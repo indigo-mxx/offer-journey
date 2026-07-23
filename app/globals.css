@@ -446,6 +446,7 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 .auth-copy p:not(.eyebrow) { margin: 14px 0 0; color: var(--muted); font-size: 13px; line-height: 1.75; }
 .google-button { width: 100%; display: flex; justify-content: center; align-items: center; gap: 9px; }
 .google-mark { width: 21px; height: 21px; display: grid; place-items: center; border: 1px solid #d6d6d6; border-radius: 50%; color: #4285f4; font-weight: 800; font-family: Arial, sans-serif; }
+.github-mark { color: #202124; font-size: 10px; letter-spacing: -0.5px; }
 .auth-divider { display: flex; align-items: center; gap: 12px; margin: 24px 0 18px; color: #999b95; font-size: 11px; }
 .auth-divider::before, .auth-divider::after { content: ""; height: 1px; flex: 1; background: var(--line); }
 .auth-form { display: grid; gap: 15px; }
