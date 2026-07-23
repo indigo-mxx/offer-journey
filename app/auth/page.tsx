@@ -45,6 +45,17 @@ export default function AuthPage() {
     setBusy(false);
   }
 
+  async function githubLogin() {
+    if (!supabase) return;
+    setBusy(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "github",
+      options: { redirectTo: `${window.location.origin}/` },
+    });
+    if (error) setMessage(error.message);
+    setBusy(false);
+  }
+
   return (
     <main className="auth-shell">
       <section className="auth-card">
@@ -66,6 +77,9 @@ export default function AuthPage() {
           <label><span>密码</span><input type="password" minLength={6} required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 6 位" /></label>
           <button className="primary-button" disabled={busy || !supabase}>{busy ? "处理中…" : mode === "signin" ? "登录" : "注册并发送验证邮件"}</button>
         </form>
+        <button className="secondary-button google-button" onClick={() => void githubLogin()} disabled={busy || !supabase}>
+          <span className="google-mark github-mark">GH</span> GitHub 登录
+        </button>
         <button className="auth-switch" onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setMessage(""); }}>
           {mode === "signin" ? "还没有账号？注册一个" : "已有账号？返回登录"}
         </button>
