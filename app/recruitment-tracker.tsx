@@ -698,6 +698,7 @@ export function RecruitmentTracker({
               </span>
               <span className="account-copy">
                 <strong>{user.displayName}</strong>
+                <a href="/account">账户设置</a>
                 {onSignOut ? (
                   <button className="text-button" onClick={() => void onSignOut()}>退出</button>
                 ) : (

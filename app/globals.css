@@ -455,6 +455,16 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 .auth-switch, .auth-back { width: 100%; margin: 18px 0 0; border: 0; background: transparent; color: var(--brand); font-size: 12px; text-align: center; }
 .auth-back a { color: var(--muted); text-decoration: none; }
 .auth-message { margin: 17px 0 0; padding: 11px 12px; border-radius: 8px; background: #f6ead8; color: #765525; font-size: 12px; line-height: 1.6; }
+.account-card { width: min(560px, 100%); padding: 34px; border: 1px solid var(--line); border-radius: 18px; background: rgba(255,253,250,.92); box-shadow: var(--shadow); }
+.account-summary { display: flex; align-items: center; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: #f5f8f3; }
+.account-summary .account-avatar { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 11px; background: var(--brand); color: white; font-weight: 800; }
+.account-summary strong, .account-summary small { display: block; }
+.account-summary strong { font-size: 13px; }
+.account-summary small { margin-top: 3px; color: var(--muted); font-size: 11px; }
+.account-form { margin-top: 24px; padding-top: 23px; border-top: 1px solid var(--line); }
+.account-form h2 { margin: 0; font-size: 16px; }
+.form-hint { margin: 7px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.account-form .secondary-button { width: 100%; }
 @keyframes toast-in { from { transform: translateY(8px); opacity: 0; } }
 
 @media (max-width: 1000px) {
