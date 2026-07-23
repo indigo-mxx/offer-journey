@@ -57,16 +57,16 @@ export default function AccountPage() {
         <div className="auth-copy">
           <p className="eyebrow">ACCOUNT SETTINGS</p>
           <h1>管理你的登录方式</h1>
-          <p>Google 登录后不需要重复注册。你还可以在这里绑定邮箱，或给当前账号设置密码。</p>
+          <p>GitHub 登录后不需要重复注册。你还可以在这里绑定邮箱，或给当前账号设置密码。</p>
         </div>
         <div className="account-summary">
           <span className="account-avatar">{email.slice(0, 1).toUpperCase() || "U"}</span>
-          <div><strong>{email || "正在读取账号…"}</strong><small>{provider === "google" ? "已使用 Google 登录" : "邮箱账号"}</small></div>
+          <div><strong>{email || "正在读取账号…"}</strong><small>{provider === "github" ? "已使用 GitHub 登录" : "邮箱账号"}</small></div>
         </div>
         {provider === "github" && <p className="form-hint">当前账号已绑定 GitHub 登录</p>}
         <form onSubmit={setAccountPassword} className="auth-form account-form">
           <h2>设置邮箱登录密码</h2>
-          <p className="form-hint">如果你是 Google 注册用户，设置密码后可直接用上面的邮箱 + 密码登录。</p>
+          <p className="form-hint">如果你是 GitHub 注册用户，设置密码后可直接用上面的邮箱 + 密码登录。</p>
           <label><span>新密码</span><input type="password" minLength={6} required value={password} onChange={(event) => setPasswordValue(event.target.value)} placeholder="至少 6 位" /></label>
           <button className="primary-button" disabled={busy || !supabase}>{busy ? "处理中…" : "保存密码"}</button>
         </form>

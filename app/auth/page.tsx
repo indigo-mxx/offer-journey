@@ -34,17 +34,6 @@ export default function AuthPage() {
     setBusy(false);
   }
 
-  async function googleLogin() {
-    if (!supabase) return;
-    setBusy(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/` },
-    });
-    if (error) setMessage(error.message);
-    setBusy(false);
-  }
-
   async function githubLogin() {
     if (!supabase) return;
     setBusy(true);
@@ -66,11 +55,8 @@ export default function AuthPage() {
         <div className="auth-copy">
           <p className="eyebrow">CLOUD ACCOUNT</p>
           <h1>{mode === "signin" ? "登录你的云端工作台" : "创建一个云端账号"}</h1>
-          <p>QQ 邮箱、网易邮箱、Gmail 都可以直接使用；也可以用 Google 一键登录。</p>
+          <p>QQ 邮箱、网易邮箱、Gmail 都可以直接使用；也可以用 GitHub 一键登录。</p>
         </div>
-        <button className="secondary-button google-button" onClick={() => void googleLogin()} disabled={busy || !supabase}>
-          <span className="google-mark">G</span> 使用 Google 登录
-        </button>
         <div className="auth-divider"><span>或使用邮箱</span></div>
         <form onSubmit={submit} className="auth-form">
           <label><span>邮箱</span><input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" /></label>
