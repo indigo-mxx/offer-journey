@@ -114,6 +114,9 @@ const STATUSES: ApplicationStatus[] = [
   "流程结束",
 ];
 
+const BASE_OPTIONS = ["北京", "上海", "广州", "深圳", "杭州", "成都", "武汉", "南京", "苏州", "西安", "合肥", "重庆"];
+const PLATFORM_OPTIONS = ["招聘官网", "Boss 直聘", "牛客", "猎聘", "智联招聘", "前程无忧", "内推", "校园招聘"];
+
 const EMPTY_FORM: Omit<
   Application,
   "id" | "updatedAt" | "ownerEmail" | "ownerName" | "isOwner" | "groupId"
@@ -245,6 +248,7 @@ export function RecruitmentTracker({
   const [groupName, setGroupName] = useState("秋招搭子小组");
   const [inviteCode, setInviteCode] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
+  const inviteHandledRef = useRef(false);
 
   const cloudAction = useCallback(async (payload: Record<string, unknown>) => {
     const supabase = getSupabaseBrowserClient();
@@ -348,6 +352,24 @@ export function RecruitmentTracker({
     const timer = window.setTimeout(() => setNotice(""), 3000);
     return () => window.clearTimeout(timer);
   }, [notice]);
+
+  useEffect(() => {
+    const invite = (new URLSearchParams(window.location.search).get("invite") || window.localStorage.getItem("pending-invite"))?.trim().toUpperCase();
+    if (!user || !ready || !invite || inviteHandledRef.current) return;
+    inviteHandledRef.current = true;
+    setInviteCode(invite);
+    void (async () => {
+      try {
+        await cloudAction({ action: "joinGroup", inviteCode: invite });
+        await loadCloud();
+        window.localStorage.removeItem("pending-invite");
+        window.history.replaceState({}, "", window.location.pathname);
+        setNotice("已通过分享链接加入小组");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "加入小组失败");
+      }
+    })();
+  }, [cloudAction, loadCloud, ready, user]);
 
   const ownApplications = useMemo(
     () => applications.filter((item) => item.isOwner !== false),
@@ -676,6 +698,13 @@ export function RecruitmentTracker({
     setNotice("邀请码已复制");
   }
 
+  async function copyShareLink() {
+    if (!group) return;
+    const shareLink = `${window.location.origin}/?invite=${encodeURIComponent(group.inviteCode)}`;
+    await navigator.clipboard.writeText(shareLink);
+    setNotice("分享链接已复制，朋友登录后会自动加入小组");
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -809,6 +838,7 @@ export function RecruitmentTracker({
             setGroupName={setGroupName}
             setInviteCode={setInviteCode}
             copyInviteCode={copyInviteCode}
+            copyShareLink={copyShareLink}
             runAction={groupAction}
           />
         ) : (
@@ -949,7 +979,7 @@ export function RecruitmentTracker({
         )}
       </section>
 
-      <section className="interview-planner" aria-label="面试安排与面经">
+      <section className="interview-planner legacy-interview-planner" aria-label="面试安排与面经">
         <div className="planner-head">
           <div>
             <p className="section-kicker">INTERVIEW LOG</p>
@@ -995,11 +1025,11 @@ export function RecruitmentTracker({
               <div className="form-grid">
                 <label><span>公司名称 *</span><input required autoFocus value={form.company} onChange={(event) => setForm({ ...form, company: event.target.value })} placeholder="例如：字节跳动" /></label>
                 <label><span>岗位名称 *</span><input required value={form.position} onChange={(event) => setForm({ ...form, position: event.target.value })} placeholder="例如：前端开发工程师" /></label>
-                <label><span>Base 城市</span><input value={form.base} onChange={(event) => setForm({ ...form, base: event.target.value })} placeholder="例如：北京 / 上海" /></label>
+                <label><span>Base 城市（可选）</span><input list="base-options" value={form.base} onChange={(event) => setForm({ ...form, base: event.target.value })} placeholder="可选：北京 / 上海，也可自定义" /></label>
                 <label><span>招聘批次</span><select value={form.batch} onChange={(event) => setForm({ ...form, batch: event.target.value as Application["batch"] })}><option>提前批</option><option>秋招</option><option>日常实习</option><option>其他</option></select></label>
                 <label><span>当前进度</span><select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as ApplicationStatus })}>{STATUSES.map((status) => <option key={status}>{status}</option>)}</select></label>
                 <label><span>投递时间</span><input type="date" value={form.appliedAt} onChange={(event) => setForm({ ...form, appliedAt: event.target.value })} /></label>
-                <label><span>投递渠道</span><input value={form.channel} onChange={(event) => setForm({ ...form, channel: event.target.value })} placeholder="招聘官网 / 内推 / 招聘平台" /></label>
+                <label><span>投递平台（可选）</span><input list="platform-options" value={form.channel} onChange={(event) => setForm({ ...form, channel: event.target.value })} placeholder="选择主流平台或自定义输入" /></label>
                 <label><span>薪资信息</span><input value={form.salary} onChange={(event) => setForm({ ...form, salary: event.target.value })} placeholder="可选，例如：25k × 15" /></label>
                 <label className="full-field"><span>岗位链接</span><input type="url" value={form.link} onChange={(event) => setForm({ ...form, link: event.target.value })} placeholder="https://..." /></label>
                 <label className="full-field"><span>备注 / 下一步</span><textarea rows={3} value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder="记录截止时间、面试安排、联系人或需要准备的内容" /></label>
@@ -1016,6 +1046,31 @@ export function RecruitmentTracker({
                   </select>
                   <small>{group ? "你可以随时修改，权限立即生效。" : "加入共享小组后可开放给好友。"}</small>
                 </label>
+                <datalist id="base-options">
+                  {BASE_OPTIONS.map((option) => <option key={option} value={option} />)}
+                </datalist>
+                <datalist id="platform-options">
+                  {PLATFORM_OPTIONS.map((option) => <option key={option} value={option} />)}
+                </datalist>
+                {editingId && (
+                  <section className="embedded-interviews full-field" aria-label="当前岗位的面试记录">
+                    <div className="embedded-interviews-head">
+                      <div><span className="section-kicker">INTERVIEW LOG</span><strong>面试安排与面经</strong><small>把这家公司的所有面试集中在这里管理</small></div>
+                      <button type="button" className="secondary-button" onClick={() => openInterviewCreate(editingId)}>选择或新增面试记录</button>
+                    </div>
+                    {interviews.filter((item) => item.applicationId === editingId).length ? (
+                      <div className="embedded-interview-list">
+                        {interviews.filter((item) => item.applicationId === editingId).sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()).map((item) => (
+                          <article className="embedded-interview-item" key={item.id}>
+                            <div><strong>{new Date(item.scheduledAt).toLocaleDateString("zh-CN", { month: "short", day: "numeric" })} {new Date(item.scheduledAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</strong><span>{item.round} · {item.format} · {item.result}</span></div>
+                            <div className="row-actions"><button type="button" onClick={() => openInterviewEdit(item)}>编辑</button><button type="button" className="danger" onClick={() => void removeInterview(item)}>删除</button></div>
+                            {item.summary && <p>{item.summary}</p>}
+                          </article>
+                        ))}
+                      </div>
+                    ) : <p className="embedded-empty">还没有面试记录，点击右上角开始添加。</p>}
+                  </section>
+                )}
               </div>
               <div className="form-actions">
                 <button type="button" className="secondary-button" onClick={closeForm}>取消</button>
@@ -1060,6 +1115,7 @@ function SharingPanel({
   setGroupName,
   setInviteCode,
   copyInviteCode,
+  copyShareLink,
   runAction,
 }: {
   group: GroupInfo | null;
@@ -1069,6 +1125,7 @@ function SharingPanel({
   setGroupName: (value: string) => void;
   setInviteCode: (value: string) => void;
   copyInviteCode: () => void;
+  copyShareLink: () => void;
   runAction: (payload: Record<string, unknown>, success: string) => Promise<void>;
 }) {
   if (!group) {
@@ -1111,7 +1168,8 @@ function SharingPanel({
         <div className="invite-code-box">
           <small>好友邀请码</small>
           <strong>{group.inviteCode}</strong>
-          <button onClick={copyInviteCode}>复制</button>
+          <div className="invite-actions"><button onClick={copyInviteCode}>复制邀请码</button><button onClick={copyShareLink}>复制分享链接</button></div>
+          <code>{typeof window !== "undefined" ? `${window.location.origin}/?invite=${group.inviteCode}` : ""}</code>
         </div>
       </div>
       <div className="group-grid">
@@ -1136,7 +1194,10 @@ function SharingPanel({
       </div>
       <div className="group-actions">
         {group.role === "owner" ? (
-          <button className="secondary-button" disabled={busy} onClick={() => runAction({ action: "rotateInviteCode" }, "邀请码已更新")}>废弃旧邀请码并生成新的</button>
+          <>
+            <button className="secondary-button" disabled={busy} onClick={() => runAction({ action: "rotateInviteCode" }, "邀请码已更新")}>废弃旧邀请码并生成新的</button>
+            <button className="danger-button" disabled={busy} onClick={() => window.confirm("删除小组后，成员关系会解除，已共享岗位会恢复为仅自己可见。确定删除吗？") && runAction({ action: "deleteGroup" }, "共享小组已删除")}>删除小组</button>
+          </>
         ) : (
           <button className="danger-button" disabled={busy} onClick={() => window.confirm("退出后，你已共享的岗位会自动改为仅自己可见。确定退出吗？") && runAction({ action: "leaveGroup" }, "已退出共享小组")}>退出小组</button>
         )}

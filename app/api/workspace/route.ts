@@ -190,6 +190,13 @@ export async function POST(request: Request) {
       if (!group || group.role !== "owner") return json({ error: "无权操作" }, 403);
       const { error } = await supabase.from("groups").update({ invite_code: crypto.randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase() }).eq("id", group.id).eq("owner_id", user.id);
       if (error) return json({ error: error.message }, 400);
+    } else if (action === "deleteGroup") {
+      const group = await groupForUser(supabase, user.id);
+      if (!group || group.role !== "owner") return json({ error: "只有创建者可以删除小组" }, 403);
+      const { error: resetError } = await supabase.from("applications").update({ group_id: null, visibility: "private" }).eq("owner_id", user.id).eq("group_id", group.id);
+      if (resetError) return json({ error: resetError.message }, 400);
+      const { error } = await supabase.from("groups").delete().eq("id", group.id).eq("owner_id", user.id);
+      if (error) return json({ error: error.message }, 400);
     } else if (["saveInterview", "updateInterview"].includes(action)) {
       const value = (body.interview ?? {}) as Record<string, unknown>;
       const interview = {

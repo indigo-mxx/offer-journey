@@ -12,7 +12,14 @@ export default function AuthPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
+  function homePath() {
+    const invite = new URLSearchParams(window.location.search).get("invite") || window.localStorage.getItem("pending-invite");
+    return invite ? `/?invite=${encodeURIComponent(invite)}` : "/";
+  }
+
   useEffect(() => {
+    const invite = new URLSearchParams(window.location.search).get("invite")?.trim().toUpperCase();
+    if (invite) window.localStorage.setItem("pending-invite", invite);
     if (!supabase) setMessage("还没有配置 Supabase 环境变量，请先完成项目设置。");
   }, [supabase]);
 
@@ -29,7 +36,7 @@ export default function AuthPage() {
     } else if (mode === "signup" && !result.data.session) {
       setMessage("注册成功，请打开邮箱里的验证链接，然后返回网站登录。");
     } else {
-      window.location.assign("/");
+      window.location.assign(homePath());
     }
     setBusy(false);
   }
@@ -39,7 +46,7 @@ export default function AuthPage() {
     setBusy(true);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "github",
-      options: { redirectTo: `${window.location.origin}/` },
+      options: { redirectTo: `${window.location.origin}${homePath()}` },
     });
     if (error) setMessage(error.message);
     setBusy(false);

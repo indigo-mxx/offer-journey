@@ -283,7 +283,7 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 }
 .modal {
   width: min(720px,100%); max-height: calc(100vh - 44px); overflow-y: auto;
-  border-radius: 15px; background: var(--surface); box-shadow: 0 30px 100px rgba(18,25,20,.3);
+  border: 1px solid rgba(157,184,170,.65); border-radius: 18px; background: linear-gradient(145deg, rgba(255,255,253,.98), rgba(247,251,247,.98)); box-shadow: 0 30px 100px rgba(18,25,20,.3), 0 0 0 8px rgba(214,232,222,.15); animation: modal-in 220ms cubic-bezier(.2,.8,.2,1);
 }
 .modal-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -416,6 +416,31 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 .privacy-level small { margin-top: 4px; color: var(--muted); font-size: 10px; }
 .group-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
 .danger-button { min-height: 42px; padding: 0 17px; border: 1px solid #e1c5c1; border-radius: 9px; background: #fbefed; color: var(--danger); font-weight: 650; }
+.invite-actions { grid-column: 1/-1; display: flex; gap: 7px; margin-top: 3px; }
+.invite-actions button { flex: 1; min-width: 0; padding: 7px 9px; border: 1px solid #b9d0c3; border-radius: 7px; background: rgba(255,255,255,.72); color: var(--brand); font-size: 11px; transition: background 140ms ease, transform 140ms ease; }
+.invite-actions button:hover { background: white; transform: translateY(-1px); }
+.invite-code-box code { grid-column: 1/-1; overflow: hidden; color: #6b7d72; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.embedded-interviews { margin-top: 1px; padding: 17px; border: 1px solid #cfe0d5; border-radius: 13px; background: linear-gradient(135deg, #f1f8f3, #fbfaf7 68%); }
+.embedded-interviews-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.embedded-interviews-head > div { min-width: 0; }
+.embedded-interviews-head strong, .embedded-interviews-head small { display: block; }
+.embedded-interviews-head strong { margin-top: 4px; color: var(--ink); font-size: 15px; }
+.embedded-interviews-head small { margin-top: 4px; color: var(--muted); font-size: 11px; }
+.embedded-interviews-head .secondary-button { flex: none; min-height: 36px; padding: 0 12px; font-size: 11px; }
+.embedded-interview-list { display: grid; gap: 8px; margin-top: 14px; }
+.embedded-interview-item { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 5px 12px; padding: 11px 12px; border: 1px solid #dce8df; border-radius: 9px; background: rgba(255,255,255,.78); }
+.embedded-interview-item > div:first-child { min-width: 0; }
+.embedded-interview-item strong, .embedded-interview-item span { display: block; }
+.embedded-interview-item strong { color: var(--brand); font-size: 12px; }
+.embedded-interview-item span { margin-top: 4px; color: var(--muted); font-size: 10px; }
+.embedded-interview-item .row-actions { opacity: 1; align-items: start; }
+.embedded-interview-item p { grid-column: 1/-1; margin: 5px 0 0; padding-top: 8px; border-top: 1px dashed #dce8df; color: #535b54; font-size: 11px; line-height: 1.6; white-space: pre-wrap; }
+.embedded-empty { margin: 13px 0 1px; color: var(--muted); font-size: 11px; }
+.legacy-interview-planner { display: none; }
+.stat-card, .sharing-card, .members-card, .privacy-card { transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease; }
+.stat-card:hover, .sharing-card:hover, .members-card:hover, .privacy-card:hover { transform: translateY(-3px); border-color: #c6d9cc; box-shadow: 0 12px 30px rgba(29,55,40,.08); }
+.primary-button, .secondary-button, .danger-button { transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease; }
+.primary-button:hover:not(:disabled), .secondary-button:hover:not(:disabled), .danger-button:hover:not(:disabled) { transform: translateY(-1px); filter: saturate(1.08); }
 .interview-planner { margin-top: 22px; padding: 28px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,253,250,.86); box-shadow: var(--shadow); }
 .planner-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
 .planner-head h2 { margin: 0; font-family: "STSong", "SimSun", serif; font-size: 27px; }
@@ -467,6 +492,7 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 .form-hint { margin: 7px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .account-form .secondary-button { width: 100%; }
 @keyframes toast-in { from { transform: translateY(8px); opacity: 0; } }
+@keyframes modal-in { from { transform: translateY(12px) scale(.98); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
 
 @media (max-width: 1000px) {
   .app-shell { padding: 0 24px 26px; }
@@ -518,6 +544,11 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
   .interview-actions { justify-content: flex-end; opacity: 1; }
   .group-head { align-items: flex-start; flex-direction: column; }
   .invite-code-box { width: 100%; min-width: 0; }
+  .embedded-interviews-head { align-items: stretch; flex-direction: column; }
+  .embedded-interviews-head .secondary-button { align-self: flex-start; }
+  .embedded-interview-item { grid-template-columns: 1fr; }
+  .embedded-interview-item .row-actions { justify-content: flex-end; }
+  .invite-actions { flex-direction: column; }
   footer { flex-direction: column; gap: 5px; }
   .auth-card { padding: 27px 21px; }
 }

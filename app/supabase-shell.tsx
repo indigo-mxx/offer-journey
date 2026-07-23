@@ -33,6 +33,8 @@ export function SupabaseShell() {
 
   const authUser = session?.user;
   const displayName = authUser?.user_metadata?.full_name || authUser?.email?.split("@")[0] || "同学";
+  const invite = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("invite") : null;
+  const signInPath = invite ? `/auth?invite=${encodeURIComponent(invite)}` : "/auth";
   const user = authUser
     ? { displayName, email: authUser.email ?? "", fullName: displayName }
     : null;
@@ -40,7 +42,7 @@ export function SupabaseShell() {
   return (
     <RecruitmentTracker
       user={user}
-      signInPath="/auth"
+      signInPath={signInPath}
       signOutPath="/auth"
       onSignOut={supabase ? async () => { await supabase.auth.signOut(); window.location.assign("/"); } : undefined}
     />
