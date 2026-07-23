@@ -63,6 +63,7 @@ export default function AccountPage() {
           <span className="account-avatar">{email.slice(0, 1).toUpperCase() || "U"}</span>
           <div><strong>{email || "正在读取账号…"}</strong><small>{provider === "google" ? "已使用 Google 登录" : "邮箱账号"}</small></div>
         </div>
+        {provider === "github" && <p className="form-hint">当前账号已绑定 GitHub 登录</p>}
         <form onSubmit={setAccountPassword} className="auth-form account-form">
           <h2>设置邮箱登录密码</h2>
           <p className="form-hint">如果你是 Google 注册用户，设置密码后可直接用上面的邮箱 + 密码登录。</p>
