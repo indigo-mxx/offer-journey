@@ -416,6 +416,45 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 .privacy-level small { margin-top: 4px; color: var(--muted); font-size: 10px; }
 .group-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
 .danger-button { min-height: 42px; padding: 0 17px; border: 1px solid #e1c5c1; border-radius: 9px; background: #fbefed; color: var(--danger); font-weight: 650; }
+.interview-planner { margin-top: 22px; padding: 28px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,253,250,.86); box-shadow: var(--shadow); }
+.planner-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.planner-head h2 { margin: 0; font-family: "STSong", "SimSun", serif; font-size: 27px; }
+.planner-head p:not(.section-kicker) { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.interview-list { display: grid; gap: 11px; margin-top: 22px; }
+.interview-card { display: grid; grid-template-columns: 82px minmax(0,1fr) auto; gap: 17px; align-items: start; padding: 16px; border: 1px solid #e3e4dc; border-radius: 11px; background: #fbfaf7; }
+.interview-date { display: grid; gap: 4px; padding-right: 14px; border-right: 1px solid var(--line); color: var(--brand); }
+.interview-date strong { font-family: Georgia, serif; font-size: 20px; }
+.interview-date span { color: var(--muted); font-size: 12px; }
+.interview-title strong, .interview-title span { display: block; }
+.interview-title strong { font-size: 14px; }
+.interview-title span { margin-top: 3px; color: var(--muted); font-size: 12px; }
+.interview-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.interview-meta span { padding: 4px 7px; border-radius: 99px; background: #edf2f8; color: #46698f; font-size: 10px; }
+.interview-main p { margin: 10px 0 0; color: #535b54; font-size: 12px; line-height: 1.65; white-space: pre-wrap; }
+.interview-main small { display: block; margin-top: 7px; color: var(--brand); font-size: 11px; }
+.interview-actions { display: flex; gap: 10px; opacity: .7; }
+.interview-actions button { padding: 4px 0; border: 0; background: transparent; color: var(--brand); font-size: 11px; }
+.interview-actions .danger { color: var(--danger); }
+.planner-empty { display: grid; justify-items: center; padding: 34px 0 13px; color: var(--muted); text-align: center; }
+.planner-empty span { color: var(--brand); font-size: 34px; }
+.planner-empty strong { margin-top: 8px; color: var(--ink); font-family: "STSong", "SimSun", serif; font-size: 20px; }
+.planner-empty p { margin: 7px 0 0; font-size: 12px; }
+.auth-shell { min-height: 100vh; display: grid; place-items: center; padding: 28px 16px; background: radial-gradient(circle at 18% 10%, rgba(40, 105, 81, 0.12), transparent 28rem), var(--paper); }
+.auth-card { width: min(460px, 100%); padding: 34px; border: 1px solid var(--line); border-radius: 18px; background: rgba(255,253,250,.92); box-shadow: var(--shadow); }
+.auth-copy { margin: 44px 0 25px; }
+.auth-copy h1 { margin: 0; font-family: "STSong", "SimSun", serif; font-size: 34px; line-height: 1.25; }
+.auth-copy p:not(.eyebrow) { margin: 14px 0 0; color: var(--muted); font-size: 13px; line-height: 1.75; }
+.google-button { width: 100%; display: flex; justify-content: center; align-items: center; gap: 9px; }
+.google-mark { width: 21px; height: 21px; display: grid; place-items: center; border: 1px solid #d6d6d6; border-radius: 50%; color: #4285f4; font-weight: 800; font-family: Arial, sans-serif; }
+.auth-divider { display: flex; align-items: center; gap: 12px; margin: 24px 0 18px; color: #999b95; font-size: 11px; }
+.auth-divider::before, .auth-divider::after { content: ""; height: 1px; flex: 1; background: var(--line); }
+.auth-form { display: grid; gap: 15px; }
+.auth-form label span { display: block; margin-bottom: 7px; color: #565b54; font-size: 12px; font-weight: 650; }
+.auth-form input { width: 100%; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: white; }
+.auth-form .primary-button { width: 100%; margin-top: 5px; }
+.auth-switch, .auth-back { width: 100%; margin: 18px 0 0; border: 0; background: transparent; color: var(--brand); font-size: 12px; text-align: center; }
+.auth-back a { color: var(--muted); text-decoration: none; }
+.auth-message { margin: 17px 0 0; padding: 11px 12px; border-radius: 8px; background: #f6ead8; color: #765525; font-size: 12px; line-height: 1.6; }
 @keyframes toast-in { from { transform: translateY(8px); opacity: 0; } }
 
 @media (max-width: 1000px) {
@@ -460,9 +499,16 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
   .modal { max-height: 92vh; border-radius: 16px 16px 0 0; }
   .sharing-layout, .group-dashboard { padding: 22px 17px; }
   .sharing-cards, .group-grid { grid-template-columns: 1fr; }
+  .interview-planner { padding: 21px 16px; }
+  .planner-head { align-items: stretch; flex-direction: column; }
+  .planner-head .primary-button { align-self: flex-start; }
+  .interview-card { grid-template-columns: 1fr; gap: 11px; }
+  .interview-date { display: flex; align-items: baseline; gap: 8px; padding: 0 0 9px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .interview-actions { justify-content: flex-end; opacity: 1; }
   .group-head { align-items: flex-start; flex-direction: column; }
   .invite-code-box { width: 100%; min-width: 0; }
   footer { flex-direction: column; gap: 5px; }
+  .auth-card { padding: 27px 21px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

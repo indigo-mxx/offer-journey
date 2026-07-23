@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import type { ChatGPTUser } from "./chatgpt-auth";
+import { getSupabaseBrowserClient } from "../lib/supabase-browser";
 
 type ApplicationStatus =
   | "准备投递"
@@ -64,12 +65,39 @@ type GroupInfo = {
 type WorkspaceResponse = {
   applications: Application[];
   group: GroupInfo | null;
+  interviews?: Interview[];
+};
+
+type Interview = {
+  id: string;
+  applicationId: string;
+  scheduledAt: string;
+  round: string;
+  format: string;
+  interviewer: string;
+  result: string;
+  summary: string;
+  nextSteps: string;
+  updatedAt: string;
+};
+
+const INTERVIEW_STORAGE_KEY = "autumn-recruitment-interviews-v1";
+const EMPTY_INTERVIEW: Omit<Interview, "id" | "updatedAt"> = {
+  applicationId: "",
+  scheduledAt: "",
+  round: "一面",
+  format: "视频面试",
+  interviewer: "",
+  result: "待进行",
+  summary: "",
+  nextSteps: "",
 };
 
 type Props = {
   user: ChatGPTUser | null;
   signInPath: string;
   signOutPath: string;
+  onSignOut?: () => Promise<void>;
 };
 
 const STORAGE_KEY = "autumn-recruitment-applications-v1";
@@ -179,6 +207,10 @@ function safeApplications(value: unknown): value is Application[] {
   );
 }
 
+function safeInterviews(value: unknown): value is Interview[] {
+  return Array.isArray(value) && value.every((item) => item && typeof item === "object" && typeof item.id === "string" && typeof item.applicationId === "string" && typeof item.scheduledAt === "string");
+}
+
 function normalizeLocal(items: Application[]) {
   return items.map((item) => ({
     ...item,
@@ -191,6 +223,7 @@ export function RecruitmentTracker({
   user,
   signInPath,
   signOutPath,
+  onSignOut,
 }: Props) {
   const [applications, setApplications] = useState<Application[]>([]);
   const [group, setGroup] = useState<GroupInfo | null>(null);
@@ -204,15 +237,24 @@ export function RecruitmentTracker({
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [interviews, setInterviews] = useState<Interview[]>([]);
+  const [isInterviewOpen, setIsInterviewOpen] = useState(false);
+  const [editingInterviewId, setEditingInterviewId] = useState<string | null>(null);
+  const [interviewForm, setInterviewForm] = useState(EMPTY_INTERVIEW);
   const [notice, setNotice] = useState("");
   const [groupName, setGroupName] = useState("秋招搭子小组");
   const [inviteCode, setInviteCode] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
 
   const cloudAction = useCallback(async (payload: Record<string, unknown>) => {
+    const supabase = getSupabaseBrowserClient();
+    const { data } = supabase ? await supabase.auth.getSession() : { data: { session: null } };
     const response = await fetch("/api/workspace", {
       method: "POST",
       headers: { "content-type": "application/json" },
+      ...(data.session?.access_token
+        ? { headers: { "content-type": "application/json", Authorization: `Bearer ${data.session.access_token}` } }
+        : {}),
       body: JSON.stringify(payload),
     });
     const result = (await response.json()) as { error?: string };
@@ -220,18 +262,25 @@ export function RecruitmentTracker({
   }, []);
 
   const loadCloud = useCallback(async () => {
-    const response = await fetch("/api/workspace", { cache: "no-store" });
+    const supabase = getSupabaseBrowserClient();
+    const { data } = supabase ? await supabase.auth.getSession() : { data: { session: null } };
+    const response = await fetch("/api/workspace", {
+      cache: "no-store",
+      ...(data.session?.access_token ? { headers: { Authorization: `Bearer ${data.session.access_token}` } } : {}),
+    });
     const result = (await response.json()) as WorkspaceResponse & {
       error?: string;
     };
     if (!response.ok) throw new Error(result.error || "云端同步失败");
     setApplications(result.applications);
     setGroup(result.group);
+    setInterviews(result.interviews ?? []);
   }, []);
 
   useEffect(() => {
     let cancelled = false;
     let localItems: Application[] = [];
+    let localInterviews: Interview[] = [];
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
@@ -241,6 +290,15 @@ export function RecruitmentTracker({
     } catch {
       localItems = [];
     }
+    try {
+      const raw = window.localStorage.getItem(INTERVIEW_STORAGE_KEY);
+      if (raw) {
+        const parsed: unknown = JSON.parse(raw);
+        if (safeInterviews(parsed)) localInterviews = parsed;
+      }
+    } catch {
+      localInterviews = [];
+    }
 
     if (user) {
       window.queueMicrotask(() => {
@@ -248,6 +306,7 @@ export function RecruitmentTracker({
           setLocalBackup(
             localItems.filter((item) => !item.id.startsWith("sample-")),
           );
+          setInterviews(localInterviews);
         }
       });
       window.queueMicrotask(() => {
@@ -263,6 +322,7 @@ export function RecruitmentTracker({
       window.queueMicrotask(() => {
         if (!cancelled) {
           setApplications(localItems.length ? localItems : SAMPLE_DATA);
+          setInterviews(localInterviews);
           setReady(true);
         }
       });
@@ -277,6 +337,11 @@ export function RecruitmentTracker({
     if (!ready || user) return;
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(applications));
   }, [applications, ready, user]);
+
+  useEffect(() => {
+    if (!ready || user) return;
+    window.localStorage.setItem(INTERVIEW_STORAGE_KEY, JSON.stringify(interviews));
+  }, [interviews, ready, user]);
 
   useEffect(() => {
     if (!notice) return;
@@ -521,6 +586,77 @@ export function RecruitmentTracker({
     }
   }
 
+  function openInterviewCreate(applicationId = ownApplications[0]?.id ?? "") {
+    setEditingInterviewId(null);
+    setInterviewForm({ ...EMPTY_INTERVIEW, applicationId, scheduledAt: new Date(Date.now() + 86400000).toISOString().slice(0, 16) });
+    setIsInterviewOpen(true);
+  }
+
+  function openInterviewEdit(item: Interview) {
+    setEditingInterviewId(item.id);
+    setInterviewForm({
+      applicationId: item.applicationId,
+      scheduledAt: item.scheduledAt.slice(0, 16),
+      round: item.round,
+      format: item.format,
+      interviewer: item.interviewer,
+      result: item.result,
+      summary: item.summary,
+      nextSteps: item.nextSteps,
+    });
+    setIsInterviewOpen(true);
+  }
+
+  function closeInterview() {
+    setIsInterviewOpen(false);
+    setEditingInterviewId(null);
+    setInterviewForm(EMPTY_INTERVIEW);
+  }
+
+  async function submitInterview(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!interviewForm.applicationId || !interviewForm.scheduledAt) return;
+    const next: Interview = {
+      ...interviewForm,
+      id: editingInterviewId ?? crypto.randomUUID(),
+      scheduledAt: new Date(interviewForm.scheduledAt).toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setBusy(true);
+    try {
+      if (user) {
+        await cloudAction({ action: editingInterviewId ? "updateInterview" : "saveInterview", interview: next });
+        await loadCloud();
+      } else {
+        setInterviews((current) => editingInterviewId ? current.map((item) => item.id === editingInterviewId ? next : item) : [next, ...current]);
+      }
+      setNotice(editingInterviewId ? "面试记录已更新" : "面试安排已添加");
+      closeInterview();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "保存面试记录失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeInterview(item: Interview) {
+    if (!window.confirm("确定删除这条面试记录吗？")) return;
+    setBusy(true);
+    try {
+      if (user) {
+        await cloudAction({ action: "deleteInterview", id: item.id });
+        await loadCloud();
+      } else {
+        setInterviews((current) => current.filter((entry) => entry.id !== item.id));
+      }
+      setNotice("面试记录已删除");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "删除失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function groupAction(payload: Record<string, unknown>, success: string) {
     setBusy(true);
     try {
@@ -562,7 +698,11 @@ export function RecruitmentTracker({
               </span>
               <span className="account-copy">
                 <strong>{user.displayName}</strong>
-                <a href={signOutPath}>退出</a>
+                {onSignOut ? (
+                  <button className="text-button" onClick={() => void onSignOut()}>退出</button>
+                ) : (
+                  <a href={signOutPath}>退出</a>
+                )}
               </span>
             </div>
           ) : (
@@ -808,6 +948,33 @@ export function RecruitmentTracker({
         )}
       </section>
 
+      <section className="interview-planner" aria-label="面试安排与面经">
+        <div className="planner-head">
+          <div>
+            <p className="section-kicker">INTERVIEW LOG</p>
+            <h2>面试安排与面经</h2>
+            <p>把每次面试的时间、轮次和复盘要点放在岗位下面，临近面试时一眼就能找到。</p>
+          </div>
+          <button className="primary-button" onClick={() => openInterviewCreate()} disabled={!ownApplications.length}>＋ 新增面试</button>
+        </div>
+        {interviews.length ? (
+          <div className="interview-list">
+            {interviews.slice().sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()).map((item) => {
+              const application = applications.find((entry) => entry.id === item.applicationId);
+              return (
+                <article className="interview-card" key={item.id}>
+                  <div className="interview-date"><strong>{new Date(item.scheduledAt).toLocaleDateString("zh-CN", { month: "short", day: "numeric" })}</strong><span>{new Date(item.scheduledAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</span></div>
+                  <div className="interview-main"><div className="interview-title"><strong>{application?.company || "未关联岗位"}</strong><span>{application?.position || ""}</span></div><div className="interview-meta"><span>{item.round}</span><span>{item.format}</span><span>{item.result}</span>{item.interviewer && <span>面试官：{item.interviewer}</span>}</div>{item.summary && <p>{item.summary}</p>}{item.nextSteps && <small>下一步：{item.nextSteps}</small>}</div>
+                  <div className="interview-actions"><button onClick={() => openInterviewEdit(item)}>编辑</button><button className="danger" onClick={() => void removeInterview(item)}>删除</button></div>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="planner-empty"><span>◷</span><strong>还没有面试安排</strong><p>添加一次面试时间，面试后再补充简要面经和下一步。</p></div>
+        )}
+      </section>
+
       <footer>
         <span>{user ? "云端数据仅对你和获得授权的小组成员可见。" : "本地数据只存放在当前浏览器，请定期导出备份。"}</span>
         <span>下一阶段：简历解析 · 素材库 · 辅助填写</span>
@@ -853,6 +1020,27 @@ export function RecruitmentTracker({
                 <button type="button" className="secondary-button" onClick={closeForm}>取消</button>
                 <button type="submit" className="primary-button" disabled={busy}>{busy ? "正在保存…" : editingId ? "保存修改" : "添加到清单"}</button>
               </div>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {isInterviewOpen && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={closeInterview}>
+          <section className="modal interview-modal" role="dialog" aria-modal="true" aria-labelledby="interview-title" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="modal-head"><div><p className="section-kicker">INTERVIEW LOG</p><h2 id="interview-title">{editingInterviewId ? "编辑面试记录" : "新增面试安排"}</h2></div><button className="close-button" onClick={closeInterview} aria-label="关闭">×</button></div>
+            <form onSubmit={submitInterview}>
+              <div className="form-grid">
+                <label className="full-field"><span>关联岗位 *</span><select required value={interviewForm.applicationId} onChange={(event) => setInterviewForm({ ...interviewForm, applicationId: event.target.value })}><option value="">请选择一个岗位</option>{ownApplications.map((item) => <option key={item.id} value={item.id}>{item.company} · {item.position}</option>)}</select></label>
+                <label><span>面试时间 *</span><input required type="datetime-local" value={interviewForm.scheduledAt} onChange={(event) => setInterviewForm({ ...interviewForm, scheduledAt: event.target.value })} /></label>
+                <label><span>面试轮次</span><select value={interviewForm.round} onChange={(event) => setInterviewForm({ ...interviewForm, round: event.target.value })}><option>一面</option><option>二面</option><option>终面</option><option>HR 面</option><option>群面</option><option>笔试/测评</option></select></label>
+                <label><span>面试形式</span><select value={interviewForm.format} onChange={(event) => setInterviewForm({ ...interviewForm, format: event.target.value })}><option>视频面试</option><option>电话面试</option><option>现场面试</option><option>群面</option><option>笔试/测评</option></select></label>
+                <label><span>面试官 / 联系人</span><input value={interviewForm.interviewer} onChange={(event) => setInterviewForm({ ...interviewForm, interviewer: event.target.value })} placeholder="可选" /></label>
+                <label><span>结果</span><select value={interviewForm.result} onChange={(event) => setInterviewForm({ ...interviewForm, result: event.target.value })}><option>待进行</option><option>通过</option><option>待定</option><option>未通过</option><option>已取消</option></select></label>
+                <label className="full-field"><span>简要面经 / 复盘</span><textarea rows={5} value={interviewForm.summary} onChange={(event) => setInterviewForm({ ...interviewForm, summary: event.target.value })} placeholder="记录问了什么、自己的回答、哪里卡住了、下次要补什么" /></label>
+                <label className="full-field"><span>下一步</span><textarea rows={3} value={interviewForm.nextSteps} onChange={(event) => setInterviewForm({ ...interviewForm, nextSteps: event.target.value })} placeholder="例如：补充项目性能优化案例，等待二面通知" /></label>
+              </div>
+              <div className="form-actions"><button type="button" className="secondary-button" onClick={closeInterview}>取消</button><button type="submit" className="primary-button" disabled={busy}>{busy ? "正在保存…" : "保存面试记录"}</button></div>
             </form>
           </section>
         </div>

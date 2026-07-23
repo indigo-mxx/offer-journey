@@ -1,0 +1,48 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { getSupabaseBrowserClient } from "../lib/supabase-browser";
+import { RecruitmentTracker } from "./recruitment-tracker";
+
+export function SupabaseShell() {
+  const supabase = getSupabaseBrowserClient();
+  const [session, setSession] = useState<Awaited<ReturnType<NonNullable<typeof supabase>["auth"]["getSession"]>>["data"]["session"]>(null);
+  const [ready, setReady] = useState(!supabase);
+
+  useEffect(() => {
+    if (!supabase) return;
+    let active = true;
+    void supabase.auth.getSession().then(({ data }) => {
+      if (!active) return;
+      setSession(data.session);
+      setReady(true);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setReady(true);
+    });
+    return () => {
+      active = false;
+      listener.subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  if (!ready) {
+    return <main className="loading-state">正在连接云端账户…</main>;
+  }
+
+  const authUser = session?.user;
+  const displayName = authUser?.user_metadata?.full_name || authUser?.email?.split("@")[0] || "同学";
+  const user = authUser
+    ? { displayName, email: authUser.email ?? "", fullName: displayName }
+    : null;
+
+  return (
+    <RecruitmentTracker
+      user={user}
+      signInPath="/auth"
+      signOutPath="/auth"
+      onSignOut={supabase ? async () => { await supabase.auth.signOut(); window.location.assign("/"); } : undefined}
+    />
+  );
+}
