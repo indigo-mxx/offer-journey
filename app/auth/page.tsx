@@ -57,7 +57,7 @@ export default function AuthPage() {
       <section className="auth-card">
         <a className="brand" href="/" aria-label="返回秋招同行录">
           <span className="brand-mark">秋</span>
-          <span><strong>秋招同行录</strong><small>投递与面试进度工作台</small></span>
+          <span><strong>MXX · 秋招同行录</strong><small>投递与面试进度工作台</small></span>
         </a>
         <div className="auth-copy">
           <p className="eyebrow">CLOUD ACCOUNT</p>

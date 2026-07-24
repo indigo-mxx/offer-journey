@@ -13,12 +13,12 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase,
     title: {
-      default: "秋招同行录",
-      template: "%s · 秋招同行录",
+      default: "MXX · 秋招同行录",
+      template: "%s · MXX 秋招同行录",
     },
     description: "清晰记录每一次秋招与提前批投递进度。",
     openGraph: {
-      title: "秋招同行录",
+      title: "MXX · 秋招同行录",
       description: "把每一次投递，变成清晰的下一步。",
       images: [{ url: new URL("/og.png", metadataBase).toString() }],
       type: "website",
@@ -26,7 +26,7 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     twitter: {
       card: "summary_large_image",
-      title: "秋招同行录",
+      title: "MXX · 秋招同行录",
       description: "把每一次投递，变成清晰的下一步。",
       images: [new URL("/og.png", metadataBase).toString()],
     },

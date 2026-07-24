@@ -50,6 +50,7 @@ create table if not exists public.interviews (
   application_id uuid not null references public.applications(id) on delete cascade,
   owner_id uuid not null references public.profiles(id) on delete cascade,
   scheduled_at timestamptz not null,
+  ended_at timestamptz,
   round text not null default '一面',
   format text not null default '视频面试',
   interviewer text not null default '',

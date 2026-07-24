@@ -74,6 +74,7 @@ type Interview = {
   id: string;
   applicationId: string;
   scheduledAt: string;
+  endedAt: string;
   round: string;
   format: string;
   interviewer: string;
@@ -87,6 +88,7 @@ const INTERVIEW_STORAGE_KEY = "autumn-recruitment-interviews-v1";
 const EMPTY_INTERVIEW: Omit<Interview, "id" | "updatedAt"> = {
   applicationId: "",
   scheduledAt: "",
+  endedAt: "",
   round: "一面",
   format: "视频面试",
   interviewer: "",
@@ -200,6 +202,11 @@ function formatDate(value: string) {
   return `${date.getMonth() + 1}月${date.getDate()}日`;
 }
 
+function formatInterviewTime(value: string) {
+  if (!value) return "未填写";
+  return new Date(value).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
 function companyKey(value: string) {
   return value.trim().toLocaleLowerCase();
 }
@@ -240,6 +247,10 @@ function normalizeLocal(items: Application[]) {
   }));
 }
 
+function normalizeInterviews(items: Interview[]) {
+  return items.map((item) => ({ ...item, endedAt: item.endedAt ?? "" }));
+}
+
 export function RecruitmentTracker({
   user,
   signInPath,
@@ -251,7 +262,7 @@ export function RecruitmentTracker({
   const [localBackup, setLocalBackup] = useState<Application[]>([]);
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [view, setView] = useState<"mine" | "friends" | "sharing">("mine");
+  const [view, setView] = useState<"mine" | "friends" | "sharing" | "insights">("mine");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("全部状态");
   const [batchFilter, setBatchFilter] = useState("全部批次");
@@ -321,7 +332,7 @@ export function RecruitmentTracker({
       const raw = window.localStorage.getItem(INTERVIEW_STORAGE_KEY);
       if (raw) {
         const parsed: unknown = JSON.parse(raw);
-        if (safeInterviews(parsed)) localInterviews = parsed;
+        if (safeInterviews(parsed)) localInterviews = normalizeInterviews(parsed);
       }
     } catch {
       localInterviews = [];
@@ -657,7 +668,9 @@ export function RecruitmentTracker({
 
   function openInterviewCreate(applicationId = ownApplications[0]?.id ?? "") {
     setEditingInterviewId(null);
-    setInterviewForm({ ...EMPTY_INTERVIEW, applicationId, scheduledAt: new Date(Date.now() + 86400000).toISOString().slice(0, 16) });
+    const start = new Date(Date.now() + 86400000);
+    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    setInterviewForm({ ...EMPTY_INTERVIEW, applicationId, scheduledAt: start.toISOString().slice(0, 16), endedAt: end.toISOString().slice(0, 16) });
     setIsInterviewOpen(true);
   }
 
@@ -666,6 +679,7 @@ export function RecruitmentTracker({
     setInterviewForm({
       applicationId: item.applicationId,
       scheduledAt: item.scheduledAt.slice(0, 16),
+      endedAt: item.endedAt ? item.endedAt.slice(0, 16) : "",
       round: item.round,
       format: item.format,
       interviewer: item.interviewer,
@@ -689,6 +703,7 @@ export function RecruitmentTracker({
       ...interviewForm,
       id: editingInterviewId ?? crypto.randomUUID(),
       scheduledAt: new Date(interviewForm.scheduledAt).toISOString(),
+      endedAt: interviewForm.endedAt ? new Date(interviewForm.endedAt).toISOString() : "",
       updatedAt: new Date().toISOString(),
     };
     setBusy(true);
@@ -768,7 +783,7 @@ export function RecruitmentTracker({
         <a className="brand" href="#top" aria-label="秋招同行录首页">
           <span className="brand-mark">秋</span>
           <span>
-            <strong>秋招同行录</strong>
+            <strong>MXX · 秋招同行录</strong>
             <small>{user ? "云端协作工作台" : "我的本地投递进度"}</small>
           </span>
         </a>
@@ -784,7 +799,7 @@ export function RecruitmentTracker({
               </span>
               <span className="account-copy">
                 <strong>{user.displayName}</strong>
-                <a href="/account">账户设置</a>
+                <a href="/account">个人中心</a>
                 {onSignOut ? (
                   <button className="text-button" onClick={() => void onSignOut()}>退出</button>
                 ) : (
@@ -884,9 +899,14 @@ export function RecruitmentTracker({
           >
             共享与隐私
           </button>
+          <button className={view === "insights" ? "active" : ""} onClick={() => setView("insights")}>
+            数据分析
+          </button>
         </nav>
 
-        {view === "sharing" && user ? (
+        {view === "insights" ? (
+          <InsightsPanel applications={ownApplications} interviews={interviews} />
+        ) : view === "sharing" && user ? (
           <SharingPanel
             group={group}
             groupName={groupName}
@@ -1063,7 +1083,7 @@ export function RecruitmentTracker({
               const application = applications.find((entry) => entry.id === item.applicationId);
               return (
                 <article className="interview-card" key={item.id}>
-                  <div className="interview-date"><strong>{new Date(item.scheduledAt).toLocaleDateString("zh-CN", { month: "short", day: "numeric" })}</strong><span>{new Date(item.scheduledAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</span></div>
+                  <div className="interview-date"><strong>{new Date(item.scheduledAt).toLocaleDateString("zh-CN", { month: "short", day: "numeric" })}</strong><span>{new Date(item.scheduledAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}{item.endedAt ? ` — ${new Date(item.endedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}` : ""}</span><small>开始 — 结束</small></div>
                   <div className="interview-main"><div className="interview-title"><strong>{application?.company || "未关联岗位"}</strong><span>{application?.position || ""}</span></div><div className="interview-meta"><span>{item.round}</span><span>{item.format}</span><span>{item.result}</span>{item.interviewer && <span>面试官：{item.interviewer}</span>}</div>{item.summary && <p>{item.summary}</p>}{item.nextSteps && <small>下一步：{item.nextSteps}</small>}</div>
                   <div className="interview-actions"><button onClick={() => openInterviewEdit(item)}>编辑</button><button className="danger" onClick={() => void removeInterview(item)}>删除</button></div>
                 </article>
@@ -1147,7 +1167,7 @@ export function RecruitmentTracker({
                       <div className="embedded-interview-list">
                         {interviews.filter((item) => item.applicationId === editingId).sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()).map((item) => (
                           <article className="embedded-interview-item" key={item.id}>
-                            <div><strong>{new Date(item.scheduledAt).toLocaleDateString("zh-CN", { month: "short", day: "numeric" })} {new Date(item.scheduledAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</strong><span>{item.round} · {item.format} · {item.result}</span></div>
+                            <div><strong>{formatInterviewTime(item.scheduledAt)}{item.endedAt ? ` — ${formatInterviewTime(item.endedAt)}` : ""}</strong><span>{item.round} · {item.format} · {item.result}</span></div>
                             <div className="row-actions"><button type="button" onClick={() => openInterviewEdit(item)}>编辑</button><button type="button" className="danger" onClick={() => void removeInterview(item)}>删除</button></div>
                             {item.summary && <p>{item.summary}</p>}
                           </article>
@@ -1173,7 +1193,8 @@ export function RecruitmentTracker({
             <form onSubmit={submitInterview}>
               <div className="form-grid">
                 <label className="full-field"><span>关联岗位 *</span><select required value={interviewForm.applicationId} onChange={(event) => setInterviewForm({ ...interviewForm, applicationId: event.target.value })}><option value="">请选择一个岗位</option>{ownApplications.map((item) => <option key={item.id} value={item.id}>{item.company} · {item.position}</option>)}</select></label>
-                <label><span>面试时间 *</span><input required type="datetime-local" value={interviewForm.scheduledAt} onChange={(event) => setInterviewForm({ ...interviewForm, scheduledAt: event.target.value })} /></label>
+                <label><span>面试开始时间 *</span><input required type="datetime-local" value={interviewForm.scheduledAt} onChange={(event) => setInterviewForm({ ...interviewForm, scheduledAt: event.target.value })} /></label>
+                <label><span>面试结束时间（可选）</span><input type="datetime-local" min={interviewForm.scheduledAt || undefined} value={interviewForm.endedAt} onChange={(event) => setInterviewForm({ ...interviewForm, endedAt: event.target.value })} /></label>
                 <label><span>面试轮次</span><select value={interviewForm.round} onChange={(event) => setInterviewForm({ ...interviewForm, round: event.target.value })}><option>一面</option><option>二面</option><option>终面</option><option>HR 面</option><option>群面</option><option>笔试/测评</option></select></label>
                 <label><span>面试形式</span><select value={interviewForm.format} onChange={(event) => setInterviewForm({ ...interviewForm, format: event.target.value })}><option>视频面试</option><option>电话面试</option><option>现场面试</option><option>群面</option><option>笔试/测评</option></select></label>
                 <label><span>面试官 / 联系人</span><input value={interviewForm.interviewer} onChange={(event) => setInterviewForm({ ...interviewForm, interviewer: event.target.value })} placeholder="可选" /></label>
@@ -1215,6 +1236,29 @@ export function RecruitmentTracker({
 
       {notice && <div className="toast">{notice}</div>}
     </main>
+  );
+}
+
+function InsightsPanel({ applications, interviews }: { applications: Application[]; interviews: Interview[] }) {
+  const statusCounts = STATUSES.map((status) => ({ status, count: applications.filter((item) => item.status === status).length })).filter((item) => item.count > 0);
+  const maxStatus = Math.max(...statusCounts.map((item) => item.count), 1);
+  const industryCounts = Array.from(applications.flatMap((item) => item.industryTags ?? []).reduce((map, tag) => map.set(tag, (map.get(tag) ?? 0) + 1), new Map<string, number>()).entries()).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const locationCounts = Array.from(applications.reduce((map, item) => item.base ? map.set(item.base, (map.get(item.base) ?? 0) + 1) : map, new Map<string, number>()).entries()).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const upcoming = interviews.filter((item) => new Date(item.scheduledAt).getTime() >= Date.now()).sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()).slice(0, 5);
+  const companies = new Set(applications.map((item) => companyKey(item.company))).size;
+  const offers = applications.filter((item) => item.status === "Offer").length;
+  const closed = applications.filter((item) => ["已拒绝", "流程结束"].includes(item.status)).length;
+  return (
+    <div className="insights-panel">
+      <div className="insights-head"><div><p className="section-kicker">PERSONAL INSIGHTS</p><h2>投递数据分析</h2><p>把分散的记录整理成更容易行动的信号。</p></div><span className="insight-refresh">实时计算 · {applications.length} 条记录</span></div>
+      <div className="insight-kpis"><article><span>公司数</span><strong>{companies}</strong><small>覆盖不同团队</small></article><article><span>岗位数</span><strong>{applications.length}</strong><small>每个岗位独立跟踪</small></article><article><span>Offer</span><strong>{offers}</strong><small>继续保持节奏</small></article><article><span>面试记录</span><strong>{interviews.length}</strong><small>{upcoming.length ? `${upcoming.length} 场待进行` : "暂无待进行"}</small></article></div>
+      <div className="insights-grid">
+        <section className="insight-card status-chart"><div className="insight-card-head"><div><span className="section-kicker">PIPELINE</span><h3>流程分布</h3></div><small>{closed} 条已结束</small></div>{statusCounts.length ? statusCounts.map((item) => <div className="bar-row" key={item.status}><span>{item.status}</span><div><i style={{ width: `${Math.max(10, item.count / maxStatus * 100)}%` }} /></div><b>{item.count}</b></div>) : <p className="insight-empty">添加投递后会显示流程分布。</p>}</section>
+        <section className="insight-card"><div className="insight-card-head"><div><span className="section-kicker">INDUSTRY MAP</span><h3>行业偏好</h3></div><small>按标签统计</small></div>{industryCounts.length ? <div className="rank-list">{industryCounts.map(([tag, count], index) => <div className="rank-row" key={tag}><span className="rank-number">0{index + 1}</span><strong>{tag}</strong><em>{count} 个岗位</em></div>)}</div> : <p className="insight-empty">给公司添加行业标签后，这里会更有参考价值。</p>}</section>
+        <section className="insight-card"><div className="insight-card-head"><div><span className="section-kicker">LOCATION</span><h3>地点分布</h3></div><small>Base 城市</small></div>{locationCounts.length ? <div className="rank-list">{locationCounts.map(([location, count]) => <div className="rank-row" key={location}><span className="location-dot" /><strong>{location}</strong><em>{count} 个岗位</em></div>)}</div> : <p className="insight-empty">补充 Base 后可以比较城市机会。</p>}</section>
+        <section className="insight-card upcoming-card"><div className="insight-card-head"><div><span className="section-kicker">NEXT UP</span><h3>最近面试</h3></div><small>按时间排序</small></div>{upcoming.length ? <div className="upcoming-list">{upcoming.map((item) => { const app = applications.find((entry) => entry.id === item.applicationId); return <div className="upcoming-row" key={item.id}><time>{formatInterviewTime(item.scheduledAt)}</time><div><strong>{app?.company || "未关联岗位"}</strong><span>{app?.position || ""} · {item.round}</span></div><b>{item.endedAt ? `${new Date(item.endedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })} 结束` : "待补结束时间"}</b></div>; })}</div> : <p className="insight-empty">近期没有安排好的面试。</p>}</section>
+      </div>
+    </div>
   );
 }
 

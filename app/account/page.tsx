@@ -52,11 +52,11 @@ export default function AccountPage() {
       <section className="account-card">
         <a className="brand" href="/" aria-label="返回秋招同行录">
           <span className="brand-mark">秋</span>
-          <span><strong>秋招同行录</strong><small>账户设置</small></span>
+          <span><strong>MXX · 秋招同行录</strong><small>个人中心</small></span>
         </a>
         <div className="auth-copy">
           <p className="eyebrow">ACCOUNT SETTINGS</p>
-          <h1>管理你的登录方式</h1>
+          <h1>个人中心</h1>
           <p>GitHub 登录后不需要重复注册。你还可以在这里绑定邮箱，或给当前账号设置密码。</p>
         </div>
         <div className="account-summary">

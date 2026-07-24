@@ -22,7 +22,7 @@
 
 ## 数据库升级
 
-已有 Supabase 项目升级时，请在 Supabase Dashboard 的 SQL Editor 中执行 `supabase/migrations/002_company_metadata.sql`，一次即可为已有投递记录增加行业标签和公司规模字段。新建项目按顺序执行 `supabase/migrations/001_initial.sql` 和 `002_company_metadata.sql`。
+已有 Supabase 项目升级时，请在 Supabase Dashboard 的 SQL Editor 中依次执行 `supabase/migrations/002_company_metadata.sql` 和 `supabase/migrations/003_interview_end_time.sql`。新建项目按顺序执行 `001_initial.sql`、`002_company_metadata.sql` 和 `003_interview_end_time.sql`。
 
 ## 正式部署
 
