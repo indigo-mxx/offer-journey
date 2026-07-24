@@ -1,0 +1,8 @@
+node_modules
+.git
+.vercel
+.wrangler
+dist
+build
+.env*
+*.log

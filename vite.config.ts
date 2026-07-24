@@ -44,9 +44,13 @@ export default defineConfig(async () => {
   // Wrangler snapshots its log path while the Cloudflare plugin is imported.
   const { cloudflare } = await import("@cloudflare/vite-plugin");
 
-  // Vercel needs Nitro's Vercel output adapter because vinext emits a
-  // multi-environment `dist/` build instead of a traditional `.next/` tree.
-  const isVercelBuild = process.env.VERCEL === "1" || process.env.NITRO_PRESET === "vercel";
+  // Vercel and CloudBase Run both need Nitro's server output adapter because
+  // vinext emits a multi-environment `dist/` build instead of a traditional
+  // `.next/` tree. CloudBase Run starts the generated Node server directly.
+  const isNitroBuild = process.env.VERCEL === "1"
+    || process.env.NITRO_PRESET === "vercel"
+    || process.env.NITRO_PRESET === "node-server"
+    || process.env.CLOUDBASE === "1";
 
   return {
     server: isCodexSeatbeltSandbox
@@ -54,7 +58,7 @@ export default defineConfig(async () => {
       : undefined,
     plugins: [
       vinext(),
-      ...(isVercelBuild
+      ...(isNitroBuild
         ? [nitro()]
         : [
             sites(),
