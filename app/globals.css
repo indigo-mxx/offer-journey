@@ -604,12 +604,14 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 @media (max-width: 700px) {
   .app-shell { padding: 0 14px 24px; }
   .topbar { min-height: 74px; }
-  .brand small, .top-actions .secondary-button { display: none; }
-  .account-copy, .save-state { display: none; }
-  .account-menu { padding: 4px; gap: 6px; border: 0; background: transparent; }
-  .account-center-link { padding: 6px 10px; font-size: 11px; }
-  .account-center-link svg { width: 14px; height: 14px; }
-  .account-signout { font-size: 11px; }
+  .brand small, .save-state { display: none; }
+  .account-copy { display: none; }
+  .account-menu { padding: 3px; gap: 3px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255, 253, 250, .7); }
+  .account-avatar { width: 30px; height: 30px; font-size: 12px; }
+  .account-center-link { padding: 5px 7px; font-size: 11px; gap: 3px; }
+  .account-center-link svg { width: 13px; height: 13px; }
+  .account-signout { padding: 4px 6px; font-size: 11px; }
+  .top-actions .secondary-button { display: inline-flex; min-height: 36px; padding: 0 10px; font-size: 12px; }
   .top-actions .primary-button { min-height: 39px; padding: 0 12px; font-size: 13px; }
   .hero { padding: 38px 4px 28px; }
   .hero h1 { font-size: 37px; }
