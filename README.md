@@ -26,6 +26,15 @@
 
 腾讯云 CloudBase 部署使用仓库 `main` 分支，监听端口为 `3000`；代码推送后可在 CloudBase 的构建记录中点击“重新部署”。
 
+## 腾讯云登录配置
+
+CloudBase 的运行环境变量中需要配置以下两项（不是 Dockerfile，也不要提交 `.env.local`）：
+
+- `NEXT_PUBLIC_SUPABASE_URL`：`https://xhavwciesioqujdmkvob.supabase.co`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`：Supabase 项目设置 → API 中的 Publishable key（旧界面叫 anon key）
+
+应用会在页面运行时读取这两个配置，因此只需在 CloudBase 运行环境变量中设置并重新部署，邮箱和 GitHub 登录都会恢复。
+
 ## 本地运行
 
 需要 Node.js 22.13 或更高版本。

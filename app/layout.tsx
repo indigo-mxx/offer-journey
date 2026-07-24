@@ -38,9 +38,16 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const supabaseConfig = JSON.stringify({
+    url: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+    anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
+  }).replace(/</g, "\\u003c");
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body>
+        <script dangerouslySetInnerHTML={{ __html: `window.__SUPABASE_CONFIG__=${supabaseConfig};` }} />
+        {children}
+      </body>
     </html>
   );
 }
