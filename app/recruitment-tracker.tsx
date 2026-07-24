@@ -118,7 +118,7 @@ const STATUSES: ApplicationStatus[] = [
 
 const BASE_OPTIONS = ["北京", "上海", "广州", "深圳", "杭州", "成都", "武汉", "南京", "苏州", "西安", "合肥", "重庆"];
 const PLATFORM_OPTIONS = ["招聘官网", "Boss 直聘", "牛客", "猎聘", "智联招聘", "前程无忧", "内推", "校园招聘"];
-const INDUSTRY_OPTIONS = ["半导体", "具身智能", "智能驾驶", "软件", "游戏", "汽车", "机器人", "AI / 大模型", "互联网 / 平台", "硬件 / 消费电子", "金融科技", "医疗健康", "制造业", "教育"];
+const INDUSTRY_OPTIONS = ["半导体", "具身智能", "智能驾驶", "软件", "游戏", "汽车", "机器人", "AI / 大模型", "互联网 / 平台", "硬件 / 消费电子", "金融科技", "金融", "医疗健康", "生物医药", "制造业", "化工", "能源电力", "国企", "事业单位", "研究院", "教育"];
 const COMPANY_SCALE_OPTIONS = ["未知", "1-50人", "51-200人", "201-500人", "501-2000人", "2001-10000人", "10000+人"];
 
 const EMPTY_FORM: Omit<
@@ -200,6 +200,10 @@ function formatDate(value: string) {
   return `${date.getMonth() + 1}月${date.getDate()}日`;
 }
 
+function companyKey(value: string) {
+  return value.trim().toLocaleLowerCase();
+}
+
 function statusTone(status: ApplicationStatus) {
   if (status === "Offer") return "offer";
   if (["一面", "二面", "终面", "HR面"].includes(status)) return "interview";
@@ -253,8 +257,11 @@ export function RecruitmentTracker({
   const [batchFilter, setBatchFilter] = useState("全部批次");
   const [industryFilter, setIndustryFilter] = useState("全部行业");
   const [scaleFilter, setScaleFilter] = useState("全部规模");
+  const [positionFilter, setPositionFilter] = useState("");
+  const [locationFilter, setLocationFilter] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [isInterviewOpen, setIsInterviewOpen] = useState(false);
@@ -419,7 +426,9 @@ export function RecruitmentTracker({
           (statusFilter === "全部状态" || item.status === statusFilter) &&
           (batchFilter === "全部批次" || item.batch === batchFilter) &&
           (industryFilter === "全部行业" || item.industryTags.includes(industryFilter)) &&
-          (scaleFilter === "全部规模" || item.companyScale === scaleFilter)
+          (scaleFilter === "全部规模" || item.companyScale === scaleFilter) &&
+          (!positionFilter.trim() || item.position.toLowerCase().includes(positionFilter.trim().toLowerCase())) &&
+          (!locationFilter.trim() || item.base.toLowerCase().includes(locationFilter.trim().toLowerCase()))
         );
       })
       .sort(
@@ -431,11 +440,21 @@ export function RecruitmentTracker({
     friendApplications,
     industryFilter,
     ownApplications,
+    locationFilter,
+    positionFilter,
     query,
     scaleFilter,
     statusFilter,
     view,
   ]);
+
+  const companyApplications = useMemo(() => {
+    if (!selectedCompany) return [];
+    const source = view === "friends" ? friendApplications : ownApplications;
+    return source
+      .filter((item) => companyKey(item.company) === companyKey(selectedCompany))
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  }, [friendApplications, ownApplications, selectedCompany, view]);
 
   const stats = useMemo(() => {
     const interview = ownApplications.filter((item) =>
@@ -478,6 +497,10 @@ export function RecruitmentTracker({
       visibility: item.visibility,
     });
     setIsFormOpen(true);
+  }
+
+  function openCompany(company: string) {
+    setSelectedCompany(company);
   }
 
   function closeForm() {
@@ -716,6 +739,16 @@ export function RecruitmentTracker({
     }
   }
 
+  function clearFilters() {
+    setQuery("");
+    setStatusFilter("全部状态");
+    setBatchFilter("全部批次");
+    setIndustryFilter("全部行业");
+    setScaleFilter("全部规模");
+    setPositionFilter("");
+    setLocationFilter("");
+  }
+
   async function copyInviteCode() {
     if (!group) return;
     await navigator.clipboard.writeText(group.inviteCode);
@@ -920,6 +953,11 @@ export function RecruitmentTracker({
                 <option>全部规模</option>
                 {Array.from(new Set([...COMPANY_SCALE_OPTIONS, ...applications.map((item) => item.companyScale).filter(Boolean)])).map((scale) => <option key={scale}>{scale}</option>)}
               </select>
+              <label className="filter-input"><span>岗位</span><input list="position-filter-options" value={positionFilter} onChange={(event) => setPositionFilter(event.target.value)} placeholder="筛选岗位" aria-label="按岗位筛选" /></label>
+              <label className="filter-input"><span>地点</span><input list="location-filter-options" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)} placeholder="筛选 Base" aria-label="按地点筛选" /></label>
+              <datalist id="position-filter-options">{Array.from(new Set(applications.map((item) => item.position).filter(Boolean))).map((position) => <option key={position} value={position} />)}</datalist>
+              <datalist id="location-filter-options">{Array.from(new Set(applications.map((item) => item.base).filter(Boolean))).map((location) => <option key={location} value={location} />)}</datalist>
+              {(query || positionFilter || locationFilter || statusFilter !== "全部状态" || batchFilter !== "全部批次" || industryFilter !== "全部行业" || scaleFilter !== "全部规模") && <button className="clear-filter-button" onClick={clearFilters}>清空筛选</button>}
             </div>
 
             {!ready ? (
@@ -942,9 +980,8 @@ export function RecruitmentTracker({
                         <td>
                           <button
                             className="company-cell"
-                            onClick={() => openEdit(item)}
-                            disabled={item.isOwner === false}
-                            aria-label={`${item.isOwner === false ? "查看" : "编辑"} ${item.company} ${item.position}`}
+                            onClick={() => openCompany(item.company)}
+                            aria-label={`查看 ${item.company} 的全部岗位`}
                           >
                             <span className="company-avatar">{item.company.slice(0, 1)}</span>
                             <span><strong>{item.company}</strong><small>{item.position}</small><small className="company-tags">{item.industryTags?.length ? item.industryTags.join(" · ") : "未标记行业"}{item.companyScale ? ` · ${item.companyScale}` : ""}</small></span>
@@ -1146,6 +1183,32 @@ export function RecruitmentTracker({
               </div>
               <div className="form-actions"><button type="button" className="secondary-button" onClick={closeInterview}>取消</button><button type="submit" className="primary-button" disabled={busy}>{busy ? "正在保存…" : "保存面试记录"}</button></div>
             </form>
+          </section>
+        </div>
+      )}
+
+      {selectedCompany && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setSelectedCompany(null)}>
+          <section className="modal company-modal" role="dialog" aria-modal="true" aria-labelledby="company-title" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="modal-head">
+              <div><p className="section-kicker">COMPANY OVERVIEW</p><h2 id="company-title">{selectedCompany}</h2><p className="modal-subtitle">已记录 {companyApplications.length} 个岗位，可逐个编辑投递进度</p></div>
+              <button className="close-button" onClick={() => setSelectedCompany(null)} aria-label="关闭">×</button>
+            </div>
+            <div className="company-summary">
+              <span><b>{new Set(companyApplications.map((item) => item.position)).size}</b> 个岗位</span>
+              <span><b>{new Set(companyApplications.map((item) => item.base).filter(Boolean)).size || "—"}</b> 个地点</span>
+              <span><b>{companyApplications.filter((item) => item.status === "Offer").length}</b> 个 Offer</span>
+              <span><b>{companyApplications[0]?.industryTags?.length || 0}</b> 个行业标签</span>
+            </div>
+            <div className="company-job-list">
+              {companyApplications.map((item) => (
+                <article className="company-job-card" key={item.id}>
+                  <div className="company-job-main"><strong>{item.position}</strong><span>{item.base || "地点未填写"} · {item.batch} · {formatDate(item.appliedAt)}</span>{item.industryTags?.length ? <small>{item.industryTags.join(" · ")}{item.companyScale ? ` · ${item.companyScale}` : ""}</small> : null}</div>
+                  <span className={`status-badge ${statusTone(item.status)}`}>{item.status}</span>
+                  {item.isOwner !== false && <button className="secondary-button compact-button" onClick={() => { setSelectedCompany(null); openEdit(item); }}>编辑岗位</button>}
+                </article>
+              ))}
+            </div>
           </section>
         </div>
       )}

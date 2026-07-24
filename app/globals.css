@@ -200,6 +200,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   width: 100%; border: 1px solid var(--line); border-radius: 8px; background: white; color: var(--ink);
 }
 .filters select { min-height: 42px; padding: 0 12px; }
+.filter-input { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 7px; min-height: 42px; padding: 0 11px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.78); color: var(--muted); font-size: 12px; }
+.filter-input input { min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; }
+.clear-filter-button { min-height: 42px; padding: 0 12px; border: 1px dashed #a5b8aa; border-radius: 10px; background: transparent; color: var(--brand); font-size: 12px; cursor: pointer; }
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; white-space: nowrap; }
 th, td { padding: 15px 18px; border-bottom: 1px solid #ebeae5; text-align: left; font-size: 13px; }
@@ -295,6 +298,18 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
   color: var(--ink); font-size: 25px; line-height: 1;
 }
 .modal form { padding: 23px 27px 27px; }
+.modal-subtitle { margin: 7px 0 0; color: var(--muted); font-size: 13px; }
+.company-modal { max-width: 720px; }
+.company-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 0 27px 18px; }
+.company-summary span { padding: 12px 13px; border: 1px solid #dbe8de; border-radius: 12px; background: #f7fbf8; color: var(--muted); font-size: 12px; }
+.company-summary b { display: block; margin-bottom: 3px; color: var(--ink); font-size: 19px; }
+.company-job-list { display: grid; gap: 10px; max-height: 48vh; overflow: auto; padding: 0 27px 27px; }
+.company-job-card { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 14px; padding: 14px 15px; border: 1px solid #e0e9e2; border-radius: 13px; background: rgba(255,255,255,.75); }
+.company-job-main strong, .company-job-main span, .company-job-main small { display: block; }
+.company-job-main strong { color: var(--ink); font-size: 14px; }
+.company-job-main span { margin-top: 5px; color: var(--muted); font-size: 12px; }
+.company-job-main small { margin-top: 5px; color: #6f8d78; font-size: 11px; }
+.compact-button { min-height: 32px; padding: 5px 10px; font-size: 12px; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 17px; }
 .form-grid label > span { display: block; margin-bottom: 7px; color: #565b54; font-size: 12px; font-weight: 650; }
 .form-grid input, .form-grid select, .form-grid textarea { min-height: 43px; padding: 10px 12px; }
@@ -537,6 +552,10 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
   .row-actions { width: 100%; justify-content: flex-end; padding-top: 6px; opacity: 1; }
   .form-grid { grid-template-columns: 1fr; }
   .full-field { grid-column: auto; }
+  .company-summary { grid-template-columns: repeat(2, 1fr); padding-inline: 18px; }
+  .company-job-list { padding-inline: 18px; }
+  .company-job-card { grid-template-columns: 1fr auto; }
+  .company-job-card .compact-button { grid-column: 1 / -1; justify-self: start; }
   .modal-backdrop { align-items: end; padding: 0; }
   .modal { max-height: 92vh; border-radius: 16px 16px 0 0; }
   .sharing-layout, .group-dashboard { padding: 22px 17px; }
