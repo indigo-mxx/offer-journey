@@ -42,6 +42,22 @@ export const groupMembers = sqliteTable(
   ],
 );
 
+export const profiles = sqliteTable(
+  "profiles",
+  {
+    id: text("id").primaryKey(),
+    email: text("email").notNull().unique(),
+    username: text("username").unique(),
+    displayName: text("display_name").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("profiles_email_idx").on(table.email),
+    uniqueIndex("profiles_username_idx").on(table.username),
+  ],
+);
+
 export const applications = sqliteTable(
   "applications",
   {

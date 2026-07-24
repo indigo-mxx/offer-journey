@@ -7,32 +7,79 @@ import "../globals.css";
 export default function AccountPage() {
   const supabase = getSupabaseBrowserClient();
   const [email, setEmail] = useState("");
-  const [newEmail, setNewEmail] = useState("");
-  const [password, setPasswordValue] = useState("");
   const [provider, setProvider] = useState("");
+  const [currentUsername, setCurrentUsername] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPasswordValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [usernameError, setUsernameError] = useState("");
 
   useEffect(() => {
     if (!supabase) return;
-    void supabase.auth.getUser().then(({ data }) => {
+    void supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) {
         window.location.assign("/auth");
         return;
       }
       setEmail(data.user.email ?? "");
       setProvider(data.user.app_metadata?.provider ?? "");
+
+      // Load current username from profile
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("username")
+        .eq("id", data.user.id)
+        .maybeSingle();
+      if (profile?.username) {
+        setCurrentUsername(profile.username);
+        setUsername(profile.username);
+      }
     });
   }, [supabase]);
 
-  async function updateEmail(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!supabase || !newEmail.trim()) return;
+  function validateUsername(value: string): string {
+    if (!value.trim()) return "";
+    if (value.length < 3 || value.length > 20) return "用户名长度需在 3~20 个字符之间";
+    if (!/^[a-zA-Z0-9_]+$/.test(value)) return "用户名只能包含字母、数字和下划线";
+    return "";
+  }
+
+  async function checkUsernameAvailability(value: string): Promise<boolean> {
+    if (!supabase) return false;
+    const { data } = await supabase.rpc("get_email_by_username", { input: value.toLowerCase() });
+    // If no email returned, the username is available; if it returns current user's email, it's also ok
+    return !data || data === email;
+  }
+
+  async function saveUsername() {
+    if (!supabase) return;
+    const err = validateUsername(username);
+    if (err) { setUsernameError(err); return; }
+    if (!username.trim()) { setUsernameError("请输入用户名"); return; }
+
     setBusy(true);
     setMessage("");
-    const { error } = await supabase.auth.updateUser({ email: newEmail.trim() });
-    setMessage(error ? error.message : "绑定邮件已发送，请打开新旧邮箱中的确认邮件完成绑定。");
-    if (!error) setNewEmail("");
+    setUsernameError("");
+
+    const available = await checkUsernameAvailability(username);
+    if (!available) {
+      setUsernameError("该用户名已被使用，请换一个");
+      setBusy(false);
+      return;
+    }
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ username: username.trim().toLowerCase() })
+      .eq("id", (await supabase.auth.getUser()).data.user?.id ?? "");
+
+    if (error) {
+      setMessage(error.message);
+    } else {
+      setCurrentUsername(username.trim().toLowerCase());
+      setMessage("用户名已保存");
+    }
     setBusy(false);
   }
 
@@ -42,7 +89,7 @@ export default function AccountPage() {
     setBusy(true);
     setMessage("");
     const { error } = await supabase.auth.updateUser({ password });
-    setMessage(error ? error.message : "密码已设置。下次可以使用当前邮箱和这个密码登录。");
+    setMessage(error ? error.message : "密码已设置。下次可以使用用户名和这个密码登录。");
     if (!error) setPasswordValue("");
     setBusy(false);
   }
@@ -57,25 +104,71 @@ export default function AccountPage() {
         <div className="auth-copy">
           <p className="eyebrow">ACCOUNT SETTINGS</p>
           <h1>个人中心</h1>
-          <p>GitHub 登录后不需要重复注册。你还可以在这里绑定邮箱，或给当前账号设置密码。</p>
+          <p>使用 GitHub 登录后即可使用。你还可以设置用户名和密码，之后无需 GitHub 也可直接登录。</p>
         </div>
+
         <div className="account-summary">
           <span className="account-avatar">{email.slice(0, 1).toUpperCase() || "U"}</span>
-          <div><strong>{email || "正在读取账号…"}</strong><small>{provider === "github" ? "已使用 GitHub 登录" : "邮箱账号"}</small></div>
+          <div>
+            <strong>{email || "正在读取账号…"}</strong>
+            <small>
+              {provider === "github" ? "已使用 GitHub 登录" : "邮箱账号"}
+              {currentUsername ? ` · 用户名：${currentUsername}` : ""}
+            </small>
+          </div>
         </div>
-        {provider === "github" && <p className="form-hint">当前账号已绑定 GitHub 登录</p>}
+
+        {/* Username setting */}
+        <form className="auth-form account-form" onSubmit={(e) => { e.preventDefault(); void saveUsername(); }}>
+          <h2>设置用户名</h2>
+          <p className="form-hint">
+            用户名可用于登录，3~20 个字符，仅支持字母、数字和下划线。设置后可用「用户名 + 密码」登录。
+          </p>
+          <label>
+            <span>用户名</span>
+            <input
+              value={username}
+              onChange={(event) => {
+                setUsername(event.target.value);
+                setUsernameError(validateUsername(event.target.value));
+              }}
+              placeholder="例如：mxx_2026"
+              maxLength={20}
+            />
+          </label>
+          {usernameError && <p className="field-error">{usernameError}</p>}
+          <button
+            className="primary-button"
+            disabled={busy || !supabase || !!usernameError}
+            type="submit"
+          >
+            {busy ? "处理中…" : currentUsername ? "更新用户名" : "保存用户名"}
+          </button>
+        </form>
+
+        {/* Password setting */}
         <form onSubmit={setAccountPassword} className="auth-form account-form">
-          <h2>设置邮箱登录密码</h2>
-          <p className="form-hint">如果你是 GitHub 注册用户，设置密码后可直接用上面的邮箱 + 密码登录。</p>
-          <label><span>新密码</span><input type="password" minLength={6} required value={password} onChange={(event) => setPasswordValue(event.target.value)} placeholder="至少 6 位" /></label>
-          <button className="primary-button" disabled={busy || !supabase}>{busy ? "处理中…" : "保存密码"}</button>
+          <h2>设置登录密码</h2>
+          <p className="form-hint">
+            设置密码后，可直接用上面的用户名 + 密码登录，不再需要 GitHub。
+          </p>
+          <label>
+            <span>密码</span>
+            <input
+              type="password"
+              minLength={6}
+              required
+              value={password}
+              onChange={(event) => setPasswordValue(event.target.value)}
+              placeholder="至少 6 位"
+            />
+          </label>
+          <button className="primary-button" disabled={busy || !supabase || !username.trim()}>
+            {busy ? "处理中…" : "保存密码"}
+          </button>
+          {!username.trim() && <p className="form-hint" style={{ color: "var(--muted)" }}>请先设置用户名，再保存密码</p>}
         </form>
-        <form onSubmit={updateEmail} className="auth-form account-form">
-          <h2>绑定或更换邮箱</h2>
-          <p className="form-hint">填写后会发送确认邮件；确认完成前，当前邮箱仍然有效。</p>
-          <label><span>新邮箱</span><input type="email" required value={newEmail} onChange={(event) => setNewEmail(event.target.value)} placeholder="例如 your@qq.com" /></label>
-          <button className="secondary-button" disabled={busy || !supabase}>{busy ? "处理中…" : "发送绑定确认邮件"}</button>
-        </form>
+
         {message && <p className="auth-message">{message}</p>}
         <p className="auth-back"><a href="/">返回工作台</a></p>
       </section>

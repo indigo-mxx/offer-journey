@@ -794,18 +794,22 @@ export function RecruitmentTracker({
           </span>
           {user ? (
             <div className="account-menu">
-              <span className="account-avatar">
+              <a className="account-avatar" href="/account" aria-label={`${user.displayName} · 个人中心`} title="个人中心">
                 {user.displayName.slice(0, 1).toUpperCase()}
-              </span>
+              </a>
               <span className="account-copy">
                 <strong>{user.displayName}</strong>
-                <a href="/account">个人中心</a>
-                {onSignOut ? (
-                  <button className="text-button" onClick={() => void onSignOut()}>退出</button>
-                ) : (
-                  <a href={signOutPath}>退出</a>
-                )}
+                <small>{user.email}</small>
               </span>
+              <a className="account-center-link" href="/account" aria-label="个人中心">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                <span>个人中心</span>
+              </a>
+              {onSignOut ? (
+                <button className="account-signout" onClick={() => void onSignOut()}>退出</button>
+              ) : (
+                <a className="account-signout" href={signOutPath}>退出</a>
+              )}
             </div>
           ) : (
             <a className="secondary-button button-link" href={signInPath}>
