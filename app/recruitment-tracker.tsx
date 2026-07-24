@@ -31,6 +31,8 @@ type Application = {
   company: string;
   position: string;
   base: string;
+  industryTags: string[];
+  companyScale: string;
   batch: "提前批" | "秋招" | "日常实习" | "其他";
   status: ApplicationStatus;
   appliedAt: string;
@@ -116,6 +118,8 @@ const STATUSES: ApplicationStatus[] = [
 
 const BASE_OPTIONS = ["北京", "上海", "广州", "深圳", "杭州", "成都", "武汉", "南京", "苏州", "西安", "合肥", "重庆"];
 const PLATFORM_OPTIONS = ["招聘官网", "Boss 直聘", "牛客", "猎聘", "智联招聘", "前程无忧", "内推", "校园招聘"];
+const INDUSTRY_OPTIONS = ["半导体", "具身智能", "智能驾驶", "软件", "游戏", "汽车", "机器人", "AI / 大模型", "互联网 / 平台", "硬件 / 消费电子", "金融科技", "医疗健康", "制造业", "教育"];
+const COMPANY_SCALE_OPTIONS = ["未知", "1-50人", "51-200人", "201-500人", "501-2000人", "2001-10000人", "10000+人"];
 
 const EMPTY_FORM: Omit<
   Application,
@@ -124,6 +128,8 @@ const EMPTY_FORM: Omit<
   company: "",
   position: "",
   base: "",
+  industryTags: [],
+  companyScale: "",
   batch: "提前批",
   status: "准备投递",
   appliedAt: "",
@@ -140,6 +146,8 @@ const SAMPLE_DATA: Application[] = [
     company: "星海科技",
     position: "前端开发工程师",
     base: "上海",
+    industryTags: ["软件"],
+    companyScale: "2001-10000人",
     batch: "提前批",
     status: "一面",
     appliedAt: "2026-07-15",
@@ -155,6 +163,8 @@ const SAMPLE_DATA: Application[] = [
     company: "远山智能",
     position: "算法工程师",
     base: "北京",
+    industryTags: ["具身智能", "机器人"],
+    companyScale: "51-200人",
     batch: "秋招",
     status: "笔试",
     appliedAt: "2026-07-19",
@@ -170,6 +180,8 @@ const SAMPLE_DATA: Application[] = [
     company: "青鸟网络",
     position: "产品经理",
     base: "深圳",
+    industryTags: ["互联网 / 平台"],
+    companyScale: "10000+人",
     batch: "提前批",
     status: "Offer",
     appliedAt: "2026-07-03",
@@ -218,6 +230,8 @@ function normalizeLocal(items: Application[]) {
   return items.map((item) => ({
     ...item,
     visibility: item.visibility ?? "private",
+    industryTags: Array.isArray(item.industryTags) ? item.industryTags.filter(Boolean) : [],
+    companyScale: item.companyScale ?? "",
     isOwner: true,
   }));
 }
@@ -237,6 +251,8 @@ export function RecruitmentTracker({
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("全部状态");
   const [batchFilter, setBatchFilter] = useState("全部批次");
+  const [industryFilter, setIndustryFilter] = useState("全部行业");
+  const [scaleFilter, setScaleFilter] = useState("全部规模");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -390,6 +406,8 @@ export function RecruitmentTracker({
           item.company,
           item.position,
           item.base,
+          item.industryTags.join(" "),
+          item.companyScale,
           item.channel,
           item.note,
           item.ownerName,
@@ -399,7 +417,9 @@ export function RecruitmentTracker({
         return (
           (!normalized || searchTarget.includes(normalized)) &&
           (statusFilter === "全部状态" || item.status === statusFilter) &&
-          (batchFilter === "全部批次" || item.batch === batchFilter)
+          (batchFilter === "全部批次" || item.batch === batchFilter) &&
+          (industryFilter === "全部行业" || item.industryTags.includes(industryFilter)) &&
+          (scaleFilter === "全部规模" || item.companyScale === scaleFilter)
         );
       })
       .sort(
@@ -409,8 +429,10 @@ export function RecruitmentTracker({
   }, [
     batchFilter,
     friendApplications,
+    industryFilter,
     ownApplications,
     query,
+    scaleFilter,
     statusFilter,
     view,
   ]);
@@ -444,6 +466,8 @@ export function RecruitmentTracker({
       company: item.company,
       position: item.position,
       base: item.base,
+      industryTags: item.industryTags ?? [],
+      companyScale: item.companyScale ?? "",
       batch: item.batch,
       status: item.status,
       appliedAt: item.appliedAt,
@@ -888,6 +912,14 @@ export function RecruitmentTracker({
                 <option>全部批次</option>
                 <option>提前批</option><option>秋招</option><option>日常实习</option><option>其他</option>
               </select>
+              <select value={industryFilter} onChange={(event) => setIndustryFilter(event.target.value)} aria-label="按行业筛选">
+                <option>全部行业</option>
+                {Array.from(new Set([...INDUSTRY_OPTIONS, ...applications.flatMap((item) => item.industryTags ?? [])])).map((industry) => <option key={industry}>{industry}</option>)}
+              </select>
+              <select value={scaleFilter} onChange={(event) => setScaleFilter(event.target.value)} aria-label="按公司规模筛选">
+                <option>全部规模</option>
+                {Array.from(new Set([...COMPANY_SCALE_OPTIONS, ...applications.map((item) => item.companyScale).filter(Boolean)])).map((scale) => <option key={scale}>{scale}</option>)}
+              </select>
             </div>
 
             {!ready ? (
@@ -915,7 +947,7 @@ export function RecruitmentTracker({
                             aria-label={`${item.isOwner === false ? "查看" : "编辑"} ${item.company} ${item.position}`}
                           >
                             <span className="company-avatar">{item.company.slice(0, 1)}</span>
-                            <span><strong>{item.company}</strong><small>{item.position}</small></span>
+                            <span><strong>{item.company}</strong><small>{item.position}</small><small className="company-tags">{item.industryTags?.length ? item.industryTags.join(" · ") : "未标记行业"}{item.companyScale ? ` · ${item.companyScale}` : ""}</small></span>
                           </button>
                         </td>
                         {view === "friends" && <td data-label="好友">{item.ownerName || "好友"}</td>}
@@ -1026,6 +1058,19 @@ export function RecruitmentTracker({
                 <label><span>公司名称 *</span><input required autoFocus value={form.company} onChange={(event) => setForm({ ...form, company: event.target.value })} placeholder="例如：字节跳动" /></label>
                 <label><span>岗位名称 *</span><input required value={form.position} onChange={(event) => setForm({ ...form, position: event.target.value })} placeholder="例如：前端开发工程师" /></label>
                 <label><span>Base 城市（可选）</span><input list="base-options" value={form.base} onChange={(event) => setForm({ ...form, base: event.target.value })} placeholder="可选：北京 / 上海，也可自定义" /></label>
+                <label className="full-field"><span>公司行业标签（可多选，也可自定义）</span>
+                  <div className="tag-picker">
+                    {INDUSTRY_OPTIONS.map((industry) => {
+                      const active = form.industryTags.includes(industry);
+                      return <button type="button" key={industry} className={`tag-choice${active ? " active" : ""}`} onClick={() => setForm({ ...form, industryTags: active ? form.industryTags.filter((tag) => tag !== industry) : [...form.industryTags, industry] })}>{industry}</button>;
+                    })}
+                  </div>
+                  <input value={form.industryTags.filter((tag) => !INDUSTRY_OPTIONS.includes(tag)).join("、")} onChange={(event) => {
+                    const custom = event.target.value.split(/[、,，]/).map((tag) => tag.trim()).filter(Boolean);
+                    setForm({ ...form, industryTags: [...form.industryTags.filter((tag) => INDUSTRY_OPTIONS.includes(tag)), ...custom] });
+                  }} placeholder="自定义标签，可用顿号分隔，例如：新能源、ToB" />
+                </label>
+                <label><span>公司规模（可选）</span><input list="scale-options" value={form.companyScale} onChange={(event) => setForm({ ...form, companyScale: event.target.value })} placeholder="选择范围或自定义，例如：约300人" /></label>
                 <label><span>招聘批次</span><select value={form.batch} onChange={(event) => setForm({ ...form, batch: event.target.value as Application["batch"] })}><option>提前批</option><option>秋招</option><option>日常实习</option><option>其他</option></select></label>
                 <label><span>当前进度</span><select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as ApplicationStatus })}>{STATUSES.map((status) => <option key={status}>{status}</option>)}</select></label>
                 <label><span>投递时间</span><input type="date" value={form.appliedAt} onChange={(event) => setForm({ ...form, appliedAt: event.target.value })} /></label>
@@ -1051,6 +1096,9 @@ export function RecruitmentTracker({
                 </datalist>
                 <datalist id="platform-options">
                   {PLATFORM_OPTIONS.map((option) => <option key={option} value={option} />)}
+                </datalist>
+                <datalist id="scale-options">
+                  {COMPANY_SCALE_OPTIONS.map((option) => <option key={option} value={option} />)}
                 </datalist>
                 {editingId && (
                   <section className="embedded-interviews full-field" aria-label="当前岗位的面试记录">

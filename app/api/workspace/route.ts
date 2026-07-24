@@ -12,6 +12,11 @@ function textValue(value: unknown, maxLength = 500) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
 }
 
+function tagValues(value: unknown) {
+  if (!Array.isArray(value)) return [] as string[];
+  return [...new Set(value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean))].slice(0, 12).map((item) => item.slice(0, 40));
+}
+
 function visibility(value: unknown): Visibility {
   return value === "progress" || value === "full" ? value : "private";
 }
@@ -99,6 +104,8 @@ export async function GET(request: Request) {
       company: row.company,
       position: row.position,
       base: row.base,
+      industryTags: Array.isArray(row.industry_tags) ? row.industry_tags : [],
+      companyScale: row.company_scale ?? "",
       batch: row.batch,
       status: row.status,
       appliedAt: row.applied_at ?? "",
@@ -154,6 +161,8 @@ export async function POST(request: Request) {
           company: textValue(value.company, 120),
           position: textValue(value.position, 160),
           base: textValue(value.base, 100),
+          industry_tags: tagValues(value.industryTags),
+          company_scale: textValue(value.companyScale, 100),
           batch: textValue(value.batch, 40) || "秋招",
           status: textValue(value.status, 40) || "准备投递",
           applied_at: textValue(value.appliedAt, 20) || null,

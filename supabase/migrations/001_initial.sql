@@ -32,6 +32,8 @@ create table if not exists public.applications (
   company text not null,
   position text not null,
   base text not null default '',
+  industry_tags text[] not null default '{}',
+  company_scale text not null default '',
   batch text not null default '秋招',
   status text not null default '准备投递',
   applied_at date,
@@ -61,6 +63,7 @@ create table if not exists public.interviews (
 create index if not exists applications_owner_idx on public.applications(owner_id);
 create index if not exists applications_group_idx on public.applications(group_id);
 create index if not exists applications_updated_idx on public.applications(updated_at desc);
+create index if not exists applications_industry_tags_idx on public.applications using gin (industry_tags);
 create index if not exists interviews_application_idx on public.interviews(application_id);
 create index if not exists interviews_scheduled_idx on public.interviews(scheduled_at);
 
