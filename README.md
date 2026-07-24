@@ -24,16 +24,16 @@
 
 已有 Supabase 项目升级时，请在 Supabase Dashboard 的 SQL Editor 中执行 `supabase/migrations/002_company_metadata.sql`，一次即可为已有投递记录增加行业标签和公司规模字段。新建项目按顺序执行 `supabase/migrations/001_initial.sql` 和 `002_company_metadata.sql`。
 
-腾讯云 CloudBase 部署使用仓库 `main` 分支，监听端口为 `3000`；代码推送后可在 CloudBase 的构建记录中点击“重新部署”。
+## 正式部署
 
-## 腾讯云登录配置
+当前正式方案是 Vercel 托管网站、Supabase 负责登录和云端数据。代码推送到 GitHub `main` 分支后，由 Vercel 自动构建部署。不要把 `.env.local` 提交到 GitHub。
 
-CloudBase 的运行环境变量中需要配置以下两项（不是 Dockerfile，也不要提交 `.env.local`）：
+Vercel 项目的环境变量中需要配置以下两项：
 
 - `NEXT_PUBLIC_SUPABASE_URL`：`https://xhavwciesioqujdmkvob.supabase.co`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`：Supabase 项目设置 → API 中的 Publishable key（旧界面叫 anon key）
 
-应用会在页面运行时读取这两个配置，因此只需在 CloudBase 运行环境变量中设置并重新部署，邮箱和 GitHub 登录都会恢复。
+应用会在页面运行时读取这两个配置，配置后重新部署，邮箱和 GitHub 登录都会恢复。
 
 ## 本地运行
 
