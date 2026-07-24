@@ -1,8 +1,9 @@
 node_modules
+.pnpm-store
 .git
 .vercel
 .wrangler
 dist
-build
+.output
 .env*
 *.log
