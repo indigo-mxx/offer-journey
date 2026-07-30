@@ -66,7 +66,7 @@ type GroupInfo = {
 
 type WorkspaceResponse = {
   applications: Application[];
-  group: GroupInfo | null;
+  groups: GroupInfo[];
   interviews?: Interview[];
 };
 
@@ -258,7 +258,8 @@ export function RecruitmentTracker({
   onSignOut,
 }: Props) {
   const [applications, setApplications] = useState<Application[]>([]);
-  const [group, setGroup] = useState<GroupInfo | null>(null);
+  const [groups, setGroups] = useState<GroupInfo[]>([]);
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [localBackup, setLocalBackup] = useState<Application[]>([]);
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -283,6 +284,11 @@ export function RecruitmentTracker({
   const [inviteCode, setInviteCode] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
   const inviteHandledRef = useRef(false);
+
+  const activeGroup = useMemo(
+    () => groups.find((g) => g.id === activeGroupId) ?? null,
+    [groups, activeGroupId],
+  );
 
   const cloudAction = useCallback(async (payload: Record<string, unknown>) => {
     const supabase = getSupabaseBrowserClient();
@@ -311,7 +317,11 @@ export function RecruitmentTracker({
     };
     if (!response.ok) throw new Error(result.error || "云端同步失败");
     setApplications(result.applications);
-    setGroup(result.group);
+    setGroups(result.groups);
+    setActiveGroupId((prev) => {
+      if (prev && result.groups.some((g) => g.id === prev)) return prev;
+      return result.groups[0]?.id ?? null;
+    });
     setInterviews(result.interviews ?? []);
   }, []);
 
@@ -480,13 +490,29 @@ export function RecruitmentTracker({
     return { total: ownApplications.length, active, interview, offers };
   }, [ownApplications]);
 
-  function openCreate() {
+  function openCreate(source?: Application) {
     setEditingId(null);
     setForm({
-      ...EMPTY_FORM,
+      company: source?.company ?? "",
+      position: "",
+      base: source?.base ?? "",
+      industryTags: source?.industryTags ?? [],
+      companyScale: source?.companyScale ?? "",
+      batch: source?.batch ?? "秋招",
+      status: "准备投递",
       appliedAt: new Date().toISOString().slice(0, 10),
+      channel: source?.channel ?? "",
+      link: source?.link ?? "",
+      salary: source?.salary ?? "",
+      note: source?.note ?? "",
+      visibility: source?.visibility ?? "private",
     });
     setIsFormOpen(true);
+  }
+
+  function copyFromExisting(id: string) {
+    const source = ownApplications.find((item) => item.id === id);
+    if (source) openCreate(source);
   }
 
   function openEdit(item: Application) {
@@ -525,7 +551,7 @@ export function RecruitmentTracker({
     if (!form.company.trim() || !form.position.trim()) return;
     const next: Application = {
       ...form,
-      visibility: group ? form.visibility : "private",
+      visibility: activeGroup ? form.visibility : "private",
       company: form.company.trim(),
       position: form.position.trim(),
       id: editingId ?? crypto.randomUUID(),
@@ -535,7 +561,7 @@ export function RecruitmentTracker({
     setBusy(true);
     try {
       if (user) {
-        await cloudAction({ action: "saveApplication", application: next });
+        await cloudAction({ action: "saveApplication", application: { ...next, groupId: activeGroupId } });
         await loadCloud();
       } else if (editingId) {
         setApplications((current) =>
@@ -765,14 +791,14 @@ export function RecruitmentTracker({
   }
 
   async function copyInviteCode() {
-    if (!group) return;
-    await navigator.clipboard.writeText(group.inviteCode);
+    if (!activeGroup) return;
+    await navigator.clipboard.writeText(activeGroup.inviteCode);
     setNotice("邀请码已复制");
   }
 
   async function copyShareLink() {
-    if (!group) return;
-    const shareLink = `${window.location.origin}/?invite=${encodeURIComponent(group.inviteCode)}`;
+    if (!activeGroup) return;
+    const shareLink = `${window.location.origin}/?invite=${encodeURIComponent(activeGroup.inviteCode)}`;
     await navigator.clipboard.writeText(shareLink);
     setNotice("分享链接已复制，朋友登录后会自动加入小组");
   }
@@ -816,7 +842,7 @@ export function RecruitmentTracker({
               登录并同步
             </a>
           )}
-          <button className="primary-button" onClick={openCreate}>
+          <button className="primary-button" onClick={() => openCreate()}>
             <span>＋</span> 新增投递
           </button>
         </div>
@@ -835,12 +861,12 @@ export function RecruitmentTracker({
           </p>
         </div>
         <div className="hero-note">
-          <span className="hero-note-icon">{group ? "♧" : "⌁"}</span>
+          <span className="hero-note-icon">{activeGroup ? "♧" : "⌁"}</span>
           <div>
-            <strong>{group ? group.name : "今天的小提醒"}</strong>
+            <strong>{activeGroup ? activeGroup.name : "今天的小提醒"}</strong>
             <p>
-              {group
-                ? `小组目前有 ${group.members.length} 位成员，好友公开的进度会显示在协作视图。`
+              {activeGroup
+                ? `小组目前有 ${activeGroup.members.length} 位成员，好友公开的进度会显示在协作视图。`
                 : stats.interview
                   ? `你有 ${stats.interview} 个岗位正在面试阶段，记得及时补充面经。`
                   : "先添加第一条投递，之后每次进展都顺手更新一下。"}
@@ -912,7 +938,9 @@ export function RecruitmentTracker({
           <InsightsPanel applications={ownApplications} interviews={interviews} />
         ) : view === "sharing" && user ? (
           <SharingPanel
-            group={group}
+            groups={groups}
+            activeGroupId={activeGroupId}
+            setActiveGroupId={setActiveGroupId}
             groupName={groupName}
             inviteCode={inviteCode}
             busy={busy}
@@ -1039,6 +1067,7 @@ export function RecruitmentTracker({
                           {item.isOwner !== false && (
                             <div className="row-actions">
                               <button onClick={() => openEdit(item)}>编辑</button>
+                              <button onClick={() => openCreate(item)}>复制</button>
                               <button className="danger" onClick={() => removeApplication(item)}>删除</button>
                             </div>
                           )}
@@ -1053,7 +1082,7 @@ export function RecruitmentTracker({
                 <span>{view === "friends" ? "♧" : "◎"}</span>
                 <h3>
                   {view === "friends"
-                    ? group ? "好友还没有公开进度" : "先创建或加入一个共享小组"
+                    ? activeGroup ? "好友还没有公开进度" : "先创建或加入一个共享小组"
                     : applications.length ? "没有符合条件的记录" : "从第一份投递开始"}
                 </h3>
                 <p>
@@ -1061,10 +1090,10 @@ export function RecruitmentTracker({
                     ? "好友将岗位设为“仅共享进度”或“完整共享”后，会出现在这里。"
                     : "添加公司和岗位信息，我们会帮你记住后续的每一步。"}
                 </p>
-                {view === "friends" && !group ? (
+                {view === "friends" && !activeGroup ? (
                   <button className="primary-button" onClick={() => setView("sharing")}>设置共享小组</button>
                 ) : view === "mine" && !ownApplications.length ? (
-                  <button className="primary-button" onClick={openCreate}>＋ 新增投递</button>
+                  <button className="primary-button" onClick={() => openCreate()}>＋ 新增投递</button>
                 ) : null}
               </div>
             )}
@@ -1115,6 +1144,50 @@ export function RecruitmentTracker({
               <button className="close-button" onClick={closeForm} aria-label="关闭">×</button>
             </div>
             <form onSubmit={submitForm}>
+              {!editingId && ownApplications.length > 0 && (
+                <div className="copy-from-existing">
+                  <span>从已有记录快速复制</span>
+                  <select
+                    value=""
+                    onChange={(event) => {
+                      const id = event.target.value;
+                      if (!id) return;
+                      const source = ownApplications.find((item) => item.id === id);
+                      if (source) {
+                        setForm({
+                          ...form,
+                          company: source.company,
+                          base: source.base,
+                          industryTags: source.industryTags ?? [],
+                          companyScale: source.companyScale ?? "",
+                          batch: source.batch,
+                          channel: source.channel,
+                          link: source.link,
+                          salary: source.salary,
+                          note: source.note,
+                          visibility: source.visibility,
+                        });
+                      }
+                    }}
+                  >
+                    <option value="">选择一条已有记录（仅复制公司信息）</option>
+                    {Array.from(
+                      ownApplications
+                        .reduce((map, item) => {
+                          if (!map.has(item.company)) map.set(item.company, item);
+                          return map;
+                        }, new Map<string, Application>())
+                        .values()
+                    )
+                      .sort((a, b) => a.company.localeCompare(b.company, "zh"))
+                      .map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.company} · {item.position}（{item.base || "无地点"}）
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
               <div className="form-grid">
                 <label><span>公司名称 *</span><input required autoFocus value={form.company} onChange={(event) => setForm({ ...form, company: event.target.value })} placeholder="例如：字节跳动" /></label>
                 <label><span>岗位名称 *</span><input required value={form.position} onChange={(event) => setForm({ ...form, position: event.target.value })} placeholder="例如：前端开发工程师" /></label>
@@ -1144,13 +1217,13 @@ export function RecruitmentTracker({
                   <select
                     value={form.visibility}
                     onChange={(event) => setForm({ ...form, visibility: event.target.value as Visibility })}
-                    disabled={!group}
+                    disabled={!activeGroup}
                   >
                     <option value="private">仅自己可见</option>
                     <option value="progress">小组可见进度（隐藏渠道、链接、薪资和备注）</option>
                     <option value="full">小组可见完整信息</option>
                   </select>
-                  <small>{group ? "你可以随时修改，权限立即生效。" : "加入共享小组后可开放给好友。"}</small>
+                  <small>{activeGroup ? "你可以随时修改，权限立即生效。" : "加入共享小组后可开放给好友。"}</small>
                 </label>
                 <datalist id="base-options">
                   {BASE_OPTIONS.map((option) => <option key={option} value={option} />)}
@@ -1224,13 +1297,16 @@ export function RecruitmentTracker({
               <span><b>{new Set(companyApplications.map((item) => item.base).filter(Boolean)).size || "—"}</b> 个地点</span>
               <span><b>{companyApplications.filter((item) => item.status === "Offer").length}</b> 个 Offer</span>
               <span><b>{companyApplications[0]?.industryTags?.length || 0}</b> 个行业标签</span>
+              <button className="secondary-button compact-button" onClick={() => { setSelectedCompany(null); openCreate({ company: selectedCompany, position: "", base: "", industryTags: [], companyScale: "", batch: "秋招", status: "准备投递", appliedAt: new Date().toISOString().slice(0, 10), channel: "", link: "", salary: "", note: "", visibility: "private", id: "", updatedAt: "" }); }}>＋ 新增岗位</button>
             </div>
             <div className="company-job-list">
               {companyApplications.map((item) => (
                 <article className="company-job-card" key={item.id}>
                   <div className="company-job-main"><strong>{item.position}</strong><span>{item.base || "地点未填写"} · {item.batch} · {formatDate(item.appliedAt)}</span>{item.industryTags?.length ? <small>{item.industryTags.join(" · ")}{item.companyScale ? ` · ${item.companyScale}` : ""}</small> : null}</div>
                   <span className={`status-badge ${statusTone(item.status)}`}>{item.status}</span>
-                  {item.isOwner !== false && <button className="secondary-button compact-button" onClick={() => { setSelectedCompany(null); openEdit(item); }}>编辑岗位</button>}
+                  <div className="company-job-actions">
+                    {item.isOwner !== false && <button className="secondary-button compact-button" onClick={() => { setSelectedCompany(null); openEdit(item); }}>编辑</button>}
+                  </div>
                 </article>
               ))}
             </div>
@@ -1267,7 +1343,9 @@ function InsightsPanel({ applications, interviews }: { applications: Application
 }
 
 function SharingPanel({
-  group,
+  groups,
+  activeGroupId,
+  setActiveGroupId,
   groupName,
   inviteCode,
   busy,
@@ -1277,7 +1355,9 @@ function SharingPanel({
   copyShareLink,
   runAction,
 }: {
-  group: GroupInfo | null;
+  groups: GroupInfo[];
+  activeGroupId: string | null;
+  setActiveGroupId: (id: string | null) => void;
   groupName: string;
   inviteCode: string;
   busy: boolean;
@@ -1287,9 +1367,49 @@ function SharingPanel({
   copyShareLink: () => void;
   runAction: (payload: Record<string, unknown>, success: string) => Promise<void>;
 }) {
-  if (!group) {
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const activeGroup = groups.find((g) => g.id === activeGroupId) ?? null;
+
+  const groupSwitcher = (
+    <div className="group-switcher">
+      <label>当前小组：</label>
+      <select
+        value={activeGroupId ?? ""}
+        onChange={(event) => setActiveGroupId(event.target.value || null)}
+      >
+        {groups.length === 0 && <option value="">（无小组）</option>}
+        {groups.map((g) => (
+          <option key={g.id} value={g.id}>
+            {g.name} ({g.members.length}人)
+          </option>
+        ))}
+      </select>
+      <button
+        className="secondary-button compact-button"
+        onClick={() => setShowCreateForm(true)}
+      >
+        ＋ 创建小组
+      </button>
+      <button
+        className="secondary-button compact-button"
+        onClick={() => setShowCreateForm(true)}
+      >
+        ↗ 加入小组
+      </button>
+    </div>
+  );
+
+  if (groups.length === 0 || showCreateForm || !activeGroup) {
     return (
       <div className="sharing-layout">
+        {groups.length > 0 && (
+          <div className="form-view-header">
+            {groupSwitcher}
+            <button className="secondary-button compact-button" onClick={() => setShowCreateForm(false)}>
+              ← 返回小组
+            </button>
+          </div>
+        )}
         <div className="sharing-intro">
           <p className="section-kicker">SHARED SPACE</p>
           <h2>和秋招搭子一起前进</h2>
@@ -1322,20 +1442,21 @@ function SharingPanel({
 
   return (
     <div className="group-dashboard">
+      {groupSwitcher}
       <div className="group-head">
-        <div><p className="section-kicker">SHARED SPACE</p><h2>{group.name}</h2><p>{group.members.length} 位成员 · 你的身份是{group.role === "owner" ? "创建者" : "成员"}</p></div>
+        <div><p className="section-kicker">SHARED SPACE</p><h2>{activeGroup.name}</h2><p>{activeGroup.members.length} 位成员 · 你的身份是{activeGroup.role === "owner" ? "创建者" : "成员"}</p></div>
         <div className="invite-code-box">
           <small>好友邀请码</small>
-          <strong>{group.inviteCode}</strong>
+          <strong>{activeGroup.inviteCode}</strong>
           <div className="invite-actions"><button onClick={copyInviteCode}>复制邀请码</button><button onClick={copyShareLink}>复制分享链接</button></div>
-          <code>{typeof window !== "undefined" ? `${window.location.origin}/?invite=${group.inviteCode}` : ""}</code>
+          <code>{typeof window !== "undefined" ? `${window.location.origin}/?invite=${activeGroup.inviteCode}` : ""}</code>
         </div>
       </div>
       <div className="group-grid">
         <section className="members-card">
-          <div className="card-title"><h3>小组成员</h3><span>{group.members.length}</span></div>
+          <div className="card-title"><h3>小组成员</h3><span>{activeGroup.members.length}</span></div>
           <div className="member-list">
-            {group.members.map((member) => (
+            {activeGroup.members.map((member) => (
               <div className="member-row" key={member.email}>
                 <span className="member-avatar">{member.display_name.slice(0, 1).toUpperCase()}</span>
                 <span><strong>{member.display_name}</strong><small>{member.email}</small></span>
@@ -1352,13 +1473,13 @@ function SharingPanel({
         </section>
       </div>
       <div className="group-actions">
-        {group.role === "owner" ? (
+        {activeGroup.role === "owner" ? (
           <>
-            <button className="secondary-button" disabled={busy} onClick={() => runAction({ action: "rotateInviteCode" }, "邀请码已更新")}>废弃旧邀请码并生成新的</button>
-            <button className="danger-button" disabled={busy} onClick={() => window.confirm("删除小组后，成员关系会解除，已共享岗位会恢复为仅自己可见。确定删除吗？") && runAction({ action: "deleteGroup" }, "共享小组已删除")}>删除小组</button>
+            <button className="secondary-button" disabled={busy} onClick={() => runAction({ action: "rotateInviteCode", groupId: activeGroupId }, "邀请码已更新")}>废弃旧邀请码并生成新的</button>
+            <button className="danger-button" disabled={busy} onClick={() => window.confirm("删除小组后，成员关系会解除，已共享岗位会恢复为仅自己可见。确定删除吗？") && runAction({ action: "deleteGroup", groupId: activeGroupId }, "共享小组已删除")}>删除小组</button>
           </>
         ) : (
-          <button className="danger-button" disabled={busy} onClick={() => window.confirm("退出后，你已共享的岗位会自动改为仅自己可见。确定退出吗？") && runAction({ action: "leaveGroup" }, "已退出共享小组")}>退出小组</button>
+          <button className="danger-button" disabled={busy} onClick={() => window.confirm("退出后，你已共享的岗位会自动改为仅自己可见。确定退出吗？") && runAction({ action: "leaveGroup", groupId: activeGroupId }, "已退出共享小组")}>退出小组</button>
         )}
       </div>
     </div>

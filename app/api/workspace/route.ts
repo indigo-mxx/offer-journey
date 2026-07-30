@@ -33,44 +33,53 @@ async function context(request: Request) {
   return result.user ? result : null;
 }
 
-async function groupForUser(supabase: Awaited<ReturnType<typeof getUserFromAccessToken>>["supabase"], userId: string) {
+async function groupsForUser(supabase: Awaited<ReturnType<typeof getUserFromAccessToken>>["supabase"], userId: string) {
   const { data: memberships } = await supabase
     .from("group_members")
     .select("group_id, role")
     .eq("user_id", userId)
-    .order("joined_at", { ascending: true })
-    .limit(1);
-  const membership = memberships?.[0];
-  if (!membership) return null;
-  const { data: group } = await supabase
+    .order("joined_at", { ascending: true });
+  if (!memberships?.length) return [];
+  const groupIds = memberships.map((m) => m.group_id);
+  const { data: groupRows } = await supabase
     .from("groups")
     .select("id, name, owner_id, invite_code")
-    .eq("id", membership.group_id)
-    .maybeSingle();
-  if (!group) return null;
-  const { data: members } = await supabase
+    .in("id", groupIds);
+  const groupMap = new Map((groupRows ?? []).map((g) => [g.id, g]));
+  const { data: allMembers } = await supabase
     .from("group_members")
-    .select("user_id, role, joined_at")
-    .eq("group_id", group.id)
+    .select("group_id, user_id, role, joined_at")
+    .in("group_id", groupIds)
     .order("joined_at", { ascending: true });
-  const memberIds = (members ?? []).map((member) => member.user_id);
-  const { data: profiles } = memberIds.length
-    ? await supabase.from("profiles").select("id, email, display_name").in("id", memberIds)
+  const memberUserIds = [...new Set((allMembers ?? []).map((m) => m.user_id))];
+  const { data: profiles } = memberUserIds.length
+    ? await supabase.from("profiles").select("id, email, display_name").in("id", memberUserIds)
     : { data: [] };
-  const profileMap = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
-  return {
-    id: group.id,
-    name: group.name,
-    ownerEmail: profileMap.get(group.owner_id)?.email ?? "",
-    inviteCode: group.invite_code,
-    role: membership.role,
-    members: (members ?? []).map((member) => ({
-      email: profileMap.get(member.user_id)?.email ?? "",
-      display_name: profileMap.get(member.user_id)?.display_name ?? "成员",
-      role: member.role,
-      joined_at: member.joined_at,
-    })),
-  };
+  const profileMap = new Map((profiles ?? []).map((p) => [p.id, p]));
+  const membersByGroup = new Map<string, typeof allMembers>();
+  for (const member of allMembers ?? []) {
+    if (!membersByGroup.has(member.group_id)) membersByGroup.set(member.group_id, []);
+    membersByGroup.get(member.group_id)!.push(member);
+  }
+  const membershipMap = new Map(memberships.map((m) => [m.group_id, m.role]));
+  return groupIds.map((id) => {
+    const group = groupMap.get(id);
+    if (!group) return null;
+    const members = membersByGroup.get(id) ?? [];
+    return {
+      id: group.id,
+      name: group.name,
+      ownerEmail: profileMap.get(group.owner_id)?.email ?? "",
+      inviteCode: group.invite_code,
+      role: membershipMap.get(id) ?? "member",
+      members: members.map((member) => ({
+        email: profileMap.get(member.user_id)?.email ?? "",
+        display_name: profileMap.get(member.user_id)?.display_name ?? "成员",
+        role: member.role,
+        joined_at: member.joined_at,
+      })),
+    };
+  }).filter((g): g is NonNullable<typeof g> => g != null);
 }
 
 export async function GET(request: Request) {
@@ -130,7 +139,7 @@ export async function GET(request: Request) {
     updatedAt: row.updated_at,
   }));
 
-  return json({ user, applications, interviews, group: await groupForUser(supabase, user.id) });
+  return json({ user, applications, interviews, groups: await groupsForUser(supabase, user.id) });
 }
 
 export async function POST(request: Request) {
@@ -150,14 +159,16 @@ export async function POST(request: Request) {
       const input = action === "importApplications" && Array.isArray(body.applications)
         ? body.applications.slice(0, 200)
         : [body.application ?? {}];
-      const currentGroup = await groupForUser(supabase, user.id);
+      const userGroups = await groupsForUser(supabase, user.id);
       const payload = input.map((item) => {
         const value = (item ?? {}) as Record<string, unknown>;
         const level = visibility(value.visibility);
+        const explicitGroupId = textValue(value.groupId, 80);
+        const groupId = level === "private" ? null : (explicitGroupId || userGroups[0]?.id || null);
         return {
           ...(textValue(value.id, 80) ? { id: textValue(value.id, 80) } : {}),
           owner_id: user.id,
-          group_id: level === "private" ? null : textValue(value.groupId, 80) || currentGroup?.id || null,
+          group_id: groupId,
           visibility: level,
           company: textValue(value.company, 120),
           position: textValue(value.position, 160),
@@ -189,23 +200,32 @@ export async function POST(request: Request) {
       const { error } = await supabase.rpc("join_group", { invite: textValue(body.inviteCode, 20).toUpperCase() });
       if (error) return json({ error: error.message.includes("invite_not_found") ? "邀请码不存在" : error.message }, 400);
     } else if (action === "leaveGroup") {
-      const group = await groupForUser(supabase, user.id);
-      if (!group) return json({ error: "尚未加入共享小组" }, 409);
-      if (group.role === "owner") return json({ error: "创建者暂时不能退出，请先保留小组" }, 409);
-      await supabase.from("applications").update({ group_id: null, visibility: "private" }).eq("owner_id", user.id).eq("group_id", group.id);
-      const { error } = await supabase.from("group_members").delete().eq("group_id", group.id).eq("user_id", user.id);
+      const groupId = textValue(body.groupId, 80);
+      if (!groupId) return json({ error: "请指定小组" }, 400);
+      const userGroups = await groupsForUser(supabase, user.id);
+      const group = userGroups.find((g) => g.id === groupId);
+      if (!group) return json({ error: "尚未加入该共享小组" }, 409);
+      if (group.role === "owner") return json({ error: "创建者不能退出，请先删除小组" }, 409);
+      await supabase.from("applications").update({ group_id: null, visibility: "private" }).eq("owner_id", user.id).eq("group_id", groupId);
+      const { error } = await supabase.from("group_members").delete().eq("group_id", groupId).eq("user_id", user.id);
       if (error) return json({ error: error.message }, 400);
     } else if (action === "rotateInviteCode") {
-      const group = await groupForUser(supabase, user.id);
+      const groupId = textValue(body.groupId, 80);
+      if (!groupId) return json({ error: "请指定小组" }, 400);
+      const userGroups = await groupsForUser(supabase, user.id);
+      const group = userGroups.find((g) => g.id === groupId);
       if (!group || group.role !== "owner") return json({ error: "无权操作" }, 403);
-      const { error } = await supabase.from("groups").update({ invite_code: crypto.randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase() }).eq("id", group.id).eq("owner_id", user.id);
+      const { error } = await supabase.from("groups").update({ invite_code: crypto.randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase() }).eq("id", groupId).eq("owner_id", user.id);
       if (error) return json({ error: error.message }, 400);
     } else if (action === "deleteGroup") {
-      const group = await groupForUser(supabase, user.id);
+      const groupId = textValue(body.groupId, 80);
+      if (!groupId) return json({ error: "请指定小组" }, 400);
+      const userGroups = await groupsForUser(supabase, user.id);
+      const group = userGroups.find((g) => g.id === groupId);
       if (!group || group.role !== "owner") return json({ error: "只有创建者可以删除小组" }, 403);
-      const { error: resetError } = await supabase.from("applications").update({ group_id: null, visibility: "private" }).eq("owner_id", user.id).eq("group_id", group.id);
+      const { error: resetError } = await supabase.from("applications").update({ group_id: null, visibility: "private" }).eq("owner_id", user.id).eq("group_id", groupId);
       if (resetError) return json({ error: resetError.message }, 400);
-      const { error } = await supabase.from("groups").delete().eq("id", group.id).eq("owner_id", user.id);
+      const { error } = await supabase.from("groups").delete().eq("id", groupId).eq("owner_id", user.id);
       if (error) return json({ error: error.message }, 400);
     } else if (["saveInterview", "updateInterview"].includes(action)) {
       const value = (body.interview ?? {}) as Record<string, unknown>;
