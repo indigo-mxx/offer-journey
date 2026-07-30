@@ -321,24 +321,52 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   text-transform: inherit;
 }
 .sort-button:hover { color: var(--brand); }
-.company-view { padding: 20px 24px 25px; }
-.company-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 14px; }
-.company-card {
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: #fffefa;
-  cursor: pointer;
-  transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+.company-view { padding: 0; }
+.company-merge-table { min-width: 1080px; table-layout: auto; }
+.company-merge-table th:first-child { min-width: 150px; }
+.company-merge-table th:nth-child(2) { width: 76px; text-align: center; }
+.company-merge-table th:nth-child(3) { min-width: 190px; }
+.company-merge-table th:nth-child(4) { min-width: 100px; }
+.company-merge-table th:nth-child(5) { min-width: 100px; }
+.company-merge-table th:nth-child(6) { min-width: 105px; }
+.company-merge-table th:nth-child(7) { min-width: 115px; }
+.company-merge-table th:nth-child(8) { min-width: 105px; }
+.company-merge-row > td { vertical-align: top; background: rgba(255,254,250,.68); }
+.company-merge-row:hover > td { background: #fbfdfb; }
+.company-merge-name .company-link { font-family: "STSong","SimSun",serif; font-size: 16px; text-align: left; }
+.company-merge-meta { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+.company-merge-meta span { padding: 3px 6px; border-radius: 999px; background: var(--brand-soft); color: var(--brand); font-size: 9px; }
+.position-count {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto;
+  border: 1px solid #bed4c7;
+  border-radius: 10px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 800;
 }
-.company-card:hover { transform: translateY(-2px); border-color: #b9d0c3; box-shadow: 0 10px 28px rgba(28,61,42,.08); }
-.company-card-header, .company-card-app, .company-modal-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.company-card-header h3 { margin: 0; font-family: "STSong","SimSun",serif; font-size: 18px; }
-.company-card-count { color: var(--muted); font-size: 11px; }
-.company-card-tags { display: flex; flex-wrap: wrap; gap: 6px; min-height: 24px; margin-top: 10px; }
-.company-card-tags .tag { padding: 3px 7px; border-radius: 999px; background: var(--brand-soft); color: var(--brand); font-size: 10px; }
-.company-card-apps { display: grid; gap: 7px; margin-top: 13px; padding-top: 12px; border-top: 1px solid #ebeae5; }
-.company-card-pos { min-width: 0; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.company-subrows { display: grid; grid-auto-rows: 38px; align-items: center; gap: 3px; }
+.company-subrows > * { min-width: 0; align-self: center; }
+.position-subrows { min-width: 180px; }
+.position-link {
+  max-width: 230px;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--brand);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 700;
+}
+.position-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.company-subrows .batch-tag, .company-subrows .status-badge, .company-subrows .privacy-tag { justify-self: start; }
+.company-modal-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .company-link { padding: 0; border: 0; background: transparent; color: var(--brand); font-weight: 700; }
 .cell-muted { color: var(--muted); }
 .action-buttons { display: flex; gap: 6px; }
@@ -839,8 +867,18 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
   .filter-row { padding: 0 13px 13px; }
   .sort-control { width: 100%; }
   .sort-control select { flex: 1; }
-  .company-view { padding: 13px; }
-  .company-grid { grid-template-columns: 1fr; }
+  .company-view { padding: 0; }
+  .company-merge-table { min-width: 0; table-layout: fixed; }
+  .company-merge-row { padding: 16px 0; }
+  .company-merge-row > td { align-items: flex-start; }
+  .company-merge-row > td::before { flex: none; padding-top: 8px; }
+  .company-merge-row .company-merge-name { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .company-merge-row .company-merge-name::before { display: none; }
+  .company-merge-row > td:last-child::before { display: block; }
+  .company-merge-row .company-subrows { width: min(70%, 310px); justify-items: start; }
+  .company-merge-row .position-count { margin: 0; }
+  .position-subrows { min-width: 0; }
+  .position-link { max-width: 100%; }
   .migration-banner { align-items: flex-start; flex-direction: column; }
   .filters { grid-template-columns: 1fr 1fr; padding: 13px; }
   .search-box { grid-column: 1/-1; }

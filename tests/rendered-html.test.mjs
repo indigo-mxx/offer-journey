@@ -16,6 +16,7 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(tracker, /visibility/);
   assert.match(tracker, /processing-overlay/);
   assert.match(tracker, /toggleSort/);
+  assert.match(tracker, /company-merge-table/);
   assert.match(route, /getUserFromAccessToken/);
   assert.match(route, /owner_id/);
   assert.match(route, /group_members/);

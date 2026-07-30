@@ -131,6 +131,12 @@ function statusTone(status: ApplicationStatus) {
   return "default";
 }
 
+function visibilityLabel(visibility: Visibility) {
+  if (visibility === "progress") return "共享进度";
+  if (visibility === "full") return "完整共享";
+  return "仅自己";
+}
+
 function safeApplications(value: unknown): value is Application[] {
   return (
     Array.isArray(value) &&
@@ -1096,27 +1102,79 @@ export function RecruitmentTracker({
                     <button className="primary-button" onClick={() => openCreate()}>添加第一条投递</button>
                   </div>
                 ) : (
-                  <div className="company-grid">
-                    {companyGrouped.map((group) => (
-                      <div key={group.key} className="company-card" onClick={() => openCompany(group.company)}>
-                        <div className="company-card-header">
-                          <h3>{group.company}</h3>
-                          <span className="company-card-count">{group.applications.length}个岗位</span>
-                        </div>
-                        <div className="company-card-tags">
-                          {group.industryTags.slice(0, 2).map((tag) => <span key={tag} className="tag">{tag}</span>)}
-                          {group.companyScale && <span className="tag">{group.companyScale}</span>}
-                        </div>
-                        <div className="company-card-apps">
-                          {group.applications.map((app) => (
-                            <div key={app.id} className="company-card-app">
-                              <span className="company-card-pos">{app.position}</span>
-                              <span className={`status-badge ${statusTone(app.status)}`}>{app.status}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
+                  <div className="table-wrap">
+                    <table className="data-table company-merge-table">
+                      <thead>
+                        <tr>
+                          <th><button className="sort-button" onClick={() => toggleSort("company")}>公司 {sortIndicator("company")}</button></th>
+                          <th>岗位数量</th>
+                          <th><button className="sort-button" onClick={() => toggleSort("position")}>岗位名称 {sortIndicator("position")}</button></th>
+                          <th>Base</th>
+                          <th>批次</th>
+                          <th><button className="sort-button" onClick={() => toggleSort("appliedAt")}>投递时间 {sortIndicator("appliedAt")}</button></th>
+                          <th><button className="sort-button" onClick={() => toggleSort("status")}>当前进度 {sortIndicator("status")}</button></th>
+                          <th>隐私</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {companyGrouped.map((group) => (
+                          <tr key={group.key} className="company-merge-row">
+                            <td data-label="公司" className="company-merge-name">
+                              <button className="company-link" onClick={() => openCompany(group.company)}>
+                                {group.company}
+                              </button>
+                              <div className="company-merge-meta">
+                                {group.industryTags.slice(0, 2).map((tag) => <span key={tag}>{tag}</span>)}
+                                {group.companyScale && <span>{group.companyScale}</span>}
+                              </div>
+                            </td>
+                            <td data-label="岗位数量">
+                              <button className="position-count" onClick={() => openCompany(group.company)}>
+                                {group.applications.length}
+                              </button>
+                            </td>
+                            <td data-label="岗位名称">
+                              <div className="company-subrows position-subrows">
+                                {group.applications.map((app) => (
+                                  <button key={app.id} className="position-link" onClick={() => openEdit(app)}>
+                                    {app.position}
+                                  </button>
+                                ))}
+                              </div>
+                            </td>
+                            <td data-label="Base">
+                              <div className="company-subrows">
+                                {group.applications.map((app) => <span key={app.id}>{app.base || "—"}</span>)}
+                              </div>
+                            </td>
+                            <td data-label="批次">
+                              <div className="company-subrows">
+                                {group.applications.map((app) => <span key={app.id} className="batch-tag">{app.batch}</span>)}
+                              </div>
+                            </td>
+                            <td data-label="投递时间">
+                              <div className="company-subrows cell-muted">
+                                {group.applications.map((app) => <span key={app.id}>{formatDate(app.appliedAt)}</span>)}
+                              </div>
+                            </td>
+                            <td data-label="当前进度">
+                              <div className="company-subrows">
+                                {group.applications.map((app) => (
+                                  <span key={app.id} className={`status-badge ${statusTone(app.status)}`}>{app.status}</span>
+                                ))}
+                              </div>
+                            </td>
+                            <td data-label="隐私">
+                              <div className="company-subrows">
+                                {group.applications.map((app) => (
+                                  <span key={app.id} className={`privacy-tag ${app.visibility}`}>{visibilityLabel(app.visibility)}</span>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
