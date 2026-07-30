@@ -3,13 +3,14 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import type { Application, Interview, GroupInfo, ApplicationStatus, Visibility } from "@/db/schema";
+import type { ChatGPTUser } from "./chatgpt-auth";
 
 // ──────────────────────────────────────────────── types
 interface Props {
-  user: string | null;
+  user: ChatGPTUser | null;
   signInPath: string;
   signOutPath: string;
-  onSignOut: () => void;
+  onSignOut?: () => Promise<void>;
 }
 
 interface FormState {
@@ -22,8 +23,9 @@ interface FormState {
   channel: string;
   link: string;
   salary: string;
-  notes: string;
+  note: string;
   visibility: Visibility;
+  groupId: string;
   industryTags: string[];
   companyScale: string;
 }
@@ -48,7 +50,7 @@ const BATCHES = ["秋招", "提前批", "日常实习", "其他"];
 const VISIBILITY_OPTIONS: { value: Visibility; label: string }[] = [
   { value: "private", label: "仅自己" },
   { value: "progress", label: "仅共享进度" },
-  { value: "public", label: "完整共享" },
+  { value: "full", label: "完整共享" },
 ];
 
 const INDUSTRY_OPTIONS = [
@@ -87,8 +89,9 @@ const EMPTY_FORM: FormState = {
   channel: "",
   link: "",
   salary: "",
-  notes: "",
+  note: "",
   visibility: "private",
+  groupId: "",
   industryTags: [],
   companyScale: "",
 };
@@ -114,11 +117,6 @@ function formatDate(value: string) {
   if (!value) return "—";
   const date = new Date(`${value}T00:00:00`);
   return `${date.getMonth() + 1}月${date.getDate()}日`;
-}
-
-function formatInterviewTime(value: string) {
-  if (!value) return "未填写";
-  return new Date(value).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 function companyKey(value: string) {
@@ -165,45 +163,16 @@ function normalizeInterviews(items: Interview[]) {
   return items.map((item) => ({ ...item, endedAt: item.endedAt ?? "" }));
 }
 
-// ──────────────────────────────────────────────── components
-function InsightsPanel({ applications: apps, interviews }: { applications: Application[]; interviews: Interview[] }) {
-  const counts = useMemo(() => {
-    const total = apps.length;
-    const active = apps.filter((a) => !["已拒绝", "流程结束", "Offer"].includes(a.status)).length;
-    const interview = apps.filter((a) => ["一面", "二面", "终面", "HR面"].includes(a.status)).length;
-    const offers = apps.filter((a) => a.status === "Offer").length;
-    return { total, active, interview, offers };
-  }, [apps]);
+type SortKey = "company" | "position" | "appliedAt" | "status";
+type SortDirection = "asc" | "desc";
 
-  return (
-    <div className="insights-panel">
-      <h3>投递概览</h3>
-      <div className="insights-stats">
-        <div><strong>{counts.total}</strong><span>总投递</span></div>
-        <div><strong>{counts.active}</strong><span>进行中</span></div>
-        <div><strong>{counts.interview}</strong><span>面试中</span></div>
-        <div><strong>{counts.offers}</strong><span>Offer</span></div>
-      </div>
-      <h3>面试安排</h3>
-      {interviews.length === 0 ? (
-        <p className="insights-empty">暂无面试安排</p>
-      ) : (
-        <ul className="insights-interview-list">
-          {interviews.slice().sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()).map((item) => {
-            const app = apps.find((a) => a.id === item.applicationId);
-            return (
-              <li key={item.id}>
-                <strong>{app?.company ?? "未知公司"}</strong> — {item.round} <br />
-                <span className="insights-interview-time">{formatInterviewTime(item.scheduledAt)}</span>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
-  );
+function compareApplications(a: Application, b: Application, key: SortKey) {
+  if (key === "status") return STATUSES.indexOf(a.status) - STATUSES.indexOf(b.status);
+  if (key === "appliedAt") return (a.appliedAt || "").localeCompare(b.appliedAt || "");
+  return (a[key] || "").localeCompare(b[key] || "", "zh-CN");
 }
 
+// ──────────────────────────────────────────────── components
 function SharingPanel({
   groups,
   activeGroupId,
@@ -229,6 +198,7 @@ function SharingPanel({
   copyShareLink: () => void;
   runAction: (action: string) => Promise<void>;
 }) {
+  const selectedGroup = groups.find((group) => group.id === activeGroupId) ?? null;
   return (
     <div className="sharing-panel">
       <h3>共享小组</h3>
@@ -239,7 +209,7 @@ function SharingPanel({
           {groups.map((g) => (
             <li key={g.id} className={g.id === activeGroupId ? "active" : ""}>
               <button onClick={() => setActiveGroupId(g.id === activeGroupId ? null : g.id)}>
-                {g.name} ({g.member_count ?? 0}人)
+                {g.name} ({g.members.length}人)
               </button>
             </li>
           ))}
@@ -247,16 +217,29 @@ function SharingPanel({
       )}
       <div className="group-actions">
         <input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="小组名称" disabled={busy} />
-        <button onClick={() => runAction("create")} disabled={busy}>创建小组</button>
+        <button onClick={() => runAction("create")} disabled={busy || !groupName.trim()}>
+          {busy ? "处理中…" : "创建新小组"}
+        </button>
       </div>
-      {activeGroupId && (
-        <div className="group-invite">
-          <input value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="邀请码" disabled={busy} />
+      <div className="group-invite">
+        <input value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="输入邀请码加入其他小组" disabled={busy} />
+        <button onClick={() => runAction("join")} disabled={busy || !inviteCode.trim()}>
+          {busy ? "处理中…" : "加入小组"}
+        </button>
+        {activeGroupId && (
+          <>
           <button onClick={copyInviteCode} disabled={busy}>复制邀请码</button>
           <button onClick={copyShareLink} disabled={busy}>复制分享链接</button>
-          <button className="danger" onClick={() => runAction("leave")} disabled={busy}>退出小组</button>
-        </div>
-      )}
+          <button
+            className="danger"
+            onClick={() => runAction(selectedGroup?.role === "owner" ? "delete" : "leave")}
+            disabled={busy}
+          >
+            {selectedGroup?.role === "owner" ? "删除小组" : "退出小组"}
+          </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -273,9 +256,11 @@ export function RecruitmentTracker({
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [localBackup, setLocalBackup] = useState<Application[]>([]);
   const [ready, setReady] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [view, setView] = useState<"mine" | "friends" | "sharing" | "insights">("mine");
-  const [companyView, setCompanyView] = useState(false);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [view, setView] = useState<"mine" | "friends" | "sharing">("mine");
+  const [companyView, setCompanyView] = useState(true);
+  const [sortKey, setSortKey] = useState<SortKey>("appliedAt");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("全部状态");
   const [batchFilter, setBatchFilter] = useState("全部批次");
@@ -296,6 +281,7 @@ export function RecruitmentTracker({
   const [inviteCode, setInviteCode] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
   const inviteHandledRef = useRef(false);
+  const busy = pendingAction !== null;
 
   const activeGroup = useMemo(
     () => groups.find((g) => g.id === activeGroupId) ?? null,
@@ -316,6 +302,19 @@ export function RecruitmentTracker({
     const result = (await response.json()) as { error?: string };
     if (!response.ok) throw new Error(result.error || "操作失败");
   }, []);
+
+  const runCloudMutation = useCallback(async (label: string, payload: Record<string, unknown>) => {
+    setPendingAction(label);
+    try {
+      await cloudAction(payload);
+      return true;
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "操作失败，请稍后重试");
+      return false;
+    } finally {
+      setPendingAction(null);
+    }
+  }, [cloudAction]);
 
   const loadCloud = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
@@ -343,16 +342,20 @@ export function RecruitmentTracker({
         visibility: item.visibility ?? "private",
         industryTags: Array.isArray(item.industryTags) ? item.industryTags.filter(Boolean) : [],
         companyScale: item.companyScale ?? "",
-        isOwner: true,
+        isOwner: item.isOwner ?? true,
       })),
     );
     setInterviews(normalizeInterviews(result.interviews));
     setGroups(groupsData);
-    if (groupsData.length > 0 && !activeGroupId) {
+    if (groupsData.length > 0) {
       const saved = localStorage.getItem("activeGroupId");
+      const current = activeGroupId ? groupsData.find((g) => g.id === activeGroupId) : null;
       const found = saved ? groupsData.find((g) => g.id === saved) : null;
-      setActiveGroupId(found?.id ?? groupsData[0].id);
+      if (!current) setActiveGroupId(found?.id ?? groupsData[0].id);
+    } else {
+      setActiveGroupId(null);
     }
+    return groupsData;
   }, [activeGroupId]);
 
   const loadLocal = useCallback(() => {
@@ -439,6 +442,11 @@ export function RecruitmentTracker({
     }
   }, []);
 
+  useEffect(() => {
+    if (activeGroupId) localStorage.setItem("activeGroupId", activeGroupId);
+    else localStorage.removeItem("activeGroupId");
+  }, [activeGroupId]);
+
   // ────────────────────────────────── derived data
   const ownApplications = useMemo(
     () => applications.filter((item) => item.isOwner !== false),
@@ -468,7 +476,7 @@ export function RecruitmentTracker({
           item.company.toLocaleLowerCase().includes(q) ||
           item.position.toLocaleLowerCase().includes(q) ||
           (item.base ?? "").toLocaleLowerCase().includes(q) ||
-          (item.notes ?? "").toLocaleLowerCase().includes(q),
+          (item.note ?? "").toLocaleLowerCase().includes(q),
       );
     }
     if (statusFilter !== "全部状态") items = items.filter((item) => item.status === statusFilter);
@@ -477,8 +485,11 @@ export function RecruitmentTracker({
     if (scaleFilter !== "全部规模") items = items.filter((item) => item.companyScale === scaleFilter);
     if (positionFilter) items = items.filter((item) => item.position.toLocaleLowerCase().includes(positionFilter.toLocaleLowerCase()));
     if (locationFilter) items = items.filter((item) => (item.base ?? "").toLocaleLowerCase().includes(locationFilter.toLocaleLowerCase()));
-    return items;
-  }, [query, statusFilter, batchFilter, industryFilter, scaleFilter, positionFilter, locationFilter, view, ownApplications, friendApplications]);
+    return items.slice().sort((a, b) => {
+      const result = compareApplications(a, b, sortKey);
+      return sortDirection === "asc" ? result : -result;
+    });
+  }, [query, statusFilter, batchFilter, industryFilter, scaleFilter, positionFilter, locationFilter, view, ownApplications, friendApplications, sortKey, sortDirection]);
 
   // ────────────────────────────────── company grouping
   const companyGrouped = useMemo(() => {
@@ -496,145 +507,176 @@ export function RecruitmentTracker({
         industryTags: apps[0].industryTags ?? [],
         companyScale: apps[0].companyScale ?? "",
       }))
-      .sort((a, b) => a.company.localeCompare(b.company, "zh"));
+      .sort((a, b) => {
+        if (sortKey === "company") {
+          const result = a.company.localeCompare(b.company, "zh-CN");
+          return sortDirection === "asc" ? result : -result;
+        }
+        return compareApplications(a.applications[0], b.applications[0], sortKey) * (sortDirection === "asc" ? 1 : -1);
+      });
   }, [filtered]);
+
+  const toggleSort = useCallback((key: SortKey) => {
+    if (sortKey === key) {
+      setSortDirection((direction) => direction === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDirection(key === "appliedAt" ? "desc" : "asc");
+    }
+  }, [sortKey]);
+
+  const sortIndicator = useCallback((key: SortKey) => {
+    if (sortKey !== key) return "↕";
+    return sortDirection === "asc" ? "↑" : "↓";
+  }, [sortKey, sortDirection]);
 
   // ────────────────────────────────── actions
   const addApplication = useCallback(
     async (item: Application) => {
-      setApplications((prev) => [...prev, item]);
       if (user) {
-        try {
-          await cloudAction({ action: "addApplication", application: item });
-        } catch {
-          // ignore
-        }
+        const saved = await runCloudMutation("正在保存投递记录", { action: "saveApplication", application: item });
+        if (!saved) return false;
       }
+      setApplications((prev) => [...prev, item]);
+      setNotice("投递记录已保存");
+      return true;
     },
-    [user, cloudAction],
+    [user, runCloudMutation],
   );
 
   const updateApplication = useCallback(
     async (id: string, changes: Partial<Application>) => {
-      setApplications((prev) => prev.map((item) => (item.id === id ? { ...item, ...changes } : item)));
+      const current = applications.find((item) => item.id === id);
+      if (!current) return false;
+      const next = { ...current, ...changes, updatedAt: new Date().toISOString() };
       if (user) {
-        try {
-          await cloudAction({ action: "updateApplication", id, changes });
-        } catch {
-          // ignore
-        }
+        const saved = await runCloudMutation("正在保存修改", { action: "saveApplication", application: next });
+        if (!saved) return false;
       }
+      setApplications((prev) => prev.map((item) => (item.id === id ? next : item)));
+      setNotice("修改已保存");
+      return true;
     },
-    [user, cloudAction],
+    [applications, user, runCloudMutation],
   );
 
   const removeApplication = useCallback(
     async (item: Application) => {
       if (!confirm(`确定删除 ${item.company} - ${item.position} 的投递记录吗？`)) return;
+      if (user) {
+        const removed = await runCloudMutation("正在删除投递记录", { action: "deleteApplication", id: item.id });
+        if (!removed) return;
+      }
       setApplications((prev) => prev.filter((entry) => entry.id !== item.id));
       setInterviews((prev) => prev.filter((entry) => entry.applicationId !== item.id));
-      if (user) {
-        try {
-          await cloudAction({ action: "removeApplication", id: item.id });
-        } catch {
-          // ignore
-        }
-      }
+      setNotice("投递记录已删除");
     },
-    [user, cloudAction],
+    [user, runCloudMutation],
   );
 
   const updateStatus = useCallback(
     async (id: string, status: ApplicationStatus) => {
-      setApplications((prev) => prev.map((item) => (item.id === id ? { ...item, status } : item)));
       if (user) {
-        try {
-          await cloudAction({ action: "updateApplication", id, changes: { status } });
-        } catch {
-          // ignore
-        }
+        const saved = await runCloudMutation("正在更新面试进度", { action: "updateStatus", id, status });
+        if (!saved) return;
       }
+      setApplications((prev) => prev.map((item) => (item.id === id ? { ...item, status } : item)));
+      setNotice("进度已更新");
     },
-    [user, cloudAction],
+    [user, runCloudMutation],
   );
 
   const addInterview = useCallback(
     async (item: Interview) => {
-      setInterviews((prev) => [...prev, item]);
       if (user) {
-        try {
-          await cloudAction({ action: "addInterview", interview: item });
-        } catch {
-          // ignore
-        }
+        const saved = await runCloudMutation("正在保存面试安排", { action: "saveInterview", interview: item });
+        if (!saved) return false;
       }
+      setInterviews((prev) => [...prev, item]);
+      setNotice("面试安排已保存");
+      return true;
     },
-    [user, cloudAction],
+    [user, runCloudMutation],
   );
 
   const updateInterview = useCallback(
     async (id: string, changes: Partial<Interview>) => {
-      setInterviews((prev) => prev.map((item) => (item.id === id ? { ...item, ...changes } : item)));
+      const current = interviews.find((item) => item.id === id);
+      if (!current) return false;
+      const next = { ...current, ...changes, updatedAt: new Date().toISOString() };
       if (user) {
-        try {
-          await cloudAction({ action: "updateInterview", id, changes });
-        } catch {
-          // ignore
-        }
+        const saved = await runCloudMutation("正在保存面试修改", { action: "updateInterview", interview: next });
+        if (!saved) return false;
       }
+      setInterviews((prev) => prev.map((item) => (item.id === id ? next : item)));
+      setNotice("面试修改已保存");
+      return true;
     },
-    [user, cloudAction],
+    [interviews, user, runCloudMutation],
   );
 
   const removeInterview = useCallback(
     async (item: Interview) => {
       if (!confirm(`确定删除这条面试记录吗？`)) return;
-      setInterviews((prev) => prev.filter((entry) => entry.id !== item.id));
       if (user) {
-        try {
-          await cloudAction({ action: "removeInterview", id: item.id });
-        } catch {
-          // ignore
-        }
+        const removed = await runCloudMutation("正在删除面试记录", { action: "deleteInterview", id: item.id });
+        if (!removed) return;
       }
+      setInterviews((prev) => prev.filter((entry) => entry.id !== item.id));
+      setNotice("面试记录已删除");
     },
-    [user, cloudAction],
+    [user, runCloudMutation],
   );
 
   const groupAction = useCallback(
     async (action: string) => {
-      setBusy(true);
       try {
         if (action === "create") {
-          await cloudAction({ action: "createGroup", name: groupName });
-          await loadCloud();
+          const existingIds = new Set(groups.map((group) => group.id));
+          const created = await runCloudMutation("正在创建新小组", { action: "createGroup", name: groupName });
+          if (!created) return;
+          const nextGroups = await loadCloud();
+          const newGroup = nextGroups.find((group) => !existingIds.has(group.id));
+          if (newGroup) setActiveGroupId(newGroup.id);
+          setGroupName("");
+          setNotice("新小组已创建，可以继续创建其他小组");
         } else if (action === "join") {
-          await cloudAction({ action: "joinGroup", inviteCode });
+          const joined = await runCloudMutation("正在加入小组", { action: "joinGroup", inviteCode });
+          if (!joined) return;
           await loadCloud();
+          setInviteCode("");
+          setNotice("已加入小组");
         } else if (action === "leave") {
           if (!activeGroupId) return;
-          await cloudAction({ action: "leaveGroup", groupId: activeGroupId });
+          const left = await runCloudMutation("正在退出小组", { action: "leaveGroup", groupId: activeGroupId });
+          if (!left) return;
           setActiveGroupId(null);
           await loadCloud();
+          setNotice("已退出小组");
+        } else if (action === "delete") {
+          if (!activeGroupId || !confirm("确定删除这个小组吗？成员关系会一并移除，原投递记录会转为仅自己可见。")) return;
+          const deleted = await runCloudMutation("正在删除小组", { action: "deleteGroup", groupId: activeGroupId });
+          if (!deleted) return;
+          setActiveGroupId(null);
+          await loadCloud();
+          setNotice("小组已删除");
         }
       } catch (error) {
         setNotice(error instanceof Error ? error.message : "操作失败");
-      } finally {
-        setBusy(false);
       }
     },
-    [cloudAction, groupName, inviteCode, activeGroupId, loadCloud],
+    [groups, runCloudMutation, groupName, inviteCode, activeGroupId, loadCloud],
   );
 
   const copyInviteCode = useCallback(() => {
     if (!activeGroup) return;
-    navigator.clipboard.writeText(activeGroup.invite_code ?? "").catch(() => {});
+    navigator.clipboard.writeText(activeGroup.inviteCode ?? "").catch(() => {});
     setNotice("邀请码已复制");
   }, [activeGroup]);
 
   const copyShareLink = useCallback(() => {
     if (!activeGroup) return;
-    const link = `${window.location.origin}${window.location.pathname}?invite=${activeGroup.invite_code}`;
+    const link = `${window.location.origin}${window.location.pathname}?invite=${activeGroup.inviteCode}`;
     navigator.clipboard.writeText(link).catch(() => {});
     setNotice("分享链接已复制");
   }, [activeGroup]);
@@ -704,13 +746,14 @@ export function RecruitmentTracker({
         channel: source.channel ?? "",
         link: source.link ?? "",
         salary: source.salary ?? "",
-        notes: source.notes ?? "",
+        note: source.note ?? "",
         visibility: source.visibility,
+        groupId: source.groupId ?? activeGroupId ?? "",
         industryTags: source.industryTags ?? [],
         companyScale: source.companyScale ?? "",
       });
     } else {
-      setForm(EMPTY_FORM);
+      setForm({ ...EMPTY_FORM, groupId: activeGroupId ?? "" });
     }
     setEditingId(null);
     setIsFormOpen(true);
@@ -727,8 +770,9 @@ export function RecruitmentTracker({
       channel: item.channel ?? "",
       link: item.link ?? "",
       salary: item.salary ?? "",
-      notes: item.notes ?? "",
+      note: item.note ?? "",
       visibility: item.visibility,
+      groupId: item.groupId ?? activeGroupId ?? "",
       industryTags: item.industryTags ?? [],
       companyScale: item.companyScale ?? "",
     });
@@ -745,14 +789,15 @@ export function RecruitmentTracker({
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
-  function submitForm(event: React.FormEvent) {
+  async function submitForm(event: React.FormEvent) {
     event.preventDefault();
     if (!form.company.trim() || !form.position.trim()) {
       setNotice("公司和岗位不能为空");
       return;
     }
+    let saved = false;
     if (editingId) {
-      updateApplication(editingId, {
+      saved = await updateApplication(editingId, {
         company: form.company,
         position: form.position,
         base: form.base,
@@ -762,8 +807,9 @@ export function RecruitmentTracker({
         channel: form.channel,
         link: form.link,
         salary: form.salary,
-        notes: form.notes,
+        note: form.note,
         visibility: form.visibility,
+        groupId: form.visibility === "private" ? null : (form.groupId || activeGroupId),
         industryTags: form.industryTags,
         companyScale: form.companyScale,
       });
@@ -779,21 +825,22 @@ export function RecruitmentTracker({
         channel: form.channel,
         link: form.link,
         salary: form.salary,
-        notes: form.notes,
+        note: form.note,
         visibility: form.visibility,
+        groupId: form.visibility === "private" ? null : (form.groupId || activeGroupId),
         industryTags: form.industryTags,
         companyScale: form.companyScale,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      addApplication(item);
+      saved = await addApplication(item);
     }
-    closeForm();
+    if (saved) closeForm();
   }
 
   // ────────────────────────────────── interview form
-  function openInterviewCreate() {
-    setInterviewForm(EMPTY_INTERVIEW);
+  function openInterviewCreate(applicationId = "") {
+    setInterviewForm({ ...EMPTY_INTERVIEW, applicationId });
     setEditingInterviewId(null);
     setIsInterviewOpen(true);
   }
@@ -819,14 +866,15 @@ export function RecruitmentTracker({
     setEditingInterviewId(null);
   }
 
-  function submitInterviewForm(event: React.FormEvent) {
+  async function submitInterviewForm(event: React.FormEvent) {
     event.preventDefault();
     if (!interviewForm.applicationId || !interviewForm.scheduledAt) {
       setNotice("请选择关联岗位和面试时间");
       return;
     }
+    let saved = false;
     if (editingInterviewId) {
-      updateInterview(editingInterviewId, interviewForm);
+      saved = await updateInterview(editingInterviewId, interviewForm);
     } else {
       const item: Interview = {
         id: crypto.randomUUID(),
@@ -834,9 +882,9 @@ export function RecruitmentTracker({
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      addInterview(item);
+      saved = await addInterview(item);
     }
-    closeInterviewForm();
+    if (saved) closeInterviewForm();
   }
 
   // ────────────────────────────────── company modal
@@ -850,12 +898,23 @@ export function RecruitmentTracker({
 
   const companyApplications = useMemo(() => {
     if (!selectedCompany) return [];
-    return ownApplications.filter((item) => companyKey(item.company) === companyKey(selectedCompany));
-  }, [selectedCompany, ownApplications]);
+    return ownApplications
+      .filter((item) => companyKey(item.company) === companyKey(selectedCompany))
+      .sort((a, b) => compareApplications(a, b, sortKey) * (sortDirection === "asc" ? 1 : -1));
+  }, [selectedCompany, ownApplications, sortKey, sortDirection]);
 
   // ────────────────────────────────── render
   return (
     <div className="app-shell">
+      {pendingAction && (
+        <div className="processing-overlay" role="status" aria-live="polite" aria-busy="true">
+          <div className="processing-card">
+            <span className="processing-spinner" aria-hidden="true" />
+            <strong>{pendingAction}</strong>
+            <small>请稍候，数据正在安全同步</small>
+          </div>
+        </div>
+      )}
       <header className="topbar">
         <a className="brand" href="/">
           <span className="brand-mark">秋</span>
@@ -868,16 +927,16 @@ export function RecruitmentTracker({
           {user ? (
             <div className="account-menu">
               <a className="account-avatar" href="/account" title="账户中心">
-                {user.slice(0, 1).toUpperCase()}
+                {user.displayName.slice(0, 1).toUpperCase()}
               </a>
               <div className="account-copy">
-                <strong>{user}</strong>
-                <small>已登录</small>
+                <strong>{user.displayName}</strong>
+                <small>{user.email}</small>
               </div>
               <a className="account-center-link" href="/account">
                 账户中心
               </a>
-              <button className="account-signout" onClick={onSignOut}>
+              <button className="account-signout" onClick={() => void onSignOut?.()}>
                 退出登录
               </button>
             </div>
@@ -944,12 +1003,6 @@ export function RecruitmentTracker({
           >
             共享管理
           </button>
-          <button
-            className={view === "insights" ? "active" : ""}
-            onClick={() => setView("insights")}
-          >
-            洞察
-          </button>
         </nav>
 
         {view === "sharing" && user ? (
@@ -966,8 +1019,6 @@ export function RecruitmentTracker({
             copyShareLink={copyShareLink}
             runAction={groupAction}
           />
-        ) : view === "insights" ? (
-          <InsightsPanel applications={ownApplications} interviews={interviews} />
         ) : (
           <>
             <div className="toolbar">
@@ -985,15 +1036,36 @@ export function RecruitmentTracker({
                   <button className="primary-button" onClick={() => openCreate()}>
                     + 新增投递
                   </button>
-                  <button className="secondary-button" onClick={() => setCompanyView(!companyView)}>
-                    {companyView ? "列表视图" : "公司视图"}
-                  </button>
+                  <div className="display-switch" aria-label="展示方式">
+                    <button className={companyView ? "active" : ""} onClick={() => setCompanyView(true)}>按公司</button>
+                    <button className={!companyView ? "active" : ""} onClick={() => setCompanyView(false)}>全部岗位</button>
+                  </div>
                   <button className="secondary-button" onClick={exportData}>导出</button>
                   <input ref={importRef} type="file" accept=".json" onChange={importData} className="hidden" />
                   <button className="secondary-button" onClick={() => importRef.current?.click()}>导入</button>
                 </div>
               </div>
               <div className="filter-row">
+                <label className="sort-control">
+                  <span>排序</span>
+                  <select value={sortKey} onChange={(e) => {
+                    const key = e.target.value as SortKey;
+                    setSortKey(key);
+                    setSortDirection(key === "appliedAt" ? "desc" : "asc");
+                  }}>
+                    <option value="appliedAt">投递时间</option>
+                    <option value="company">公司名称</option>
+                    <option value="status">面试进度</option>
+                    <option value="position">岗位名称</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setSortDirection((direction) => direction === "asc" ? "desc" : "asc")}
+                    aria-label={sortDirection === "asc" ? "切换为降序" : "切换为升序"}
+                  >
+                    {sortDirection === "asc" ? "升序 ↑" : "降序 ↓"}
+                  </button>
+                </label>
                 <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                   <option>全部状态</option>
                   {STATUSES.map((s) => <option key={s}>{s}</option>)}
@@ -1053,12 +1125,12 @@ export function RecruitmentTracker({
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>公司</th>
-                      <th>岗位</th>
+                      <th><button className="sort-button" onClick={() => toggleSort("company")}>公司 {sortIndicator("company")}</button></th>
+                      <th><button className="sort-button" onClick={() => toggleSort("position")}>岗位 {sortIndicator("position")}</button></th>
                       <th>地点</th>
                       <th>批次</th>
-                      <th>投递日期</th>
-                      <th>状态</th>
+                      <th><button className="sort-button" onClick={() => toggleSort("appliedAt")}>投递日期 {sortIndicator("appliedAt")}</button></th>
+                      <th><button className="sort-button" onClick={() => toggleSort("status")}>面试进度 {sortIndicator("status")}</button></th>
                       <th>操作</th>
                     </tr>
                   </thead>
@@ -1089,6 +1161,7 @@ export function RecruitmentTracker({
                               className={`status-select ${statusTone(item.status)}`}
                               value={item.status}
                               onChange={(e) => updateStatus(item.id, e.target.value as ApplicationStatus)}
+                              disabled={busy}
                             >
                               {STATUSES.map((s) => <option key={s}>{s}</option>)}
                             </select>
@@ -1097,7 +1170,7 @@ export function RecruitmentTracker({
                             <div className="action-buttons">
                               <button className="action-btn" onClick={() => openEdit(item)} title="编辑">✎</button>
                               <button className="action-btn" onClick={() => openCreate(item)} title="复制创建同公司新岗位">复制</button>
-                              <button className="action-btn" onClick={() => { setInterviewForm((prev) => ({ ...prev, applicationId: item.id })); openInterviewCreate(); }} title="添加面试">+面</button>
+                              <button className="action-btn" onClick={() => openInterviewCreate(item.id)} title="添加面试">+面</button>
                               <button className="action-btn danger" onClick={() => removeApplication(item)} title="删除">✕</button>
                             </div>
                           </td>
@@ -1187,7 +1260,7 @@ export function RecruitmentTracker({
                   </label>
                   <label className="full-width">
                     备注
-                    <textarea value={form.notes} onChange={(e) => updateFormField("notes", e.target.value)} rows={2} />
+                    <textarea value={form.note} onChange={(e) => updateFormField("note", e.target.value)} rows={2} />
                   </label>
                   <label className="full-width">
                     可见性
@@ -1195,11 +1268,24 @@ export function RecruitmentTracker({
                       {VISIBILITY_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                     </select>
                   </label>
+                  {form.visibility !== "private" && (
+                    <label className="full-width">
+                      共享到小组
+                      <select
+                        value={form.groupId}
+                        onChange={(e) => updateFormField("groupId", e.target.value)}
+                        required
+                      >
+                        <option value="">选择小组…</option>
+                        {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+                      </select>
+                    </label>
+                  )}
                 </div>
                 <div className="form-actions">
                   <button type="button" className="secondary-button" onClick={closeForm}>取消</button>
-                  <button type="submit" className="primary-button">
-                    {editingId ? "保存修改" : "添加记录"}
+                  <button type="submit" className="primary-button" disabled={busy}>
+                    {busy ? "保存中…" : editingId ? "保存修改" : "添加记录"}
                   </button>
                 </div>
               </form>
@@ -1303,8 +1389,8 @@ export function RecruitmentTracker({
                 </div>
                 <div className="form-actions">
                   <button type="button" className="secondary-button" onClick={closeInterviewForm}>取消</button>
-                  <button type="submit" className="primary-button">
-                    {editingInterviewId ? "保存修改" : "添加面试"}
+                  <button type="submit" className="primary-button" disabled={busy}>
+                    {busy ? "保存中…" : editingInterviewId ? "保存修改" : "添加面试"}
                   </button>
                 </div>
               </form>
@@ -1323,11 +1409,11 @@ export function RecruitmentTracker({
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>岗位</th>
+                    <th><button className="sort-button" onClick={() => toggleSort("position")}>岗位 {sortIndicator("position")}</button></th>
                     <th>地点</th>
                     <th>批次</th>
-                    <th>投递日期</th>
-                    <th>状态</th>
+                    <th><button className="sort-button" onClick={() => toggleSort("appliedAt")}>投递日期 {sortIndicator("appliedAt")}</button></th>
+                    <th><button className="sort-button" onClick={() => toggleSort("status")}>面试进度 {sortIndicator("status")}</button></th>
                     <th>操作</th>
                   </tr>
                 </thead>
@@ -1343,6 +1429,7 @@ export function RecruitmentTracker({
                           className={`status-select ${statusTone(item.status)}`}
                           value={item.status}
                           onChange={(e) => updateStatus(item.id, e.target.value as ApplicationStatus)}
+                          disabled={busy}
                         >
                           {STATUSES.map((s) => <option key={s}>{s}</option>)}
                         </select>

@@ -6,6 +6,74 @@ import {
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
+export type ApplicationStatus =
+  | "准备投递"
+  | "简历投递"
+  | "简历筛选"
+  | "已投递"
+  | "笔试"
+  | "一面"
+  | "二面"
+  | "终面"
+  | "HR面"
+  | "Offer"
+  | "已拒绝"
+  | "流程结束";
+
+export type Visibility = "private" | "progress" | "full";
+
+export type Application = {
+  id: string;
+  company: string;
+  position: string;
+  base: string;
+  industryTags: string[];
+  companyScale: string;
+  batch: string;
+  status: ApplicationStatus;
+  appliedAt: string;
+  channel: string;
+  link: string;
+  salary: string;
+  note: string;
+  visibility: Visibility;
+  createdAt?: string;
+  updatedAt: string;
+  ownerEmail?: string;
+  ownerName?: string;
+  isOwner?: boolean;
+  groupId?: string | null;
+};
+
+export type Interview = {
+  id: string;
+  applicationId: string;
+  scheduledAt: string;
+  endedAt: string;
+  round: string;
+  format: string;
+  interviewer: string;
+  result: string;
+  summary: string;
+  nextSteps: string;
+  createdAt?: string;
+  updatedAt: string;
+};
+
+export type GroupInfo = {
+  id: string;
+  name: string;
+  ownerEmail: string;
+  inviteCode: string;
+  role: "owner" | "member";
+  members: Array<{
+    email: string;
+    display_name: string;
+    role: "owner" | "member";
+    joined_at: string;
+  }>;
+};
+
 export const users = sqliteTable("users", {
   email: text("email").primaryKey(),
   displayName: text("display_name").notNull(),

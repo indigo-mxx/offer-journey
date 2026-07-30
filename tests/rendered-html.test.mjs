@@ -11,12 +11,16 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
     readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
   ]);
 
-  assert.match(page, /getChatGPTUser/);
+  assert.match(page, /SupabaseShell/);
   assert.match(tracker, /SharingPanel/);
   assert.match(tracker, /visibility/);
-  assert.match(route, /getChatGPTUser/);
-  assert.match(route, /owner_email/);
+  assert.match(tracker, /processing-overlay/);
+  assert.match(tracker, /toggleSort/);
+  assert.match(route, /getUserFromAccessToken/);
+  assert.match(route, /owner_id/);
   assert.match(route, /group_members/);
+  assert.match(route, /saveApplication/);
+  assert.match(route, /deleteApplication/);
   assert.match(schema, /applications/);
   assert.match(hosting, /"d1": "DB"/);
 });
