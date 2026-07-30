@@ -309,7 +309,11 @@ export function RecruitmentTracker({
     if (!response.ok) throw new Error(result.error || "操作失败");
   }, []);
 
-  const runCloudMutation = useCallback(async (label: string, payload: Record<string, unknown>) => {
+  const runCloudMutation = useCallback(async (
+    label: string,
+    payload: Record<string, unknown>,
+    keepPending = false,
+  ) => {
     setPendingAction(label);
     try {
       await cloudAction(payload);
@@ -318,7 +322,7 @@ export function RecruitmentTracker({
       setNotice(error instanceof Error ? error.message : "操作失败，请稍后重试");
       return false;
     } finally {
-      setPendingAction(null);
+      if (!keepPending) setPendingAction(null);
     }
   }, [cloudAction]);
 
@@ -540,7 +544,7 @@ export function RecruitmentTracker({
   const addApplication = useCallback(
     async (item: Application) => {
       if (user) {
-        const saved = await runCloudMutation("正在保存投递记录", { action: "saveApplication", application: item });
+        const saved = await runCloudMutation("保存投递信息中", { action: "saveApplication", application: item });
         if (!saved) return false;
       }
       setApplications((prev) => [...prev, item]);
@@ -556,7 +560,7 @@ export function RecruitmentTracker({
       if (!current) return false;
       const next = { ...current, ...changes, updatedAt: new Date().toISOString() };
       if (user) {
-        const saved = await runCloudMutation("正在保存修改", { action: "saveApplication", application: next });
+        const saved = await runCloudMutation("保存修改中", { action: "saveApplication", application: next });
         if (!saved) return false;
       }
       setApplications((prev) => prev.map((item) => (item.id === id ? next : item)));
@@ -570,7 +574,7 @@ export function RecruitmentTracker({
     async (item: Application) => {
       if (!confirm(`确定删除 ${item.company} - ${item.position} 的投递记录吗？`)) return;
       if (user) {
-        const removed = await runCloudMutation("正在删除投递记录", { action: "deleteApplication", id: item.id });
+        const removed = await runCloudMutation("删除投递记录中", { action: "deleteApplication", id: item.id });
         if (!removed) return;
       }
       setApplications((prev) => prev.filter((entry) => entry.id !== item.id));
@@ -583,7 +587,7 @@ export function RecruitmentTracker({
   const updateStatus = useCallback(
     async (id: string, status: ApplicationStatus) => {
       if (user) {
-        const saved = await runCloudMutation("正在更新面试进度", { action: "updateStatus", id, status });
+        const saved = await runCloudMutation("更新面试进度中", { action: "updateStatus", id, status });
         if (!saved) return;
       }
       setApplications((prev) => prev.map((item) => (item.id === id ? { ...item, status } : item)));
@@ -595,7 +599,7 @@ export function RecruitmentTracker({
   const addInterview = useCallback(
     async (item: Interview) => {
       if (user) {
-        const saved = await runCloudMutation("正在保存面试安排", { action: "saveInterview", interview: item });
+        const saved = await runCloudMutation("保存面试安排中", { action: "saveInterview", interview: item });
         if (!saved) return false;
       }
       setInterviews((prev) => [...prev, item]);
@@ -611,7 +615,7 @@ export function RecruitmentTracker({
       if (!current) return false;
       const next = { ...current, ...changes, updatedAt: new Date().toISOString() };
       if (user) {
-        const saved = await runCloudMutation("正在保存面试修改", { action: "updateInterview", interview: next });
+        const saved = await runCloudMutation("保存面试修改中", { action: "updateInterview", interview: next });
         if (!saved) return false;
       }
       setInterviews((prev) => prev.map((item) => (item.id === id ? next : item)));
@@ -625,7 +629,7 @@ export function RecruitmentTracker({
     async (item: Interview) => {
       if (!confirm(`确定删除这条面试记录吗？`)) return;
       if (user) {
-        const removed = await runCloudMutation("正在删除面试记录", { action: "deleteInterview", id: item.id });
+        const removed = await runCloudMutation("删除面试记录中", { action: "deleteInterview", id: item.id });
         if (!removed) return;
       }
       setInterviews((prev) => prev.filter((entry) => entry.id !== item.id));
@@ -639,7 +643,7 @@ export function RecruitmentTracker({
       try {
         if (action === "create") {
           const existingIds = new Set(groups.map((group) => group.id));
-          const created = await runCloudMutation("正在创建新小组", { action: "createGroup", name: groupName });
+          const created = await runCloudMutation("创建小组中", { action: "createGroup", name: groupName }, true);
           if (!created) return;
           const nextGroups = await loadCloud();
           const newGroup = nextGroups.find((group) => !existingIds.has(group.id));
@@ -647,21 +651,21 @@ export function RecruitmentTracker({
           setGroupName("");
           setNotice("新小组已创建，可以继续创建其他小组");
         } else if (action === "join") {
-          const joined = await runCloudMutation("正在加入小组", { action: "joinGroup", inviteCode });
+          const joined = await runCloudMutation("加入小组中", { action: "joinGroup", inviteCode }, true);
           if (!joined) return;
           await loadCloud();
           setInviteCode("");
           setNotice("已加入小组");
         } else if (action === "leave") {
           if (!activeGroupId) return;
-          const left = await runCloudMutation("正在退出小组", { action: "leaveGroup", groupId: activeGroupId });
+          const left = await runCloudMutation("退出小组中", { action: "leaveGroup", groupId: activeGroupId }, true);
           if (!left) return;
           setActiveGroupId(null);
           await loadCloud();
           setNotice("已退出小组");
         } else if (action === "delete") {
           if (!activeGroupId || !confirm("确定删除这个小组吗？成员关系会一并移除，原投递记录会转为仅自己可见。")) return;
-          const deleted = await runCloudMutation("正在删除小组", { action: "deleteGroup", groupId: activeGroupId });
+          const deleted = await runCloudMutation("删除小组中", { action: "deleteGroup", groupId: activeGroupId }, true);
           if (!deleted) return;
           setActiveGroupId(null);
           await loadCloud();
@@ -669,6 +673,8 @@ export function RecruitmentTracker({
         }
       } catch (error) {
         setNotice(error instanceof Error ? error.message : "操作失败");
+      } finally {
+        setPendingAction(null);
       }
     },
     [groups, runCloudMutation, groupName, inviteCode, activeGroupId, loadCloud],
@@ -917,6 +923,9 @@ export function RecruitmentTracker({
           <div className="processing-card">
             <span className="processing-spinner" aria-hidden="true" />
             <strong>{pendingAction}</strong>
+            <div className="processing-progress" aria-hidden="true">
+              <span />
+            </div>
             <small>请稍候，数据正在安全同步</small>
           </div>
         </div>
