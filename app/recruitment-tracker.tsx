@@ -593,6 +593,8 @@ export function RecruitmentTracker({
           bases: [...new Set(apps.map((app) => app.base).filter(Boolean))],
           latestAppliedAt: latest?.appliedAt ?? "",
           statuses: [...new Set(apps.map((app) => app.status))],
+          visibilities: [...new Set(apps.map((app) => app.visibility))],
+          sharedCount: apps.filter((app) => app.visibility !== "private").length,
         };
       })
       .sort((a, b) => {
@@ -1374,6 +1376,7 @@ export function RecruitmentTracker({
                           <th>Base 地点</th>
                           <th><button className="sort-button" onClick={() => toggleSort("appliedAt")}>最近投递 {sortIndicator("appliedAt")}</button></th>
                           <th><button className="sort-button" onClick={() => toggleSort("status")}>进度概览 {sortIndicator("status")}</button></th>
+                          <th>公开状态</th>
                           <th>操作</th>
                         </tr>
                       </thead>
@@ -1420,6 +1423,13 @@ export function RecruitmentTracker({
                                 {group.statuses.slice(0, 3).map((status) => <span key={status} className={`status-badge ${statusTone(status)}`}>{status}</span>)}
                                 {group.statuses.length > 3 && <span className="cell-muted">+{group.statuses.length - 3}</span>}
                               </div>
+                            </td>
+                            <td data-label="公开状态">
+                              {group.visibilities.length === 1 ? (
+                                <span className={`privacy-tag ${group.visibilities[0]}`}>{visibilityLabel(group.visibilities[0])}</span>
+                              ) : (
+                                <span className="privacy-tag mixed">部分共享 · {group.sharedCount}/{group.applications.length}</span>
+                              )}
                             </td>
                             <td data-label="操作" className="cell-actions">
                               <div className="action-buttons company-row-actions">

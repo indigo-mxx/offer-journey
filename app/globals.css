@@ -532,6 +532,8 @@ tbody tr:hover { background: #fcfbf8; }
 .privacy-tag.progress::before { background: #6689b0; }
 .privacy-tag.full { background: #e3f2ea; color: #1d7252; }
 .privacy-tag.full::before { background: #3a9870; }
+.privacy-tag.mixed { background: #fbf4e8; color: #936124; }
+.privacy-tag.mixed::before { background: #c48635; }
 .row-actions { justify-content: flex-end; opacity: 0; transition: opacity 140ms ease; }
 tr:hover .row-actions, .row-actions:focus-within { opacity: 1; }
 .row-actions button { font-size: 12px; }
