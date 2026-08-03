@@ -243,12 +243,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   background: #e4ece7;
 }
 .processing-progress span {
-  width: 46%;
+  width: 38%;
   height: 100%;
   display: block;
   border-radius: inherit;
   background: linear-gradient(90deg, var(--brand), #6ca485);
-  animation: processing-progress 1.15s ease-in-out infinite;
+  animation: processing-progress 2.8s cubic-bezier(.4, 0, .2, 1) infinite;
 }
 .processing-spinner {
   width: 30px;
@@ -256,7 +256,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   border: 3px solid #d8e8df;
   border-top-color: var(--brand);
   border-radius: 50%;
-  animation: processing-spin .75s linear infinite;
+  animation: processing-spin 1.7s linear infinite;
 }
 .toolbar { border-bottom: 1px solid var(--line); background: #fbfaf7; }
 .toolbar-row {
@@ -925,8 +925,8 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 @keyframes modal-in { from { transform: translateY(12px) scale(.98); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
 @keyframes processing-spin { to { transform: rotate(360deg); } }
 @keyframes processing-progress {
-  from { transform: translateX(-110%); }
-  to { transform: translateX(240%); }
+  from { transform: translateX(-115%); }
+  to { transform: translateX(280%); }
 }
 
 @media (max-width: 1000px) {
