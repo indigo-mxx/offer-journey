@@ -516,13 +516,19 @@ export function RecruitmentTracker({
       map.get(key)!.push(item);
     }
     return Array.from(map.entries())
-      .map(([key, apps]) => ({
-        key,
-        company: apps[0].company,
-        applications: apps,
-        industryTags: apps[0].industryTags ?? [],
-        companyScale: apps[0].companyScale ?? "",
-      }))
+      .map(([key, apps]) => {
+        const latest = apps.slice().sort((a, b) => (b.appliedAt || "").localeCompare(a.appliedAt || ""))[0];
+        return {
+          key,
+          company: apps[0].company,
+          applications: apps,
+          industryTags: [...new Set(apps.flatMap((app) => app.industryTags ?? []))],
+          companyScale: apps.find((app) => app.companyScale)?.companyScale ?? "",
+          bases: [...new Set(apps.map((app) => app.base).filter(Boolean))],
+          latestAppliedAt: latest?.appliedAt ?? "",
+          statuses: [...new Set(apps.map((app) => app.status))],
+        };
+      })
       .sort((a, b) => {
         if (sortKey === "company") {
           const result = a.company.localeCompare(b.company, "zh-CN");
@@ -1079,10 +1085,7 @@ export function RecruitmentTracker({
                   <button className="primary-button" onClick={() => openCreate()}>
                     + 新增公司 / 岗位
                   </button>
-                  <div className="display-switch" aria-label="展示方式">
-                    <button className={companyView ? "active" : ""} onClick={() => setCompanyView(true)}>按公司</button>
-                    <button className={!companyView ? "active" : ""} onClick={() => setCompanyView(false)}>全部岗位</button>
-                  </div>
+                  <span className="display-mode-label">按公司查看</span>
                   <button className="secondary-button" onClick={exportData}>导出</button>
                   <input ref={importRef} type="file" accept=".json" onChange={importData} className="hidden" />
                   <button className="secondary-button" onClick={() => importRef.current?.click()}>导入</button>
@@ -1144,13 +1147,12 @@ export function RecruitmentTracker({
                       <thead>
                         <tr>
                           <th><button className="sort-button" onClick={() => toggleSort("company")}>公司 {sortIndicator("company")}</button></th>
-                          <th>岗位数量</th>
-                          <th><button className="sort-button" onClick={() => toggleSort("position")}>岗位名称 {sortIndicator("position")}</button></th>
-                          <th>Base</th>
-                          <th>批次</th>
-                          <th><button className="sort-button" onClick={() => toggleSort("appliedAt")}>投递时间 {sortIndicator("appliedAt")}</button></th>
-                          <th><button className="sort-button" onClick={() => toggleSort("status")}>当前进度 {sortIndicator("status")}</button></th>
-                          <th>隐私</th>
+                          <th>岗位</th>
+                          <th>行业 / 规模</th>
+                          <th>Base 地点</th>
+                          <th><button className="sort-button" onClick={() => toggleSort("appliedAt")}>最近投递 {sortIndicator("appliedAt")}</button></th>
+                          <th><button className="sort-button" onClick={() => toggleSort("status")}>进度概览 {sortIndicator("status")}</button></th>
+                          <th>操作</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1165,48 +1167,30 @@ export function RecruitmentTracker({
                                 {group.companyScale && <span>{group.companyScale}</span>}
                               </div>
                             </td>
-                            <td data-label="岗位数量">
+                            <td data-label="岗位">
                               <button className="position-count" onClick={() => openCompany(group.company)}>
-                                {group.applications.length}
+                                {group.applications.length} 个岗位
                               </button>
+                              <span className="company-row-hint">点击查看岗位明细</span>
                             </td>
-                            <td data-label="岗位名称">
-                              <div className="company-subrows position-subrows">
-                                {group.applications.map((app) => (
-                                  <button key={app.id} className="position-link" onClick={() => openEdit(app)}>
-                                    {app.position}
-                                  </button>
-                                ))}
+                            <td data-label="行业 / 规模">
+                              <div className="company-merge-meta">
+                                {group.industryTags.slice(0, 3).map((tag) => <span key={tag}>{tag}</span>)}
+                                {group.companyScale && <span>{group.companyScale}</span>}
                               </div>
                             </td>
-                            <td data-label="Base">
-                              <div className="company-subrows">
-                                {group.applications.map((app) => <span key={app.id}>{app.base || "—"}</span>)}
+                            <td data-label="Base 地点" className="cell-muted">
+                              {group.bases.length ? group.bases.join("、") : "—"}
+                            </td>
+                            <td data-label="最近投递" className="cell-muted">{formatDate(group.latestAppliedAt)}</td>
+                            <td data-label="进度概览">
+                              <div className="company-status-summary">
+                                {group.statuses.slice(0, 3).map((status) => <span key={status} className={`status-badge ${statusTone(status)}`}>{status}</span>)}
+                                {group.statuses.length > 3 && <span className="cell-muted">+{group.statuses.length - 3}</span>}
                               </div>
                             </td>
-                            <td data-label="批次">
-                              <div className="company-subrows">
-                                {group.applications.map((app) => <span key={app.id} className="batch-tag">{app.batch}</span>)}
-                              </div>
-                            </td>
-                            <td data-label="投递时间">
-                              <div className="company-subrows cell-muted">
-                                {group.applications.map((app) => <span key={app.id}>{formatDate(app.appliedAt)}</span>)}
-                              </div>
-                            </td>
-                            <td data-label="当前进度">
-                              <div className="company-subrows">
-                                {group.applications.map((app) => (
-                                  <span key={app.id} className={`status-badge ${statusTone(app.status)}`}>{app.status}</span>
-                                ))}
-                              </div>
-                            </td>
-                            <td data-label="隐私">
-                              <div className="company-subrows">
-                                {group.applications.map((app) => (
-                                  <span key={app.id} className={`privacy-tag ${app.visibility}`}>{visibilityLabel(app.visibility)}</span>
-                                ))}
-                              </div>
+                            <td data-label="操作" className="cell-actions">
+                              <button className="secondary-button compact-button" onClick={() => openCompany(group.company)}>查看公司</button>
                             </td>
                           </tr>
                         ))}
@@ -1283,7 +1267,7 @@ export function RecruitmentTracker({
         {isFormOpen && (
           <div className="modal-overlay" onClick={closeForm}>
             <div className="modal" onClick={(e) => e.stopPropagation()}>
-              <h2>{editingId ? "编辑投递" : "新增投递"}</h2>
+              <h2>{editingId ? "编辑岗位投递" : "新增公司 / 岗位"}</h2>
               <form onSubmit={submitForm}>
                 <div className="form-grid">
                   <label>
