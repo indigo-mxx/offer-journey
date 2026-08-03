@@ -626,8 +626,8 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 .field-hint { color: var(--muted) !important; font-size: 11px !important; font-weight: 500 !important; line-height: 1.55; }
 .batch-position-field { display: flex; flex-direction: column; gap: 8px; }
 .batch-position-list { display: grid; gap: 8px; }
-.batch-position-row { display: flex; align-items: center; gap: 8px; }
-.batch-position-row input { flex: 1; }
+.batch-position-row { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(160px, .75fr) auto; align-items: center; gap: 8px; }
+.batch-position-row input { min-width: 0; }
 .batch-add-position { align-self: flex-start; min-height: 34px; padding: 6px 11px; font-size: 12px; }
 .display-mode-label { display: inline-flex; align-items: center; min-height: 34px; padding: 0 11px; border: 1px solid #d8e4da; border-radius: 9px; background: #f4faf5; color: #467052; font-size: 12px; font-weight: 650; }
 .readonly-note { display: inline-flex; align-items: center; min-height: 34px; padding: 0 11px; border-radius: 9px; background: #f0f0eb; color: var(--muted); font-size: 11px; }
@@ -1000,6 +1000,8 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
   .modal { max-height: 92vh; border-radius: 16px 16px 0 0; }
   .application-form-modal form { padding-inline: 18px !important; }
   .application-form-modal .modal-head { padding-inline: 18px; }
+  .batch-position-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .batch-position-row input:first-child { grid-column: 1 / -1; }
   .company-detail-modal { width: 100%; max-height: 92vh; }
   .company-detail-modal .company-modal-header { align-items: flex-start; padding: 20px 18px 16px; }
   .company-modal-actions .primary-button { display: none; }

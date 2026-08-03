@@ -38,6 +38,11 @@ interface CompanyFormState {
   companyScale: string;
 }
 
+interface BatchPositionEntry {
+  position: string;
+  base: string;
+}
+
 interface InterviewForm {
   applicationId: string;
   scheduledAt: string;
@@ -304,7 +309,7 @@ export function RecruitmentTracker({
   const [editingCompanyName, setEditingCompanyName] = useState<string | null>(null);
   const [companyForm, setCompanyForm] = useState<CompanyFormState>(EMPTY_COMPANY_FORM);
   const [form, setForm] = useState(EMPTY_FORM);
-  const [batchPositions, setBatchPositions] = useState<string[]>([""]);
+  const [batchPositions, setBatchPositions] = useState<BatchPositionEntry[]>([{ position: "", base: "" }]);
   const [selectedApplicationIds, setSelectedApplicationIds] = useState<string[]>([]);
   const [batchStatus, setBatchStatus] = useState<ApplicationStatus | "">("");
   const [batchVisibility, setBatchVisibility] = useState<Visibility | "">("");
@@ -871,7 +876,7 @@ export function RecruitmentTracker({
 
   // ────────────────────────────────── form
   function openCreate(source?: Application) {
-    setBatchPositions([""]);
+    setBatchPositions([{ position: "", base: source?.base ?? "" }]);
     if (source) {
       setForm({
         company: source.company,
@@ -898,7 +903,7 @@ export function RecruitmentTracker({
 
   function openEdit(item: Application) {
     setSelectedCompany(null);
-    setBatchPositions([item.position]);
+    setBatchPositions([{ position: item.position, base: item.base ?? "" }]);
     setForm({
       company: item.company,
       position: item.position,
@@ -922,7 +927,7 @@ export function RecruitmentTracker({
   function closeForm() {
     setIsFormOpen(false);
     setEditingId(null);
-    setBatchPositions([""]);
+    setBatchPositions([{ position: "", base: "" }]);
   }
 
   function updateFormField(field: keyof FormState, value: string | string[]) {
@@ -932,8 +937,10 @@ export function RecruitmentTracker({
   async function submitForm(event: React.FormEvent) {
     event.preventDefault();
     const positions = editingId
-      ? [form.position.trim()]
-      : batchPositions.map((position) => position.trim()).filter(Boolean);
+      ? [{ position: form.position.trim(), base: form.base.trim() }]
+      : batchPositions
+        .map((item) => ({ position: item.position.trim(), base: item.base.trim() }))
+        .filter((item) => item.position);
     if (!form.company.trim() || positions.length === 0) {
       setNotice("公司和岗位不能为空");
       return;
@@ -958,11 +965,11 @@ export function RecruitmentTracker({
       });
     } else {
       const now = new Date().toISOString();
-      const items: Application[] = positions.map((position) => ({
+      const items: Application[] = positions.map((item) => ({
           id: crypto.randomUUID(),
           company: form.company.trim(),
-          position,
-          base: form.base,
+          position: item.position,
+          base: item.base,
           batch: form.batch,
           appliedAt: form.appliedAt,
           status: form.status,
@@ -1517,15 +1524,21 @@ export function RecruitmentTracker({
                   ) : (
                     <label className="full-width batch-position-field">
                       <span>岗位列表 *</span>
-                      <span className="field-hint">先选公司，再一次填写多个岗位；每一行会生成一条独立投递记录。</span>
+                      <span className="field-hint">每个岗位单独设置 Base 地点；渠道、批次、投递日期和公开范围会作为这一批岗位的共同信息。</span>
                       <div className="batch-position-list">
-                        {batchPositions.map((position, index) => (
+                        {batchPositions.map((entry, index) => (
                           <div className="batch-position-row" key={`position-${index}`}>
                             <input
-                              value={position}
-                              onChange={(e) => setBatchPositions((prev) => prev.map((item, itemIndex) => itemIndex === index ? e.target.value : item))}
+                              value={entry.position}
+                              onChange={(e) => setBatchPositions((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, position: e.target.value } : item))}
                               placeholder={`岗位 ${index + 1}，例如：算法工程师`}
                               required={index === 0}
+                            />
+                            <input
+                              list="base-options"
+                              value={entry.base}
+                              onChange={(e) => setBatchPositions((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, base: e.target.value } : item))}
+                              placeholder="该岗位 Base 地点"
                             />
                             {batchPositions.length > 1 && (
                               <button type="button" className="action-btn danger" onClick={() => setBatchPositions((prev) => prev.filter((_, itemIndex) => itemIndex !== index))} title="移除此岗位">✕</button>
@@ -1533,7 +1546,7 @@ export function RecruitmentTracker({
                           </div>
                         ))}
                       </div>
-                      <button type="button" className="secondary-button batch-add-position" onClick={() => setBatchPositions((prev) => [...prev, ""])}>
+                      <button type="button" className="secondary-button batch-add-position" onClick={() => setBatchPositions((prev) => [...prev, { position: "", base: "" }])}>
                         + 再加一个岗位
                       </button>
                     </label>
@@ -1542,10 +1555,12 @@ export function RecruitmentTracker({
                     <span>2</span>
                     <div><strong>投递信息</strong><small>记录批次、日期与当前进展</small></div>
                   </div>
-                  <label>
-                    <span>Base 地点（可选或自定义）</span>
-                    <input list="base-options" value={form.base} onChange={(e) => updateFormField("base", e.target.value)} placeholder="选择城市，或输入多个地点" />
-                  </label>
+                  {editingId && (
+                    <label>
+                      <span>Base 地点（可选或自定义）</span>
+                      <input list="base-options" value={form.base} onChange={(e) => updateFormField("base", e.target.value)} placeholder="选择城市，或输入多个地点" />
+                    </label>
+                  )}
                   <label>
                     <span>批次</span>
                     <select value={form.batch} onChange={(e) => updateFormField("batch", e.target.value)}>
