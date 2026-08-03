@@ -630,6 +630,12 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 .batch-action-bar label > span { display: block; margin-bottom: 5px; color: var(--muted); font-size: 10px; }
 .batch-action-bar select { min-width: 135px; min-height: 38px; padding: 0 9px; border: 1px solid #c8d8cc; border-radius: 8px; background: white; color: var(--ink); }
 .batch-action-bar .primary-button { min-height: 38px; }
+.batch-share-hint { display: grid; gap: 4px; min-width: 142px; padding: 6px 0; color: var(--muted); font-size: 10px; }
+.batch-share-hint button { justify-self: start; padding: 0; border: 0; background: transparent; color: var(--brand); font-size: 11px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.share-setup-prompt { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 14px; border: 1px solid #d8e5db; border-radius: 10px; background: #f4faf5; }
+.share-setup-prompt strong, .share-setup-prompt small { display: block; }
+.share-setup-prompt strong { color: #426a4e; font-size: 12px; }
+.share-setup-prompt small { margin-top: 4px; color: var(--muted); font-size: 10px; }
 .company-row-hint { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; }
 .company-status-summary { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
 .tag-picker { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 9px; }
@@ -946,6 +952,8 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
   .batch-action-bar { align-items: stretch; flex-direction: column; }
   .batch-selection-copy { width: 100%; margin: 0; }
   .batch-action-bar label, .batch-action-bar select { width: 100%; }
+  .batch-share-hint { width: 100%; }
+  .share-setup-prompt { align-items: flex-start; flex-direction: column; }
   .filter-row { padding: 0 13px 13px; }
   .sort-control { width: 100%; }
   .sort-control select { flex: 1; }

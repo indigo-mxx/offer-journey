@@ -314,6 +314,7 @@ export function RecruitmentTracker({
   const [selectedApplicationIds, setSelectedApplicationIds] = useState<string[]>([]);
   const [batchStatus, setBatchStatus] = useState<ApplicationStatus | "">("");
   const [batchVisibility, setBatchVisibility] = useState<Visibility | "">("");
+  const [batchGroupId, setBatchGroupId] = useState("");
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [isInterviewOpen, setIsInterviewOpen] = useState(false);
   const [editingInterviewId, setEditingInterviewId] = useState<string | null>(null);
@@ -337,6 +338,8 @@ export function RecruitmentTracker({
     () => groups.find((g) => g.id === activeGroupId) ?? null,
     [groups, activeGroupId],
   );
+
+  const defaultGroupId = activeGroupId || groups[0]?.id || "";
 
   const cloudAction = useCallback(async (payload: Record<string, unknown>) => {
     const supabase = getSupabaseBrowserClient();
@@ -705,8 +708,9 @@ export function RecruitmentTracker({
       setNotice("请选择要批量修改的进度或公开范围");
       return;
     }
-    if (batchVisibility && batchVisibility !== "private" && !activeGroupId) {
-      setNotice("请先在共享管理中选择一个小组，再批量公开");
+    const shareGroupId = batchGroupId || defaultGroupId;
+    if (batchVisibility && batchVisibility !== "private" && !shareGroupId) {
+      setNotice("请先创建或加入小组，再批量共享给搭子");
       return;
     }
     const now = new Date().toISOString();
@@ -718,7 +722,7 @@ export function RecruitmentTracker({
         ...(batchStatus ? { status: batchStatus } : {}),
         ...(batchVisibility ? {
           visibility: batchVisibility,
-          groupId: batchVisibility === "private" ? null : activeGroupId,
+          groupId: batchVisibility === "private" ? null : shareGroupId,
         } : {}),
         updatedAt: now,
       }));
@@ -731,8 +735,9 @@ export function RecruitmentTracker({
     setSelectedApplicationIds([]);
     setBatchStatus("");
     setBatchVisibility("");
+    setBatchGroupId("");
     setNotice(`已批量更新 ${changed.length} 条投递`);
-  }, [selectedApplicationIds, batchStatus, batchVisibility, activeGroupId, ownApplications, user, runCloudMutation]);
+  }, [selectedApplicationIds, batchStatus, batchVisibility, batchGroupId, defaultGroupId, ownApplications, user, runCloudMutation]);
 
   const addInterview = useCallback(
     async (item: Interview) => {
@@ -899,12 +904,12 @@ export function RecruitmentTracker({
         salary: source.salary ?? "",
         note: source.note ?? "",
         visibility: source.visibility,
-        groupId: source.groupId ?? activeGroupId ?? "",
+        groupId: source.groupId ?? defaultGroupId,
         industryTags: source.industryTags ?? [],
         companyScale: source.companyScale ?? "",
       });
     } else {
-      setForm({ ...EMPTY_FORM, groupId: activeGroupId ?? "" });
+      setForm({ ...EMPTY_FORM, groupId: defaultGroupId });
     }
     setEditingId(null);
     setIsFormOpen(true);
@@ -925,7 +930,7 @@ export function RecruitmentTracker({
       salary: item.salary ?? "",
       note: item.note ?? "",
       visibility: item.visibility,
-      groupId: item.groupId ?? activeGroupId ?? "",
+      groupId: item.groupId ?? defaultGroupId,
       industryTags: item.industryTags ?? [],
       companyScale: item.companyScale ?? "",
     });
@@ -954,6 +959,11 @@ export function RecruitmentTracker({
       setNotice("公司和岗位不能为空");
       return;
     }
+    const shareGroupId = form.groupId || defaultGroupId;
+    if (form.visibility !== "private" && !shareGroupId) {
+      setNotice("请先创建或加入小组，再设置共享范围");
+      return;
+    }
     let saved = false;
     if (editingId) {
       saved = await updateApplication(editingId, {
@@ -968,7 +978,7 @@ export function RecruitmentTracker({
         salary: form.salary,
         note: form.note,
         visibility: form.visibility,
-        groupId: form.visibility === "private" ? null : (form.groupId || activeGroupId),
+        groupId: form.visibility === "private" ? null : shareGroupId,
         industryTags: form.industryTags,
         companyScale: form.companyScale,
       });
@@ -987,7 +997,7 @@ export function RecruitmentTracker({
           salary: form.salary,
           note: form.note,
           visibility: form.visibility,
-          groupId: form.visibility === "private" ? null : (form.groupId || activeGroupId),
+          groupId: form.visibility === "private" ? null : shareGroupId,
           industryTags: form.industryTags,
           companyScale: form.companyScale,
           createdAt: now,
@@ -1326,6 +1336,19 @@ export function RecruitmentTracker({
                     {VISIBILITY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
                 </label>
+                {batchVisibility && batchVisibility !== "private" && (groups.length > 0 ? (
+                  <label>
+                    <span>共享给</span>
+                    <select value={batchGroupId || defaultGroupId} onChange={(e) => setBatchGroupId(e.target.value)}>
+                      {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+                    </select>
+                  </label>
+                ) : (
+                  <div className="batch-share-hint">
+                    <span>还没有可共享的小组</span>
+                    <button type="button" onClick={() => { setView("sharing"); setSelectedApplicationIds([]); }}>去创建或加入</button>
+                  </div>
+                ))}
                 <button className="primary-button" type="button" onClick={() => void applyBatchChanges()} disabled={busy}>
                   {busy ? "保存中…" : "应用修改"}
                 </button>
@@ -1650,11 +1673,11 @@ export function RecruitmentTracker({
                       {VISIBILITY_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                     </select>
                   </label>
-                  {form.visibility !== "private" && (
+                  {form.visibility !== "private" && groups.length > 0 && (
                     <label className="full-width">
                       <span>共享到小组</span>
                       <select
-                        value={form.groupId}
+                        value={form.groupId || defaultGroupId}
                         onChange={(e) => updateFormField("groupId", e.target.value)}
                         required
                       >
@@ -1663,10 +1686,19 @@ export function RecruitmentTracker({
                       </select>
                     </label>
                   )}
+                  {form.visibility !== "private" && groups.length === 0 && (
+                    <div className="share-setup-prompt full-width">
+                      <div>
+                        <strong>还没有可共享的小组</strong>
+                        <small>先创建或加入小组，才能把这批投递共享给搭子。</small>
+                      </div>
+                      <button type="button" className="secondary-button" onClick={() => { closeForm(); setView("sharing"); }}>去创建或加入</button>
+                    </div>
+                  )}
                 </div>
                 <div className="form-actions">
                   <button type="button" className="secondary-button" onClick={closeForm}>取消</button>
-                  <button type="submit" className="primary-button" disabled={busy}>
+                  <button type="submit" className="primary-button" disabled={busy || (form.visibility !== "private" && groups.length === 0)}>
                     {busy ? "保存中…" : editingId ? "保存修改" : "添加记录"}
                   </button>
                 </div>
@@ -1906,9 +1938,22 @@ export function RecruitmentTracker({
                     <select value={batchVisibility} onChange={(e) => setBatchVisibility(e.target.value as Visibility | "")}>
                       <option value="">保持不变</option>
                       {VISIBILITY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </label>
+                {batchVisibility && batchVisibility !== "private" && (groups.length > 0 ? (
+                  <label>
+                    <span>共享给</span>
+                    <select value={batchGroupId || defaultGroupId} onChange={(e) => setBatchGroupId(e.target.value)}>
+                      {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
                     </select>
                   </label>
-                  <button className="primary-button" type="button" onClick={() => void applyBatchChanges()} disabled={busy}>
+                ) : (
+                  <div className="batch-share-hint">
+                    <span>还没有可共享的小组</span>
+                    <button type="button" onClick={() => { closeCompany(); setView("sharing"); setSelectedApplicationIds([]); }}>去创建或加入</button>
+                  </div>
+                ))}
+                <button className="primary-button" type="button" onClick={() => void applyBatchChanges()} disabled={busy}>
                     {busy ? "保存中…" : "应用修改"}
                   </button>
                 </div>
