@@ -406,6 +406,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   background: rgba(26,31,27,.46);
   backdrop-filter: blur(5px);
 }
+.modal-overlay-elevated { z-index: 30; }
 .modal-overlay .modal { padding: 24px 27px 27px; }
 .modal-overlay .modal form { padding: 20px 0 0; }
 .modal-wide { width: min(980px, 100%); }
@@ -575,6 +576,10 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 .form-section-heading strong, .form-section-heading small { display: block; }
 .form-section-heading strong { color: var(--ink); font-size: 13px; }
 .form-section-heading small { margin-top: 2px; color: var(--muted); font-size: 10px; }
+.company-edit-modal { width: min(640px, 100%); padding: 0 !important; }
+.company-edit-modal form { padding: 22px 27px 27px !important; }
+.company-edit-grid { grid-template-columns: 1fr; }
+.company-edit-impact { margin-top: 17px; padding: 11px 13px; border: 1px solid #d5e3d8; border-radius: 9px; background: #f2f8f3; color: #52705b; font-size: 11px; }
 .modal-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 24px 27px 19px; border-bottom: 1px solid var(--line);
@@ -602,6 +607,7 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 .company-detail-position { min-width: 260px; color: var(--ink); font-size: 13px; font-weight: 700; white-space: normal; line-height: 1.45; }
 .selection-column { width: 46px !important; min-width: 46px !important; text-align: center !important; }
 .selection-column input { width: 17px; height: 17px; accent-color: var(--brand); cursor: pointer; }
+.company-row-actions { flex-wrap: wrap; }
 .company-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 0 27px 18px; }
 .company-summary span { padding: 12px 13px; border: 1px solid #dbe8de; border-radius: 12px; background: #f7fbf8; color: var(--muted); font-size: 12px; }
 .company-summary b { display: block; margin-bottom: 3px; color: var(--ink); font-size: 19px; }

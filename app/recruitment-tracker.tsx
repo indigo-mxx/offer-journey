@@ -32,6 +32,12 @@ interface FormState {
   companyScale: string;
 }
 
+interface CompanyFormState {
+  name: string;
+  industryTags: string[];
+  companyScale: string;
+}
+
 interface InterviewForm {
   applicationId: string;
   scheduledAt: string;
@@ -98,6 +104,12 @@ const EMPTY_FORM: FormState = {
   note: "",
   visibility: "private",
   groupId: "",
+  industryTags: [],
+  companyScale: "",
+};
+
+const EMPTY_COMPANY_FORM: CompanyFormState = {
+  name: "",
   industryTags: [],
   companyScale: "",
 };
@@ -294,6 +306,8 @@ export function RecruitmentTracker({
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
+  const [editingCompanyName, setEditingCompanyName] = useState<string | null>(null);
+  const [companyForm, setCompanyForm] = useState<CompanyFormState>(EMPTY_COMPANY_FORM);
   const [form, setForm] = useState(EMPTY_FORM);
   const [batchPositions, setBatchPositions] = useState<string[]>([""]);
   const [selectedApplicationIds, setSelectedApplicationIds] = useState<string[]>([]);
@@ -868,6 +882,7 @@ export function RecruitmentTracker({
   }
 
   function openEdit(item: Application) {
+    setSelectedCompany(null);
     setBatchPositions([item.position]);
     setForm({
       company: item.company,
@@ -1008,6 +1023,48 @@ export function RecruitmentTracker({
 
   function closeCompany() {
     setSelectedCompany(null);
+  }
+
+  function openCompanyEdit(company: string) {
+    const companyItems = ownApplications.filter((item) => companyKey(item.company) === companyKey(company));
+    setCompanyForm({
+      name: company,
+      industryTags: [...new Set(companyItems.flatMap((item) => item.industryTags ?? []))],
+      companyScale: companyItems.find((item) => item.companyScale)?.companyScale ?? "",
+    });
+    setEditingCompanyName(company);
+    setSelectedCompany(null);
+  }
+
+  function closeCompanyEdit() {
+    setEditingCompanyName(null);
+    setCompanyForm(EMPTY_COMPANY_FORM);
+  }
+
+  async function submitCompanyEdit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!editingCompanyName || !companyForm.name.trim()) {
+      setNotice("公司名称不能为空");
+      return;
+    }
+    const now = new Date().toISOString();
+    const changed = ownApplications
+      .filter((item) => companyKey(item.company) === companyKey(editingCompanyName))
+      .map((item) => ({
+        ...item,
+        company: companyForm.name.trim(),
+        industryTags: companyForm.industryTags,
+        companyScale: companyForm.companyScale,
+        updatedAt: now,
+      }));
+    if (user) {
+      const saved = await runCloudMutation("保存公司信息中", { action: "importApplications", applications: changed });
+      if (!saved) return;
+    }
+    const changedMap = new Map(changed.map((item) => [item.id, item]));
+    setApplications((current) => current.map((item) => changedMap.get(item.id) ?? item));
+    setNotice(`已更新 ${companyForm.name.trim()} 的公司信息及 ${changed.length} 个岗位`);
+    closeCompanyEdit();
   }
 
   const companyApplications = useMemo(() => {
@@ -1306,7 +1363,10 @@ export function RecruitmentTracker({
                               </div>
                             </td>
                             <td data-label="操作" className="cell-actions">
-                              <button className="secondary-button compact-button" onClick={() => openCompany(group.company)}>查看公司</button>
+                              <div className="action-buttons company-row-actions">
+                                <button className="secondary-button compact-button" onClick={() => openCompany(group.company)}>查看公司</button>
+                                {view === "mine" && <button className="action-btn" onClick={() => openCompanyEdit(group.company)}>编辑公司</button>}
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -1375,7 +1435,7 @@ export function RecruitmentTracker({
                           <td className="cell-actions">
                             {view === "mine" && (
                               <div className="action-buttons">
-                                <button className="action-btn" onClick={() => openEdit(item)} title="编辑">✎</button>
+                                <button className="action-btn" onClick={() => openEdit(item)} title="编辑岗位信息">编辑岗位</button>
                                 <button className="action-btn" onClick={() => openCreate(item)} title="复制创建同公司新岗位">复制</button>
                                 <button className="action-btn" onClick={() => openInterviewCreate(item.id)} title="添加面试">+面</button>
                                 <button className="action-btn danger" onClick={() => removeApplication(item)} title="删除">✕</button>
@@ -1667,6 +1727,75 @@ export function RecruitmentTracker({
           </ModalPortal>
         )}
 
+        {/* ────────────────────────────────── company edit modal */}
+        {editingCompanyName && (
+          <ModalPortal>
+            <div className="modal-overlay modal-overlay-elevated" onClick={closeCompanyEdit}>
+              <div className="modal company-edit-modal" onClick={(event) => event.stopPropagation()}>
+                <div className="modal-head">
+                  <div>
+                    <p className="modal-kicker">EDIT COMPANY</p>
+                    <h2>修改公司信息</h2>
+                    <p className="modal-subtitle">公司资料会同步更新到该公司的全部岗位，不会改变各岗位的投递进度。</p>
+                  </div>
+                  <button type="button" className="close-button" onClick={closeCompanyEdit} aria-label="关闭">×</button>
+                </div>
+                <form onSubmit={submitCompanyEdit}>
+                  <div className="form-grid company-edit-grid">
+                    <label className="full-width">
+                      <span>公司名称 *</span>
+                      <input
+                        value={companyForm.name}
+                        onChange={(event) => setCompanyForm((current) => ({ ...current, name: event.target.value }))}
+                        placeholder="输入公司名称"
+                        required
+                        autoFocus
+                      />
+                    </label>
+                    <label className="full-width">
+                      <span>公司规模</span>
+                      <select
+                        value={companyForm.companyScale}
+                        onChange={(event) => setCompanyForm((current) => ({ ...current, companyScale: event.target.value }))}
+                      >
+                        <option value="">暂不填写</option>
+                        {COMPANY_SCALE_OPTIONS.map((scale) => <option key={scale} value={scale}>{scale}</option>)}
+                      </select>
+                    </label>
+                    <label className="full-width">
+                      <span>行业标签</span>
+                      <div className="tag-selector">
+                        {INDUSTRY_OPTIONS.map((tag) => (
+                          <button
+                            key={tag}
+                            type="button"
+                            className={`tag-option ${companyForm.industryTags.includes(tag) ? "active" : ""}`}
+                            onClick={() => setCompanyForm((current) => ({
+                              ...current,
+                              industryTags: current.industryTags.includes(tag)
+                                ? current.industryTags.filter((item) => item !== tag)
+                                : [...current.industryTags, tag],
+                            }))}
+                          >
+                            {tag}
+                          </button>
+                        ))}
+                      </div>
+                    </label>
+                  </div>
+                  <div className="company-edit-impact">
+                    将同步更新该公司下的 {ownApplications.filter((item) => companyKey(item.company) === companyKey(editingCompanyName)).length} 个岗位
+                  </div>
+                  <div className="form-actions">
+                    <button type="button" className="secondary-button" onClick={closeCompanyEdit}>取消</button>
+                    <button type="submit" className="primary-button" disabled={busy}>{busy ? "保存中…" : "保存公司信息"}</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </ModalPortal>
+        )}
+
         {/* ────────────────────────────────── company modal */}
         {selectedCompany && (
           <ModalPortal>
@@ -1679,7 +1808,12 @@ export function RecruitmentTracker({
                   <p className="modal-subtitle">共 {companyApplications.length} 个岗位，集中查看和更新每次投递。</p>
                 </div>
                 <div className="company-modal-actions">
-                  {view === "mine" && <button className="primary-button" onClick={() => { const src = companyApplications[0]; closeCompany(); openCreate(src); }}>+ 新增岗位</button>}
+                  {view === "mine" && (
+                    <>
+                      <button className="secondary-button" onClick={() => openCompanyEdit(selectedCompany)}>编辑公司信息</button>
+                      <button className="primary-button" onClick={() => { const src = companyApplications[0]; closeCompany(); openCreate(src); }}>+ 新增岗位</button>
+                    </>
+                  )}
                   <button type="button" className="close-button" onClick={closeCompany} aria-label="关闭">×</button>
                 </div>
               </div>
@@ -1745,7 +1879,7 @@ export function RecruitmentTracker({
                       ) : <span className={`status-badge ${statusTone(item.status)}`}>{item.status}</span>}</td>
                       <td className="cell-actions">
                         {view === "mine" && <div className="action-buttons">
-                          <button className="action-btn" onClick={() => openEdit(item)} title="编辑">✎</button>
+                          <button className="action-btn" onClick={() => openEdit(item)} title="编辑岗位信息">编辑岗位</button>
                           <button className="action-btn" onClick={() => { const src = item; closeCompany(); openCreate(src); }} title="复制创建同公司新岗位">复制</button>
                           <button className="action-btn danger" onClick={() => removeApplication(item)} title="删除">✕</button>
                         </div>}
