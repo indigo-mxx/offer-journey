@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import type { Application, Interview, GroupInfo, ApplicationStatus, Visibility } from "@/db/schema";
@@ -605,6 +605,22 @@ export function RecruitmentTracker({
         return compareApplications(a.applications[0], b.applications[0], sortKey) * (sortDirection === "asc" ? 1 : -1);
       });
   }, [filtered, sortKey, sortDirection]);
+
+  const listInsights = useMemo(() => {
+    const total = filtered.length;
+    const companyCount = new Set(filtered.map((item) => companyKey(item.company))).size;
+    const interviewCount = filtered.filter((item) => ["一面", "二面", "终面", "HR面"].includes(item.status)).length;
+    const offerCount = filtered.filter((item) => item.status === "Offer").length;
+    const sharedCount = filtered.filter((item) => item.visibility !== "private").length;
+    const rate = (count: number) => total ? Math.round((count / total) * 100) : 0;
+
+    return [
+      { label: "公司总数", value: companyCount, unit: "家", detail: `覆盖 ${total} 个岗位`, progress: total ? 100 : 0, color: "#5c9874" },
+      { label: "面试进行中", value: interviewCount, unit: "个", detail: `占全部岗位 ${rate(interviewCount)}%`, progress: rate(interviewCount), color: "#6589b2" },
+      { label: "已拿 Offer", value: offerCount, unit: "个", detail: `占全部岗位 ${rate(offerCount)}%`, progress: rate(offerCount), color: "#d49743" },
+      { label: "已共享给搭子", value: sharedCount, unit: "个", detail: `占全部岗位 ${rate(sharedCount)}%`, progress: rate(sharedCount), color: "#9b6b9c" },
+    ];
+  }, [filtered]);
 
   const toggleSort = useCallback((key: SortKey) => {
     if (sortKey === key) {
@@ -1517,6 +1533,33 @@ export function RecruitmentTracker({
                   </tbody>
                 </table>
               </div>
+            )}
+
+            {filtered.length > 0 && (
+              <section className="list-insights" aria-label="当前投递统计">
+                <div className="list-insights-copy">
+                  <span>当前清单统计</span>
+                  <h3>投递进展一览</h3>
+                  <p>统计会随上方的筛选条件和查看范围同步变化。</p>
+                </div>
+                <div className="insight-rings">
+                  {listInsights.map((insight) => (
+                    <article className="insight-card" key={insight.label}>
+                      <div
+                        className="insight-ring"
+                        style={{ "--insight-progress": `${insight.progress}%`, "--insight-color": insight.color } as CSSProperties}
+                      >
+                        <strong>{insight.value}</strong>
+                        <small>{insight.unit}</small>
+                      </div>
+                      <div>
+                        <strong>{insight.label}</strong>
+                        <small>{insight.detail}</small>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
             )}
           </>
         )}

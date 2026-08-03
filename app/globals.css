@@ -448,6 +448,21 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 .workspace h2, .modal h2 { margin: 0; font-family: "STSong","SimSun",serif; font-size: 25px; }
 .data-actions { color: var(--muted); font-size: 12px; }
+.list-insights { display: grid; grid-template-columns: minmax(170px, .55fr) 1.45fr; gap: 24px; align-items: center; margin: 24px 25px 26px; padding: 21px 22px; border: 1px solid #dce8df; border-radius: 14px; background: linear-gradient(115deg, #f7fbf8, #fffdf8); }
+.list-insights-copy > span { color: var(--brand); font-size: 11px; font-weight: 750; letter-spacing: .08em; }
+.list-insights-copy h3 { margin: 5px 0 7px; color: var(--ink); font-family: "STSong","SimSun",serif; font-size: 21px; }
+.list-insights-copy p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.65; }
+.insight-rings { display: grid; grid-template-columns: repeat(4, minmax(112px, 1fr)); gap: 10px; }
+.insight-card { display: grid; grid-template-columns: 48px minmax(0, 1fr); align-items: center; gap: 9px; min-width: 0; padding: 10px; border: 1px solid rgba(206,222,211,.8); border-radius: 12px; background: rgba(255,255,255,.72); }
+.insight-ring { --insight-progress: 0%; --insight-color: var(--brand); position: relative; width: 48px; height: 48px; display: grid; place-content: center; border-radius: 50%; background: conic-gradient(var(--insight-color) var(--insight-progress), #e8eeea 0); }
+.insight-ring::after { content: ""; position: absolute; inset: 5px; border-radius: inherit; background: #fffefa; }
+.insight-ring strong, .insight-ring small { position: relative; z-index: 1; text-align: center; line-height: 1; }
+.insight-ring strong { color: var(--ink); font-family: Georgia, serif; font-size: 15px; }
+.insight-ring small { margin-top: 2px; color: var(--muted); font-size: 8px; }
+.insight-card > div:last-child { min-width: 0; }
+.insight-card > div:last-child strong, .insight-card > div:last-child small { display: block; }
+.insight-card > div:last-child strong { color: var(--ink); font-size: 11px; line-height: 1.35; }
+.insight-card > div:last-child small { margin-top: 4px; color: var(--muted); font-size: 9px; line-height: 1.35; }
 .text-button, .row-actions button, .close-button { padding: 0; border: 0; background: transparent; color: var(--brand); }
 .text-button { padding-right: 12px; border-right: 1px solid var(--line); font-weight: 650; }
 .filters {
@@ -947,6 +962,8 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
   .stat-card { min-height: 112px; gap: 10px; padding: 16px 13px; }
   .stat-icon { width: 30px; height: 30px; }
   .workspace-head { padding: 18px; }
+  .list-insights { grid-template-columns: 1fr; gap: 17px; margin: 18px 13px 20px; padding: 18px; }
+  .insight-rings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .view-tabs { overflow-x: auto; padding-left: 6px; }
   .view-tabs button { min-width: max-content; padding: 0 10px; }
   .toolbar-row { align-items: stretch; flex-direction: column; padding: 13px; }
