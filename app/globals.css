@@ -415,6 +415,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .tag-selector { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 7px; }
 .tag-option { min-height: 30px; padding: 4px 9px; border: 1px solid var(--line); border-radius: 999px; background: white; color: var(--muted); font-size: 11px; }
 .tag-option.active { border-color: #82a991; background: var(--brand-soft); color: var(--brand); }
+.custom-tag-input { width: 100%; margin-top: 10px; }
 .notice-toast {
   position: fixed;
   right: 26px;

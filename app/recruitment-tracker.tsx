@@ -59,6 +59,16 @@ const STATUSES: ApplicationStatus[] = ["简历投递", "简历筛选", "笔试",
 
 const BATCHES = ["秋招", "提前批", "日常实习", "其他"];
 
+const BASE_OPTIONS = [
+  "北京", "上海", "广州", "深圳", "杭州", "成都", "武汉", "南京", "苏州", "西安", "合肥", "重庆",
+  "天津", "青岛", "厦门", "长沙", "郑州", "宁波", "无锡", "东莞", "珠海", "佛山", "济南", "大连",
+  "沈阳", "长春", "哈尔滨", "福州", "昆明", "南昌", "石家庄", "香港", "全国", "远程",
+];
+
+const PLATFORM_OPTIONS = [
+  "招聘官网", "内推", "校园招聘", "Boss 直聘", "牛客", "猎聘", "智联招聘", "前程无忧", "实习僧", "拉勾", "LinkedIn", "微信公众号", "线下宣讲会", "其他",
+];
+
 const VISIBILITY_OPTIONS: { value: Visibility; label: string }[] = [
   { value: "private", label: "仅自己" },
   { value: "progress", label: "仅共享进度" },
@@ -66,29 +76,14 @@ const VISIBILITY_OPTIONS: { value: Visibility; label: string }[] = [
 ];
 
 const INDUSTRY_OPTIONS = [
-  "互联网/电商",
-  "AI/大模型",
-  "游戏",
-  "金融/银行",
-  "咨询/四大",
-  "快消/零售",
-  "制造业/汽车",
-  "医药/生物",
-  "地产/建筑",
-  "国企/央企",
-  "外企",
-  "创业公司",
-  "其他",
+  "半导体", "具身智能", "智能驾驶", "软件", "游戏", "汽车", "机器人", "AI / 大模型",
+  "互联网 / 平台", "互联网/电商", "硬件 / 消费电子", "通信", "金融科技", "金融/银行",
+  "生物医药", "医疗健康", "化工", "能源电力", "制造业", "快消/零售", "咨询/四大",
+  "地产/建筑", "教育", "国企/央企", "事业单位", "研究院", "外企", "创业公司", "其他",
 ];
 
 const COMPANY_SCALE_OPTIONS = [
-  "0-20人",
-  "20-99人",
-  "100-499人",
-  "500-999人",
-  "1000-4999人",
-  "5000-9999人",
-  "10000人以上",
+  "未知", "1-50人", "51-200人", "201-500人", "501-2000人", "2001-10000人", "10000+人",
 ];
 
 const EMPTY_FORM: FormState = {
@@ -505,6 +500,26 @@ export function RecruitmentTracker({
 
   const friendApplications = useMemo(
     () => applications.filter((item) => item.isOwner === false),
+    [applications],
+  );
+
+  const industryOptions = useMemo(
+    () => [...new Set([...INDUSTRY_OPTIONS, ...applications.flatMap((item) => item.industryTags ?? [])])].filter(Boolean),
+    [applications],
+  );
+
+  const companyScaleOptions = useMemo(
+    () => [...new Set([...COMPANY_SCALE_OPTIONS, ...applications.map((item) => item.companyScale).filter(Boolean)])],
+    [applications],
+  );
+
+  const baseOptions = useMemo(
+    () => [...new Set([...BASE_OPTIONS, ...applications.map((item) => item.base).filter(Boolean)])],
+    [applications],
+  );
+
+  const platformOptions = useMemo(
+    () => [...new Set([...PLATFORM_OPTIONS, ...applications.map((item) => item.channel).filter(Boolean)])],
     [applications],
   );
 
@@ -1080,6 +1095,12 @@ export function RecruitmentTracker({
 
   return (
     <div className="app-shell">
+      <datalist id="base-options">
+        {baseOptions.map((option) => <option key={option} value={option} />)}
+      </datalist>
+      <datalist id="platform-options">
+        {platformOptions.map((option) => <option key={option} value={option} />)}
+      </datalist>
       {pendingAction && (
         <div className="processing-overlay" role="status" aria-live="polite" aria-busy="true">
           <div className="processing-card">
@@ -1258,14 +1279,14 @@ export function RecruitmentTracker({
                 </select>
                 <select value={industryFilter} onChange={(e) => setIndustryFilter(e.target.value)}>
                   <option>全部行业</option>
-                  {INDUSTRY_OPTIONS.map((i) => <option key={i}>{i}</option>)}
+                  {industryOptions.map((i) => <option key={i}>{i}</option>)}
                 </select>
                 <select value={scaleFilter} onChange={(e) => setScaleFilter(e.target.value)}>
                   <option>全部规模</option>
-                  {COMPANY_SCALE_OPTIONS.map((s) => <option key={s}>{s}</option>)}
+                  {companyScaleOptions.map((s) => <option key={s}>{s}</option>)}
                 </select>
                 <input value={positionFilter} onChange={(e) => setPositionFilter(e.target.value)} placeholder="岗位筛选" />
-                <input value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} placeholder="地点筛选" />
+                <input list="base-options" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} placeholder="选择或输入地点" />
                 <button className="secondary-button" onClick={clearFilters}>清除筛选</button>
               </div>
             </div>
@@ -1522,8 +1543,8 @@ export function RecruitmentTracker({
                     <div><strong>投递信息</strong><small>记录批次、日期与当前进展</small></div>
                   </div>
                   <label>
-                    <span>地点</span>
-                    <input value={form.base} onChange={(e) => updateFormField("base", e.target.value)} />
+                    <span>Base 地点（可选或自定义）</span>
+                    <input list="base-options" value={form.base} onChange={(e) => updateFormField("base", e.target.value)} placeholder="选择城市，或输入多个地点" />
                   </label>
                   <label>
                     <span>批次</span>
@@ -1542,8 +1563,8 @@ export function RecruitmentTracker({
                     </select>
                   </label>
                   <label>
-                    <span>渠道</span>
-                    <input value={form.channel} onChange={(e) => updateFormField("channel", e.target.value)} placeholder="官网/内推/招聘平台" />
+                    <span>投递渠道（可选或自定义）</span>
+                    <input list="platform-options" value={form.channel} onChange={(e) => updateFormField("channel", e.target.value)} placeholder="选择官网、内推或招聘平台" />
                   </label>
                   <label>
                     <span>链接</span>
@@ -1557,7 +1578,7 @@ export function RecruitmentTracker({
                     <span>公司规模</span>
                     <select value={form.companyScale} onChange={(e) => updateFormField("companyScale", e.target.value)}>
                       <option value="">不限</option>
-                      {COMPANY_SCALE_OPTIONS.map((s) => <option key={s}>{s}</option>)}
+                      {companyScaleOptions.map((s) => <option key={s}>{s}</option>)}
                     </select>
                   </label>
                   <div className="form-section-heading full-width">
@@ -1583,6 +1604,18 @@ export function RecruitmentTracker({
                         </button>
                       ))}
                     </div>
+                    <input
+                      className="custom-tag-input"
+                      value={form.industryTags.filter((tag) => !INDUSTRY_OPTIONS.includes(tag)).join("、")}
+                      onChange={(event) => {
+                        const customTags = event.target.value.split(/[、,，]/).map((tag) => tag.trim()).filter(Boolean);
+                        updateFormField("industryTags", [
+                          ...form.industryTags.filter((tag) => INDUSTRY_OPTIONS.includes(tag)),
+                          ...customTags,
+                        ]);
+                      }}
+                      placeholder="自定义标签，可用顿号分隔，例如：新能源、ToB"
+                    />
                   </label>
                   <label className="full-width">
                     <span>备注</span>
@@ -1759,7 +1792,7 @@ export function RecruitmentTracker({
                         onChange={(event) => setCompanyForm((current) => ({ ...current, companyScale: event.target.value }))}
                       >
                         <option value="">暂不填写</option>
-                        {COMPANY_SCALE_OPTIONS.map((scale) => <option key={scale} value={scale}>{scale}</option>)}
+                        {companyScaleOptions.map((scale) => <option key={scale} value={scale}>{scale}</option>)}
                       </select>
                     </label>
                     <label className="full-width">
@@ -1781,6 +1814,21 @@ export function RecruitmentTracker({
                           </button>
                         ))}
                       </div>
+                      <input
+                        className="custom-tag-input"
+                        value={companyForm.industryTags.filter((tag) => !INDUSTRY_OPTIONS.includes(tag)).join("、")}
+                        onChange={(event) => {
+                          const customTags = event.target.value.split(/[、,，]/).map((tag) => tag.trim()).filter(Boolean);
+                          setCompanyForm((current) => ({
+                            ...current,
+                            industryTags: [
+                              ...current.industryTags.filter((tag) => INDUSTRY_OPTIONS.includes(tag)),
+                              ...customTags,
+                            ],
+                          }));
+                        }}
+                        placeholder="自定义标签，可用顿号分隔"
+                      />
                     </label>
                   </div>
                   <div className="company-edit-impact">
