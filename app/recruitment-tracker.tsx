@@ -278,6 +278,7 @@ export function RecruitmentTracker({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [batchPositions, setBatchPositions] = useState<string[]>([""]);
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [isInterviewOpen, setIsInterviewOpen] = useState(false);
   const [editingInterviewId, setEditingInterviewId] = useState<string | null>(null);
@@ -463,6 +464,11 @@ export function RecruitmentTracker({
     [applications],
   );
 
+  const companyOptions = useMemo(
+    () => [...new Set(ownApplications.map((item) => item.company.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-CN")),
+    [ownApplications],
+  );
+
   const friendApplications = useMemo(
     () => applications.filter((item) => item.isOwner === false),
     [applications],
@@ -549,6 +555,19 @@ export function RecruitmentTracker({
       }
       setApplications((prev) => [...prev, item]);
       setNotice("投递记录已保存");
+      return true;
+    },
+    [user, runCloudMutation],
+  );
+
+  const addApplications = useCallback(
+    async (items: Application[]) => {
+      if (user) {
+        const saved = await runCloudMutation("批量保存投递信息中", { action: "importApplications", applications: items });
+        if (!saved) return false;
+      }
+      setApplications((prev) => [...prev, ...items]);
+      setNotice(`已保存 ${items.length} 个岗位`);
       return true;
     },
     [user, runCloudMutation],
@@ -747,6 +766,7 @@ export function RecruitmentTracker({
 
   // ────────────────────────────────── form
   function openCreate(source?: Application) {
+    setBatchPositions([""]);
     if (source) {
       setForm({
         company: source.company,
@@ -772,6 +792,7 @@ export function RecruitmentTracker({
   }
 
   function openEdit(item: Application) {
+    setBatchPositions([item.position]);
     setForm({
       company: item.company,
       position: item.position,
@@ -795,6 +816,7 @@ export function RecruitmentTracker({
   function closeForm() {
     setIsFormOpen(false);
     setEditingId(null);
+    setBatchPositions([""]);
   }
 
   function updateFormField(field: keyof FormState, value: string | string[]) {
@@ -803,7 +825,10 @@ export function RecruitmentTracker({
 
   async function submitForm(event: React.FormEvent) {
     event.preventDefault();
-    if (!form.company.trim() || !form.position.trim()) {
+    const positions = editingId
+      ? [form.position.trim()]
+      : batchPositions.map((position) => position.trim()).filter(Boolean);
+    if (!form.company.trim() || positions.length === 0) {
       setNotice("公司和岗位不能为空");
       return;
     }
@@ -826,26 +851,27 @@ export function RecruitmentTracker({
         companyScale: form.companyScale,
       });
     } else {
-      const item: Application = {
-        id: crypto.randomUUID(),
-        company: form.company,
-        position: form.position,
-        base: form.base,
-        batch: form.batch,
-        appliedAt: form.appliedAt,
-        status: form.status,
-        channel: form.channel,
-        link: form.link,
-        salary: form.salary,
-        note: form.note,
-        visibility: form.visibility,
-        groupId: form.visibility === "private" ? null : (form.groupId || activeGroupId),
-        industryTags: form.industryTags,
-        companyScale: form.companyScale,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      saved = await addApplication(item);
+      const now = new Date().toISOString();
+      const items: Application[] = positions.map((position) => ({
+          id: crypto.randomUUID(),
+          company: form.company.trim(),
+          position,
+          base: form.base,
+          batch: form.batch,
+          appliedAt: form.appliedAt,
+          status: form.status,
+          channel: form.channel,
+          link: form.link,
+          salary: form.salary,
+          note: form.note,
+          visibility: form.visibility,
+          groupId: form.visibility === "private" ? null : (form.groupId || activeGroupId),
+          industryTags: form.industryTags,
+          companyScale: form.companyScale,
+          createdAt: now,
+          updatedAt: now,
+        }));
+      saved = items.length === 1 ? await addApplication(items[0]) : await addApplications(items);
     }
     if (saved) closeForm();
   }
@@ -916,6 +942,8 @@ export function RecruitmentTracker({
   }, [selectedCompany, ownApplications, sortKey, sortDirection]);
 
   // ────────────────────────────────── render
+  const selectedCompanyValue = companyOptions.includes(form.company.trim()) ? form.company.trim() : "__new__";
+
   return (
     <div className="app-shell">
       {pendingAction && (
@@ -974,8 +1002,8 @@ export function RecruitmentTracker({
         <div className="hero-note">
           <span className="hero-note-icon">⇡</span>
           <div>
-            <strong>善用「复制」快速创建同公司新岗位</strong>
-            <p>在表格行或公司概览弹窗中使用「复制」「新增岗位」按钮，自动填入公司信息，只需填写新岗位名称即可。</p>
+            <strong>同一家公司可一次填写多个岗位</strong>
+            <p>新增投递时先选择已有公司或新建公司，再点击「再加一个岗位」，公共信息会自动复用。</p>
           </div>
         </div>
       </section>
@@ -1049,7 +1077,7 @@ export function RecruitmentTracker({
                 </div>
                 <div className="toolbar-actions">
                   <button className="primary-button" onClick={() => openCreate()}>
-                    + 新增投递
+                    + 新增公司 / 岗位
                   </button>
                   <div className="display-switch" aria-label="展示方式">
                     <button className={companyView ? "active" : ""} onClick={() => setCompanyView(true)}>按公司</button>
@@ -1260,12 +1288,50 @@ export function RecruitmentTracker({
                 <div className="form-grid">
                   <label>
                     公司 *
-                    <input value={form.company} onChange={(e) => updateFormField("company", e.target.value)} required />
+                    {!editingId && companyOptions.length > 0 && (
+                      <select
+                        value={selectedCompanyValue}
+                        onChange={(e) => updateFormField("company", e.target.value === "__new__" ? "" : e.target.value)}
+                      >
+                        <option value="__new__">新建公司 / 自定义</option>
+                        {companyOptions.map((company) => <option key={company} value={company}>{company}</option>)}
+                      </select>
+                    )}
+                    {(!editingId && selectedCompanyValue === "__new__") || editingId ? (
+                      <input value={form.company} onChange={(e) => updateFormField("company", e.target.value)} placeholder="输入公司名称" required />
+                    ) : (
+                      <span className="field-hint">已选择：{form.company}</span>
+                    )}
                   </label>
-                  <label>
-                    岗位 *
-                    <input value={form.position} onChange={(e) => updateFormField("position", e.target.value)} required />
-                  </label>
+                  {editingId ? (
+                    <label>
+                      岗位 *
+                      <input value={form.position} onChange={(e) => updateFormField("position", e.target.value)} required />
+                    </label>
+                  ) : (
+                    <label className="full-width batch-position-field">
+                      岗位列表 *
+                      <span className="field-hint">先选公司，再一次填写多个岗位；每一行会生成一条独立投递记录。</span>
+                      <div className="batch-position-list">
+                        {batchPositions.map((position, index) => (
+                          <div className="batch-position-row" key={`position-${index}`}>
+                            <input
+                              value={position}
+                              onChange={(e) => setBatchPositions((prev) => prev.map((item, itemIndex) => itemIndex === index ? e.target.value : item))}
+                              placeholder={`岗位 ${index + 1}，例如：算法工程师`}
+                              required={index === 0}
+                            />
+                            {batchPositions.length > 1 && (
+                              <button type="button" className="action-btn danger" onClick={() => setBatchPositions((prev) => prev.filter((_, itemIndex) => itemIndex !== index))} title="移除此岗位">✕</button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <button type="button" className="secondary-button batch-add-position" onClick={() => setBatchPositions((prev) => [...prev, ""])}>
+                        + 再加一个岗位
+                      </button>
+                    </label>
+                  )}
                   <label>
                     地点
                     <input value={form.base} onChange={(e) => updateFormField("base", e.target.value)} />

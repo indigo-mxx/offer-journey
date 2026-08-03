@@ -572,6 +572,12 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 .form-grid label > span { display: block; margin-bottom: 7px; color: #565b54; font-size: 12px; font-weight: 650; }
 .form-grid input, .form-grid select, .form-grid textarea { min-height: 43px; padding: 10px 12px; }
 .form-grid textarea { resize: vertical; }
+.field-hint { color: var(--muted) !important; font-size: 11px !important; font-weight: 500 !important; line-height: 1.55; }
+.batch-position-field { display: flex; flex-direction: column; gap: 8px; }
+.batch-position-list { display: grid; gap: 8px; }
+.batch-position-row { display: flex; align-items: center; gap: 8px; }
+.batch-position-row input { flex: 1; }
+.batch-add-position { align-self: flex-start; min-height: 34px; padding: 6px 11px; font-size: 12px; }
 .tag-picker { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 9px; }
 .tag-choice { min-height: 32px; padding: 5px 10px; border: 1px solid #d6e2d8; border-radius: 999px; background: #f8fbf8; color: #5f6f62; font-size: 12px; cursor: pointer; transition: .18s ease; }
 .tag-choice:hover { border-color: #9db8a7; transform: translateY(-1px); }
