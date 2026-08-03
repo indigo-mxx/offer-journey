@@ -213,50 +213,35 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .view-tabs button:disabled { cursor: not-allowed; opacity: .45; }
 .processing-overlay {
   position: fixed;
-  inset: 0;
+  top: 18px;
+  right: 20px;
   z-index: 100;
-  display: grid;
-  place-items: center;
-  padding: 20px;
-  background: rgba(245, 243, 238, .58);
-  backdrop-filter: blur(3px);
+  pointer-events: none;
 }
 .processing-card {
-  min-width: 230px;
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-  padding: 24px 28px;
-  border: 1px solid rgba(33,95,75,.22);
-  border-radius: 15px;
-  background: rgba(255,253,250,.97);
-  box-shadow: 0 22px 65px rgba(23,72,57,.18);
+  min-width: 250px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 15px;
+  border: 1px solid rgba(33,95,75,.18);
+  border-left: 3px solid var(--brand);
+  border-radius: 11px;
+  background: rgba(255,253,250,.98);
+  box-shadow: 0 12px 30px rgba(23,72,57,.14);
+  animation: processing-arrive 240ms ease-out both;
 }
-.processing-card strong { margin-top: 3px; color: var(--brand); font-size: 14px; }
-.processing-card small { color: var(--muted); font-size: 11px; }
-.processing-progress {
-  width: 100%;
-  height: 5px;
-  overflow: hidden;
-  margin: 3px 0 1px;
-  border-radius: 999px;
-  background: #e4ece7;
-}
-.processing-progress span {
-  width: 38%;
-  height: 100%;
-  display: block;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--brand), #6ca485);
-  animation: processing-progress 2.8s cubic-bezier(.4, 0, .2, 1) infinite;
-}
+.processing-card strong, .processing-card small { display: block; }
+.processing-card strong { color: var(--brand); font-size: 13px; }
+.processing-card small { margin-top: 3px; color: var(--muted); font-size: 10px; }
 .processing-spinner {
-  width: 30px;
-  height: 30px;
-  border: 3px solid #d8e8df;
-  border-top-color: var(--brand);
+  width: 9px;
+  height: 9px;
+  flex: none;
   border-radius: 50%;
-  animation: processing-spin 1.7s linear infinite;
+  background: var(--brand);
+  box-shadow: 0 0 0 5px rgba(74,133,96,.12);
+  animation: processing-breathe 2.8s ease-in-out infinite;
 }
 .toolbar { border-bottom: 1px solid var(--line); background: #fbfaf7; }
 .toolbar-row {
@@ -923,11 +908,8 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 @keyframes bar-in { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes toast-in { from { transform: translateY(8px); opacity: 0; } }
 @keyframes modal-in { from { transform: translateY(12px) scale(.98); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
-@keyframes processing-spin { to { transform: rotate(360deg); } }
-@keyframes processing-progress {
-  from { transform: translateX(-115%); }
-  to { transform: translateX(280%); }
-}
+@keyframes processing-arrive { from { transform: translateY(-6px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes processing-breathe { 0%, 100% { opacity: .55; transform: scale(.9); } 50% { opacity: 1; transform: scale(1); } }
 
 @media (max-width: 1000px) {
   .app-shell { padding: 0 24px 26px; }
@@ -938,6 +920,8 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 }
 
 @media (max-width: 700px) {
+  .processing-overlay { top: 12px; right: 12px; left: 12px; }
+  .processing-card { min-width: 0; }
   .app-shell { padding: 0 14px 24px; }
   .topbar { min-height: 74px; }
   .brand small, .save-state { display: none; }

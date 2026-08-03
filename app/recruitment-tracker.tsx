@@ -292,6 +292,7 @@ export function RecruitmentTracker({
   const [localBackup, setLocalBackup] = useState<Application[]>([]);
   const [ready, setReady] = useState(false);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [showProcessingHint, setShowProcessingHint] = useState(false);
   const [view, setView] = useState<"mine" | "friends" | "sharing">("mine");
   const [companyView, setCompanyView] = useState(true);
   const [sortKey, setSortKey] = useState<SortKey>("appliedAt");
@@ -323,6 +324,14 @@ export function RecruitmentTracker({
   const importRef = useRef<HTMLInputElement>(null);
   const inviteHandledRef = useRef(false);
   const busy = pendingAction !== null;
+
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setShowProcessingHint(Boolean(pendingAction)),
+      pendingAction ? 500 : 0,
+    );
+    return () => window.clearTimeout(timer);
+  }, [pendingAction]);
 
   const activeGroup = useMemo(
     () => groups.find((g) => g.id === activeGroupId) ?? null,
@@ -1108,15 +1117,14 @@ export function RecruitmentTracker({
       <datalist id="platform-options">
         {platformOptions.map((option) => <option key={option} value={option} />)}
       </datalist>
-      {pendingAction && (
+      {showProcessingHint && pendingAction && (
         <div className="processing-overlay" role="status" aria-live="polite" aria-busy="true">
           <div className="processing-card">
             <span className="processing-spinner" aria-hidden="true" />
-            <strong>{pendingAction}</strong>
-            <div className="processing-progress" aria-hidden="true">
-              <span />
+            <div>
+              <strong>{pendingAction}</strong>
+              <small>正在安全同步，请稍候</small>
             </div>
-            <small>请稍候，数据正在安全同步</small>
           </div>
         </div>
       )}
