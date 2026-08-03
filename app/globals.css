@@ -340,7 +340,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .company-view { padding: 0; }
 .company-merge-table { min-width: 1080px; table-layout: auto; }
 .company-merge-table th:first-child { min-width: 150px; }
-.company-merge-table th:nth-child(2) { width: 76px; text-align: center; }
+.company-merge-table th:nth-child(2) { min-width: 118px; text-align: left; }
 .company-merge-table th:nth-child(3) { min-width: 190px; }
 .company-merge-table th:nth-child(4) { min-width: 100px; }
 .company-merge-table th:nth-child(5) { min-width: 100px; }
@@ -353,16 +353,23 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .company-merge-meta { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
 .company-merge-meta span { padding: 3px 6px; border-radius: 999px; background: var(--brand-soft); color: var(--brand); font-size: 9px; }
 .position-count {
-  width: 34px;
-  height: 34px;
-  display: grid;
+  width: auto;
+  min-width: 92px;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   place-items: center;
-  margin: 0 auto;
+  margin: 0;
+  padding: 7px 13px;
   border: 1px solid #bed4c7;
-  border-radius: 10px;
+  border-radius: 999px;
   background: var(--brand-soft);
   color: var(--brand);
+  font-size: 12px;
   font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 .company-subrows { display: grid; grid-auto-rows: 38px; align-items: center; gap: 3px; }
 .company-subrows > * { min-width: 0; align-self: center; }
@@ -430,6 +437,23 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .sharing-panel .group-actions button, .group-invite button { min-height: 40px; padding: 0 13px; border: 1px solid #b9d0c3; border-radius: 8px; background: var(--brand); color: white; }
 .group-invite button { background: white; color: var(--brand); }
 .group-invite button.danger { border-color: #e1c5c1; background: #fbefed; color: var(--danger); }
+.current-invite-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 18px;
+  padding: 18px 20px;
+  border: 1px solid #c8ddcf;
+  border-radius: 13px;
+  background: linear-gradient(135deg, #edf7f0, #fafcf9);
+}
+.current-invite-card small, .current-invite-card strong, .current-invite-card span { display: block; }
+.current-invite-card small { color: var(--muted); font-size: 11px; }
+.current-invite-card strong { margin-top: 5px; color: var(--brand); font-family: ui-monospace, monospace; font-size: 24px; letter-spacing: .12em; }
+.current-invite-card span { margin-top: 7px; color: var(--muted); font-size: 11px; }
+.current-invite-actions { display: flex; flex: none; gap: 8px; }
+.current-invite-actions button { min-height: 38px; padding: 0 12px; border: 1px solid #a9c8b5; border-radius: 8px; background: white; color: var(--brand); font-weight: 650; }
 .primary-button:disabled, .secondary-button:disabled, .action-btn:disabled, .group-invite button:disabled { cursor: wait; opacity: .58; transform: none; }
 .workspace-head {
   min-height: 90px; display: flex; align-items: center; justify-content: space-between;
@@ -541,6 +565,16 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
   width: min(720px,100%); max-height: calc(100vh - 44px); overflow-y: auto;
   border: 1px solid rgba(157,184,170,.65); border-radius: 18px; background: linear-gradient(145deg, rgba(255,255,253,.98), rgba(247,251,247,.98)); box-shadow: 0 30px 100px rgba(18,25,20,.3), 0 0 0 8px rgba(214,232,222,.15); animation: modal-in 220ms cubic-bezier(.2,.8,.2,1);
 }
+.application-form-modal { width: min(860px, 100%); padding: 0 !important; }
+.application-form-modal .modal-head { position: sticky; top: 0; z-index: 2; background: rgba(251,253,250,.96); backdrop-filter: blur(10px); }
+.application-form-modal form { padding: 22px 27px 27px !important; }
+.modal-kicker { margin: 0 0 5px; color: #6f927a; font-size: 9px; font-weight: 800; letter-spacing: .18em; }
+.form-section-heading { display: flex; align-items: center; gap: 11px; padding: 3px 0 11px; border-bottom: 1px solid #e3eae4; }
+.form-section-heading:not(:first-child) { margin-top: 5px; }
+.form-section-heading > span { width: 27px; height: 27px; display: grid !important; flex: none; place-items: center; margin: 0 !important; border-radius: 8px; background: var(--brand); color: white !important; font-size: 12px !important; }
+.form-section-heading strong, .form-section-heading small { display: block; }
+.form-section-heading strong { color: var(--ink); font-size: 13px; }
+.form-section-heading small { margin-top: 2px; color: var(--muted); font-size: 10px; }
 .modal-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 24px 27px 19px; border-bottom: 1px solid var(--line);
@@ -558,6 +592,16 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 .modal form { padding: 23px 27px 27px; }
 .modal-subtitle { margin: 7px 0 0; color: var(--muted); font-size: 13px; }
 .company-modal { max-width: 720px; }
+.company-detail-modal { width: min(1120px, calc(100vw - 44px)); max-width: none; padding: 0 !important; overflow: hidden; }
+.company-detail-modal .company-modal-header { margin: 0; padding: 24px 27px 20px; border-bottom: 1px solid var(--line); background: #fbfdfb; }
+.company-modal-actions { display: flex; align-items: center; gap: 10px; }
+.company-detail-table-wrap { max-height: min(62vh, 620px); overflow: auto; }
+.company-detail-table { min-width: 880px; }
+.company-detail-table th, .company-detail-table td { padding-block: 15px; }
+.company-detail-table th:nth-child(2) { min-width: 260px; }
+.company-detail-position { min-width: 260px; color: var(--ink); font-size: 13px; font-weight: 700; white-space: normal; line-height: 1.45; }
+.selection-column { width: 46px !important; min-width: 46px !important; text-align: center !important; }
+.selection-column input { width: 17px; height: 17px; accent-color: var(--brand); cursor: pointer; }
 .company-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 0 27px 18px; }
 .company-summary span { padding: 12px 13px; border: 1px solid #dbe8de; border-radius: 12px; background: #f7fbf8; color: var(--muted); font-size: 12px; }
 .company-summary b { display: block; margin-bottom: 3px; color: var(--ink); font-size: 19px; }
@@ -579,6 +623,21 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 .batch-position-row input { flex: 1; }
 .batch-add-position { align-self: flex-start; min-height: 34px; padding: 6px 11px; font-size: 12px; }
 .display-mode-label { display: inline-flex; align-items: center; min-height: 34px; padding: 0 11px; border: 1px solid #d8e4da; border-radius: 9px; background: #f4faf5; color: #467052; font-size: 12px; font-weight: 650; }
+.readonly-note { display: inline-flex; align-items: center; min-height: 34px; padding: 0 11px; border-radius: 9px; background: #f0f0eb; color: var(--muted); font-size: 11px; }
+.batch-action-bar {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid #cfe0d5;
+  background: linear-gradient(90deg, #eef7f0, #f8fbf8);
+}
+.batch-selection-copy { min-width: 170px; margin-right: auto; }
+.batch-selection-copy strong { display: block; color: var(--brand); font-size: 13px; }
+.batch-selection-copy button { margin-top: 5px; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 10px; text-decoration: underline; }
+.batch-action-bar label > span { display: block; margin-bottom: 5px; color: var(--muted); font-size: 10px; }
+.batch-action-bar select { min-width: 135px; min-height: 38px; padding: 0 9px; border: 1px solid #c8d8cc; border-radius: 8px; background: white; color: var(--ink); }
+.batch-action-bar .primary-button { min-height: 38px; }
 .company-row-hint { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; }
 .company-status-summary { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
 .tag-picker { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 9px; }
@@ -893,6 +952,9 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
   .view-tabs button { min-width: max-content; padding: 0 10px; }
   .toolbar-row { align-items: stretch; flex-direction: column; padding: 13px; }
   .toolbar-actions { justify-content: flex-start; }
+  .batch-action-bar { align-items: stretch; flex-direction: column; }
+  .batch-selection-copy { width: 100%; margin: 0; }
+  .batch-action-bar label, .batch-action-bar select { width: 100%; }
   .filter-row { padding: 0 13px 13px; }
   .sort-control { width: 100%; }
   .sort-control select { flex: 1; }
@@ -927,8 +989,20 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
   .company-job-list { padding-inline: 18px; }
   .company-job-card { grid-template-columns: 1fr auto; }
   .company-job-card .compact-button { grid-column: 1 / -1; justify-self: start; }
-  .modal-backdrop { align-items: end; padding: 0; }
+  .modal-backdrop, .modal-overlay { align-items: end; padding: 0; }
   .modal { max-height: 92vh; border-radius: 16px 16px 0 0; }
+  .application-form-modal form { padding-inline: 18px !important; }
+  .application-form-modal .modal-head { padding-inline: 18px; }
+  .company-detail-modal { width: 100%; max-height: 92vh; }
+  .company-detail-modal .company-modal-header { align-items: flex-start; padding: 20px 18px 16px; }
+  .company-modal-actions .primary-button { display: none; }
+  .company-detail-table-wrap { max-height: 70vh; padding: 0 18px 16px; }
+  .company-detail-table { min-width: 0; }
+  .company-detail-position { min-width: 0; }
+  .selection-column { width: 100% !important; }
+  .selection-column::before { display: block !important; }
+  .current-invite-card { align-items: stretch; flex-direction: column; }
+  .current-invite-actions { flex-wrap: wrap; }
   .sharing-layout, .group-dashboard { padding: 22px 17px; }
   .sharing-cards, .group-grid { grid-template-columns: 1fr; }
   .interview-planner { padding: 21px 16px; }

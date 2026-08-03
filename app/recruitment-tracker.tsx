@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import type { Application, Interview, GroupInfo, ApplicationStatus, Visibility } from "@/db/schema";
 import type { ChatGPTUser } from "./chatgpt-auth";
@@ -40,6 +42,10 @@ interface InterviewForm {
   interviewer: string;
   summary: string;
   nextSteps: string;
+}
+
+function ModalPortal({ children }: { children: ReactNode }) {
+  return createPortal(children, document.body);
 }
 
 // ──────────────────────────────────────────────── constants
@@ -221,6 +227,19 @@ function SharingPanel({
           ))}
         </ul>
       )}
+      {selectedGroup && (
+        <div className="current-invite-card">
+          <div>
+            <small>当前小组邀请码</small>
+            <strong>{selectedGroup.inviteCode || "暂未生成"}</strong>
+            <span>分享邀请码或链接，好友加入后才能看到你公开的进度。</span>
+          </div>
+          <div className="current-invite-actions">
+            <button onClick={copyInviteCode} disabled={busy || !selectedGroup.inviteCode}>复制邀请码</button>
+            <button onClick={copyShareLink} disabled={busy || !selectedGroup.inviteCode}>复制邀请链接</button>
+          </div>
+        </div>
+      )}
       <div className="group-actions">
         <input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="小组名称" disabled={busy} />
         <button onClick={() => runAction("create")} disabled={busy || !groupName.trim()}>
@@ -234,8 +253,6 @@ function SharingPanel({
         </button>
         {activeGroupId && (
           <>
-          <button onClick={copyInviteCode} disabled={busy}>复制邀请码</button>
-          <button onClick={copyShareLink} disabled={busy}>复制分享链接</button>
           <button
             className="danger"
             onClick={() => runAction(selectedGroup?.role === "owner" ? "delete" : "leave")}
@@ -279,6 +296,9 @@ export function RecruitmentTracker({
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [batchPositions, setBatchPositions] = useState<string[]>([""]);
+  const [selectedApplicationIds, setSelectedApplicationIds] = useState<string[]>([]);
+  const [batchStatus, setBatchStatus] = useState<ApplicationStatus | "">("");
+  const [batchVisibility, setBatchVisibility] = useState<Visibility | "">("");
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [isInterviewOpen, setIsInterviewOpen] = useState(false);
   const [editingInterviewId, setEditingInterviewId] = useState<string | null>(null);
@@ -536,7 +556,7 @@ export function RecruitmentTracker({
         }
         return compareApplications(a.applications[0], b.applications[0], sortKey) * (sortDirection === "asc" ? 1 : -1);
       });
-  }, [filtered]);
+  }, [filtered, sortKey, sortDirection]);
 
   const toggleSort = useCallback((key: SortKey) => {
     if (sortKey === key) {
@@ -620,6 +640,56 @@ export function RecruitmentTracker({
     },
     [user, runCloudMutation],
   );
+
+  const toggleApplicationSelection = useCallback((id: string) => {
+    setSelectedApplicationIds((current) => current.includes(id)
+      ? current.filter((itemId) => itemId !== id)
+      : [...current, id]);
+  }, []);
+
+  const toggleCompanySelection = useCallback((ids: string[]) => {
+    setSelectedApplicationIds((current) => {
+      const allSelected = ids.every((id) => current.includes(id));
+      return allSelected
+        ? current.filter((id) => !ids.includes(id))
+        : [...new Set([...current, ...ids])];
+    });
+  }, []);
+
+  const applyBatchChanges = useCallback(async () => {
+    if (selectedApplicationIds.length === 0) return;
+    if (!batchStatus && !batchVisibility) {
+      setNotice("请选择要批量修改的进度或公开范围");
+      return;
+    }
+    if (batchVisibility && batchVisibility !== "private" && !activeGroupId) {
+      setNotice("请先在共享管理中选择一个小组，再批量公开");
+      return;
+    }
+    const now = new Date().toISOString();
+    const selectedSet = new Set(selectedApplicationIds);
+    const changed = ownApplications
+      .filter((item) => selectedSet.has(item.id))
+      .map((item) => ({
+        ...item,
+        ...(batchStatus ? { status: batchStatus } : {}),
+        ...(batchVisibility ? {
+          visibility: batchVisibility,
+          groupId: batchVisibility === "private" ? null : activeGroupId,
+        } : {}),
+        updatedAt: now,
+      }));
+    if (user) {
+      const saved = await runCloudMutation("批量修改投递信息中", { action: "importApplications", applications: changed });
+      if (!saved) return;
+    }
+    const changedMap = new Map(changed.map((item) => [item.id, item]));
+    setApplications((current) => current.map((item) => changedMap.get(item.id) ?? item));
+    setSelectedApplicationIds([]);
+    setBatchStatus("");
+    setBatchVisibility("");
+    setNotice(`已批量更新 ${changed.length} 条投递`);
+  }, [selectedApplicationIds, batchStatus, batchVisibility, activeGroupId, ownApplications, user, runCloudMutation]);
 
   const addInterview = useCallback(
     async (item: Interview) => {
@@ -942,10 +1012,11 @@ export function RecruitmentTracker({
 
   const companyApplications = useMemo(() => {
     if (!selectedCompany) return [];
-    return ownApplications
+    const source = view === "friends" ? friendApplications : ownApplications;
+    return source
       .filter((item) => companyKey(item.company) === companyKey(selectedCompany))
       .sort((a, b) => compareApplications(a, b, sortKey) * (sortDirection === "asc" ? 1 : -1));
-  }, [selectedCompany, ownApplications, sortKey, sortDirection]);
+  }, [selectedCompany, view, ownApplications, friendApplications, sortKey, sortDirection]);
 
   // ────────────────────────────────── render
   const selectedCompanyValue = companyOptions.includes(form.company.trim()) ? form.company.trim() : "__new__";
@@ -1040,14 +1111,14 @@ export function RecruitmentTracker({
           </button>
           <button
             className={view === "friends" ? "active" : ""}
-            onClick={() => setView("friends")}
+            onClick={() => { setView("friends"); setSelectedApplicationIds([]); }}
             disabled={!user}
           >
             好友进度 <span>{friendApplications.length}</span>
           </button>
           <button
             className={view === "sharing" ? "active" : ""}
-            onClick={() => setView("sharing")}
+            onClick={() => { setView("sharing"); setSelectedApplicationIds([]); }}
             disabled={!user}
           >
             共享管理
@@ -1082,13 +1153,21 @@ export function RecruitmentTracker({
                   />
                 </div>
                 <div className="toolbar-actions">
-                  <button className="primary-button" onClick={() => openCreate()}>
-                    + 新增公司 / 岗位
-                  </button>
+                  {view === "mine" ? (
+                    <button className="primary-button" onClick={() => openCreate()}>
+                      + 新增公司 / 岗位
+                    </button>
+                  ) : (
+                    <span className="readonly-note">好友进度仅供查看</span>
+                  )}
                   <span className="display-mode-label">按公司查看</span>
-                  <button className="secondary-button" onClick={exportData}>导出</button>
-                  <input ref={importRef} type="file" accept=".json" onChange={importData} className="hidden" />
-                  <button className="secondary-button" onClick={() => importRef.current?.click()}>导入</button>
+                  {view === "mine" && (
+                    <>
+                      <button className="secondary-button" onClick={exportData}>导出</button>
+                      <input ref={importRef} type="file" accept=".json" onChange={importData} className="hidden" />
+                      <button className="secondary-button" onClick={() => importRef.current?.click()}>导入</button>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="filter-row">
@@ -1134,18 +1213,45 @@ export function RecruitmentTracker({
               </div>
             </div>
 
+            {view === "mine" && selectedApplicationIds.length > 0 && (
+              <div className="batch-action-bar" role="region" aria-label="批量修改投递">
+                <div className="batch-selection-copy">
+                  <strong>已选择 {selectedApplicationIds.length} 个岗位</strong>
+                  <button type="button" onClick={() => setSelectedApplicationIds([])}>取消选择</button>
+                </div>
+                <label>
+                  <span>批量进度</span>
+                  <select value={batchStatus} onChange={(e) => setBatchStatus(e.target.value as ApplicationStatus | "")}>
+                    <option value="">保持不变</option>
+                    {STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+                  </select>
+                </label>
+                <label>
+                  <span>批量公开</span>
+                  <select value={batchVisibility} onChange={(e) => setBatchVisibility(e.target.value as Visibility | "")}>
+                    <option value="">保持不变</option>
+                    {VISIBILITY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </label>
+                <button className="primary-button" type="button" onClick={() => void applyBatchChanges()} disabled={busy}>
+                  {busy ? "保存中…" : "应用修改"}
+                </button>
+              </div>
+            )}
+
             {companyView ? (
               <div className="company-view">
                 {companyGrouped.length === 0 ? (
                   <div className="empty-state">
                     <p>暂无投递记录</p>
-                    <button className="primary-button" onClick={() => openCreate()}>添加第一条投递</button>
+                    {view === "mine" && <button className="primary-button" onClick={() => openCreate()}>添加第一条投递</button>}
                   </div>
                 ) : (
                   <div className="table-wrap">
                     <table className="data-table company-merge-table">
                       <thead>
                         <tr>
+                          {view === "mine" && <th className="selection-column"><span className="visually-hidden">选择</span></th>}
                           <th><button className="sort-button" onClick={() => toggleSort("company")}>公司 {sortIndicator("company")}</button></th>
                           <th>岗位</th>
                           <th>行业 / 规模</th>
@@ -1158,6 +1264,16 @@ export function RecruitmentTracker({
                       <tbody>
                         {companyGrouped.map((group) => (
                           <tr key={group.key} className="company-merge-row">
+                            {view === "mine" && (
+                              <td className="selection-column" data-label="选择">
+                                <input
+                                  type="checkbox"
+                                  aria-label={`选择 ${group.company} 的全部岗位`}
+                                  checked={group.applications.every((item) => selectedApplicationIds.includes(item.id))}
+                                  onChange={() => toggleCompanySelection(group.applications.map((item) => item.id))}
+                                />
+                              </td>
+                            )}
                             <td data-label="公司" className="company-merge-name">
                               <button className="company-link" onClick={() => openCompany(group.company)}>
                                 {group.company}
@@ -1203,8 +1319,9 @@ export function RecruitmentTracker({
               <div className="table-wrap">
                 <table className="data-table">
                   <thead>
-                    <tr>
-                      <th><button className="sort-button" onClick={() => toggleSort("company")}>公司 {sortIndicator("company")}</button></th>
+                      <tr>
+                        {view === "mine" && <th className="selection-column"><span className="visually-hidden">选择</span></th>}
+                        <th><button className="sort-button" onClick={() => toggleSort("company")}>公司 {sortIndicator("company")}</button></th>
                       <th><button className="sort-button" onClick={() => toggleSort("position")}>岗位 {sortIndicator("position")}</button></th>
                       <th>地点</th>
                       <th>批次</th>
@@ -1215,17 +1332,27 @@ export function RecruitmentTracker({
                   </thead>
                   <tbody>
                     {filtered.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="empty-row">
-                          <div className="empty-state">
-                            <p>暂无投递记录</p>
-                            <button className="primary-button" onClick={() => openCreate()}>添加第一条投递</button>
-                          </div>
+                        <tr>
+                          <td colSpan={view === "mine" ? 8 : 7} className="empty-row">
+                            <div className="empty-state">
+                              <p>暂无投递记录</p>
+                              {view === "mine" && <button className="primary-button" onClick={() => openCreate()}>添加第一条投递</button>}
+                            </div>
                         </td>
                       </tr>
                     ) : (
                       filtered.map((item) => (
                         <tr key={item.id}>
+                          {view === "mine" && (
+                            <td className="selection-column" data-label="选择">
+                              <input
+                                type="checkbox"
+                                aria-label={`选择 ${item.company} ${item.position}`}
+                                checked={selectedApplicationIds.includes(item.id)}
+                                onChange={() => toggleApplicationSelection(item.id)}
+                              />
+                            </td>
+                          )}
                           <td className="cell-company">
                             <button className="company-link" onClick={() => openCompany(item.company)}>
                               {item.company}
@@ -1235,7 +1362,7 @@ export function RecruitmentTracker({
                           <td className="cell-muted">{item.base || "—"}</td>
                           <td><span className="batch-tag">{item.batch}</span></td>
                           <td className="cell-muted">{formatDate(item.appliedAt)}</td>
-                          <td>
+                          <td>{view === "mine" ? (
                             <select
                               className={`status-select ${statusTone(item.status)}`}
                               value={item.status}
@@ -1244,14 +1371,16 @@ export function RecruitmentTracker({
                             >
                               {STATUSES.map((s) => <option key={s}>{s}</option>)}
                             </select>
-                          </td>
+                          ) : <span className={`status-badge ${statusTone(item.status)}`}>{item.status}</span>}</td>
                           <td className="cell-actions">
-                            <div className="action-buttons">
-                              <button className="action-btn" onClick={() => openEdit(item)} title="编辑">✎</button>
-                              <button className="action-btn" onClick={() => openCreate(item)} title="复制创建同公司新岗位">复制</button>
-                              <button className="action-btn" onClick={() => openInterviewCreate(item.id)} title="添加面试">+面</button>
-                              <button className="action-btn danger" onClick={() => removeApplication(item)} title="删除">✕</button>
-                            </div>
+                            {view === "mine" && (
+                              <div className="action-buttons">
+                                <button className="action-btn" onClick={() => openEdit(item)} title="编辑">✎</button>
+                                <button className="action-btn" onClick={() => openCreate(item)} title="复制创建同公司新岗位">复制</button>
+                                <button className="action-btn" onClick={() => openInterviewCreate(item.id)} title="添加面试">+面</button>
+                                <button className="action-btn danger" onClick={() => removeApplication(item)} title="删除">✕</button>
+                              </div>
+                            )}
                           </td>
                         </tr>
                       ))
@@ -1265,13 +1394,25 @@ export function RecruitmentTracker({
 
         {/* ────────────────────────────────── form modal */}
         {isFormOpen && (
+          <ModalPortal>
           <div className="modal-overlay" onClick={closeForm}>
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
-              <h2>{editingId ? "编辑岗位投递" : "新增公司 / 岗位"}</h2>
+            <div className="modal application-form-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-head">
+                <div>
+                  <p className="modal-kicker">{editingId ? "EDIT APPLICATION" : "NEW APPLICATION"}</p>
+                  <h2>{editingId ? "编辑岗位投递" : "新增公司与岗位"}</h2>
+                  <p className="modal-subtitle">先确定公司和岗位，再补充投递信息与共享范围。</p>
+                </div>
+                <button type="button" className="close-button" onClick={closeForm} aria-label="关闭">×</button>
+              </div>
               <form onSubmit={submitForm}>
                 <div className="form-grid">
+                  <div className="form-section-heading full-width">
+                    <span>1</span>
+                    <div><strong>公司与岗位</strong><small>同一家公司可以一次添加多个岗位</small></div>
+                  </div>
                   <label>
-                    公司 *
+                    <span>公司 *</span>
                     {!editingId && companyOptions.length > 0 && (
                       <select
                         value={selectedCompanyValue}
@@ -1289,12 +1430,12 @@ export function RecruitmentTracker({
                   </label>
                   {editingId ? (
                     <label>
-                      岗位 *
+                      <span>岗位 *</span>
                       <input value={form.position} onChange={(e) => updateFormField("position", e.target.value)} required />
                     </label>
                   ) : (
                     <label className="full-width batch-position-field">
-                      岗位列表 *
+                      <span>岗位列表 *</span>
                       <span className="field-hint">先选公司，再一次填写多个岗位；每一行会生成一条独立投递记录。</span>
                       <div className="batch-position-list">
                         {batchPositions.map((position, index) => (
@@ -1316,47 +1457,55 @@ export function RecruitmentTracker({
                       </button>
                     </label>
                   )}
+                  <div className="form-section-heading full-width">
+                    <span>2</span>
+                    <div><strong>投递信息</strong><small>记录批次、日期与当前进展</small></div>
+                  </div>
                   <label>
-                    地点
+                    <span>地点</span>
                     <input value={form.base} onChange={(e) => updateFormField("base", e.target.value)} />
                   </label>
                   <label>
-                    批次
+                    <span>批次</span>
                     <select value={form.batch} onChange={(e) => updateFormField("batch", e.target.value)}>
                       {BATCHES.map((b) => <option key={b}>{b}</option>)}
                     </select>
                   </label>
                   <label>
-                    投递日期
+                    <span>投递日期</span>
                     <input type="date" value={form.appliedAt} onChange={(e) => updateFormField("appliedAt", e.target.value)} />
                   </label>
                   <label>
-                    状态
+                    <span>状态</span>
                     <select value={form.status} onChange={(e) => updateFormField("status", e.target.value)}>
                       {STATUSES.map((s) => <option key={s}>{s}</option>)}
                     </select>
                   </label>
                   <label>
-                    渠道
+                    <span>渠道</span>
                     <input value={form.channel} onChange={(e) => updateFormField("channel", e.target.value)} placeholder="官网/内推/招聘平台" />
                   </label>
                   <label>
-                    链接
+                    <span>链接</span>
                     <input value={form.link} onChange={(e) => updateFormField("link", e.target.value)} placeholder="https://…" />
                   </label>
                   <label>
-                    薪资
+                    <span>薪资</span>
                     <input value={form.salary} onChange={(e) => updateFormField("salary", e.target.value)} placeholder="例如 20k-30k" />
                   </label>
                   <label>
-                    公司规模
+                    <span>公司规模</span>
                     <select value={form.companyScale} onChange={(e) => updateFormField("companyScale", e.target.value)}>
                       <option value="">不限</option>
                       {COMPANY_SCALE_OPTIONS.map((s) => <option key={s}>{s}</option>)}
                     </select>
                   </label>
+                  <div className="form-section-heading full-width">
+                    <span>3</span>
+                    <div><strong>公司资料与共享</strong><small>公开时仅向所选小组成员展示</small></div>
+                  </div>
                   <label className="full-width">
-                    行业标签
+                    <span>行业标签</span>
                     <div className="tag-selector">
                       {INDUSTRY_OPTIONS.map((tag: string) => (
                         <button
@@ -1376,18 +1525,18 @@ export function RecruitmentTracker({
                     </div>
                   </label>
                   <label className="full-width">
-                    备注
+                    <span>备注</span>
                     <textarea value={form.note} onChange={(e) => updateFormField("note", e.target.value)} rows={2} />
                   </label>
                   <label className="full-width">
-                    可见性
+                    <span>可见性</span>
                     <select value={form.visibility} onChange={(e) => updateFormField("visibility", e.target.value as Visibility)}>
                       {VISIBILITY_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                     </select>
                   </label>
                   {form.visibility !== "private" && (
                     <label className="full-width">
-                      共享到小组
+                      <span>共享到小组</span>
                       <select
                         value={form.groupId}
                         onChange={(e) => updateFormField("groupId", e.target.value)}
@@ -1408,10 +1557,12 @@ export function RecruitmentTracker({
               </form>
             </div>
           </div>
+          </ModalPortal>
         )}
 
         {/* ────────────────────────────────── interview form modal */}
         {isInterviewOpen && (
+          <ModalPortal>
           <div className="modal-overlay" onClick={closeInterviewForm}>
             <div className="modal" onClick={(e) => e.stopPropagation()}>
               <h2>{editingInterviewId ? "编辑面试" : "添加面试"}</h2>
@@ -1513,19 +1664,55 @@ export function RecruitmentTracker({
               </form>
             </div>
           </div>
+          </ModalPortal>
         )}
 
         {/* ────────────────────────────────── company modal */}
         {selectedCompany && (
+          <ModalPortal>
           <div className="modal-overlay" onClick={closeCompany}>
-            <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal modal-wide company-detail-modal" onClick={(e) => e.stopPropagation()}>
               <div className="company-modal-header">
-                <h2>{selectedCompany}</h2>
-                <button className="primary-button" onClick={() => { const src = companyApplications[0]; closeCompany(); openCreate(src); }}>+ 新增岗位</button>
+                <div>
+                  <p className="modal-kicker">COMPANY APPLICATIONS</p>
+                  <h2>{selectedCompany}</h2>
+                  <p className="modal-subtitle">共 {companyApplications.length} 个岗位，集中查看和更新每次投递。</p>
+                </div>
+                <div className="company-modal-actions">
+                  {view === "mine" && <button className="primary-button" onClick={() => { const src = companyApplications[0]; closeCompany(); openCreate(src); }}>+ 新增岗位</button>}
+                  <button type="button" className="close-button" onClick={closeCompany} aria-label="关闭">×</button>
+                </div>
               </div>
-              <table className="data-table">
+              {view === "mine" && selectedApplicationIds.length > 0 && (
+                <div className="batch-action-bar company-modal-batch">
+                  <div className="batch-selection-copy">
+                    <strong>已选择 {selectedApplicationIds.length} 个岗位</strong>
+                    <button type="button" onClick={() => setSelectedApplicationIds([])}>取消选择</button>
+                  </div>
+                  <label>
+                    <span>批量进度</span>
+                    <select value={batchStatus} onChange={(e) => setBatchStatus(e.target.value as ApplicationStatus | "")}>
+                      <option value="">保持不变</option>
+                      {STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    <span>批量公开</span>
+                    <select value={batchVisibility} onChange={(e) => setBatchVisibility(e.target.value as Visibility | "")}>
+                      <option value="">保持不变</option>
+                      {VISIBILITY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                  </label>
+                  <button className="primary-button" type="button" onClick={() => void applyBatchChanges()} disabled={busy}>
+                    {busy ? "保存中…" : "应用修改"}
+                  </button>
+                </div>
+              )}
+              <div className="company-detail-table-wrap">
+              <table className="data-table company-detail-table">
                 <thead>
                   <tr>
+                    {view === "mine" && <th className="selection-column"><span className="visually-hidden">选择</span></th>}
                     <th><button className="sort-button" onClick={() => toggleSort("position")}>岗位 {sortIndicator("position")}</button></th>
                     <th>地点</th>
                     <th>批次</th>
@@ -1537,11 +1724,16 @@ export function RecruitmentTracker({
                 <tbody>
                   {companyApplications.map((item) => (
                     <tr key={item.id}>
-                      <td>{item.position}</td>
+                      {view === "mine" && (
+                        <td className="selection-column" data-label="选择">
+                          <input type="checkbox" aria-label={`选择 ${item.position}`} checked={selectedApplicationIds.includes(item.id)} onChange={() => toggleApplicationSelection(item.id)} />
+                        </td>
+                      )}
+                      <td className="company-detail-position">{item.position}</td>
                       <td className="cell-muted">{item.base || "—"}</td>
                       <td><span className="batch-tag">{item.batch}</span></td>
                       <td className="cell-muted">{formatDate(item.appliedAt)}</td>
-                      <td>
+                      <td>{view === "mine" ? (
                         <select
                           className={`status-select ${statusTone(item.status)}`}
                           value={item.status}
@@ -1550,20 +1742,22 @@ export function RecruitmentTracker({
                         >
                           {STATUSES.map((s) => <option key={s}>{s}</option>)}
                         </select>
-                      </td>
+                      ) : <span className={`status-badge ${statusTone(item.status)}`}>{item.status}</span>}</td>
                       <td className="cell-actions">
-                        <div className="action-buttons">
+                        {view === "mine" && <div className="action-buttons">
                           <button className="action-btn" onClick={() => openEdit(item)} title="编辑">✎</button>
                           <button className="action-btn" onClick={() => { const src = item; closeCompany(); openCreate(src); }} title="复制创建同公司新岗位">复制</button>
                           <button className="action-btn danger" onClick={() => removeApplication(item)} title="删除">✕</button>
-                        </div>
+                        </div>}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           </div>
+          </ModalPortal>
         )}
 
         {/* ────────────────────────────────── notice toast */}
