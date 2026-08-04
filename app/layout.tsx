@@ -13,8 +13,8 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase,
     title: {
-      default: "MXX · 秋招同行录",
-      template: "%s · MXX 秋招同行录",
+      default: "秋招同行录 · 未登录",
+      template: "%s · 秋招同行录",
     },
     description: "清晰记录每一次秋招与提前批投递进度。",
     openGraph: {

@@ -27,12 +27,18 @@ export function SupabaseShell() {
     };
   }, [supabase]);
 
+  const authUser = session?.user;
+  const displayName = authUser?.user_metadata?.full_name || authUser?.email?.split("@")[0] || "同学";
+
+  useEffect(() => {
+    if (!ready) return;
+    document.title = `秋招同行录 · ${authUser ? displayName : "未登录"}`;
+  }, [authUser?.id, displayName, ready]);
+
   if (!ready) {
     return <main className="loading-state">正在连接云端账户…</main>;
   }
 
-  const authUser = session?.user;
-  const displayName = authUser?.user_metadata?.full_name || authUser?.email?.split("@")[0] || "同学";
   const invite = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("invite") : null;
   const signInPath = invite ? `/auth?invite=${encodeURIComponent(invite)}` : "/auth";
   const user = authUser
