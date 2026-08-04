@@ -1567,8 +1567,8 @@ export function RecruitmentTracker({
         {/* ────────────────────────────────── form modal */}
         {isFormOpen && (
           <ModalPortal>
-          <div className="modal-overlay" onClick={closeForm}>
-            <div className="modal application-form-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-overlay">
+            <div className="modal application-form-modal">
               <div className="modal-head">
                 <div>
                   <p className="modal-kicker">{editingId ? "EDIT APPLICATION" : "NEW APPLICATION"}</p>
@@ -1750,7 +1750,6 @@ export function RecruitmentTracker({
                   )}
                 </div>
                 <div className="form-actions">
-                  <button type="button" className="secondary-button" onClick={closeForm}>取消</button>
                   <button type="submit" className="primary-button" disabled={busy || (form.visibility !== "private" && groups.length === 0)}>
                     {busy ? "保存中…" : editingId ? "保存修改" : "添加记录"}
                   </button>
