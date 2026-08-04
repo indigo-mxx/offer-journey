@@ -48,6 +48,7 @@ export function SupabaseShell() {
   return (
     <RecruitmentTracker
       user={user}
+      accessToken={session?.access_token ?? null}
       signInPath={signInPath}
       signOutPath="/auth"
       onSignOut={supabase ? async () => { await supabase.auth.signOut(); window.location.assign("/"); } : undefined}

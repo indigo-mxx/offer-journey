@@ -10,6 +10,7 @@ import type { ChatGPTUser } from "./chatgpt-auth";
 // ──────────────────────────────────────────────── types
 interface Props {
   user: ChatGPTUser | null;
+  accessToken: string | null;
   signInPath: string;
   signOutPath: string;
   onSignOut?: () => Promise<void>;
@@ -282,6 +283,7 @@ function SharingPanel({
 // ──────────────────────────────────────────────── main component
 export function RecruitmentTracker({
   user,
+  accessToken,
   signInPath,
   signOutPath,
   onSignOut,
@@ -325,6 +327,7 @@ export function RecruitmentTracker({
   const importRef = useRef<HTMLInputElement>(null);
   const inviteHandledRef = useRef(false);
   const busy = pendingAction !== null;
+  const workspaceCacheKey = user ? `workspace-cache:${user.email}` : null;
 
   useEffect(() => {
     const timer = window.setTimeout(
@@ -342,19 +345,23 @@ export function RecruitmentTracker({
   const defaultGroupId = activeGroupId || groups[0]?.id || "";
 
   const cloudAction = useCallback(async (payload: Record<string, unknown>) => {
-    const supabase = getSupabaseBrowserClient();
-    const { data } = supabase ? await supabase.auth.getSession() : { data: { session: null } };
+    let token = accessToken;
+    if (!token) {
+      const supabase = getSupabaseBrowserClient();
+      const { data } = supabase ? await supabase.auth.getSession() : { data: { session: null } };
+      token = data.session?.access_token ?? null;
+    }
     const response = await fetch("/api/workspace", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      ...(data.session?.access_token
-        ? { headers: { "content-type": "application/json", Authorization: `Bearer ${data.session.access_token}` } }
+      ...(token
+        ? { headers: { "content-type": "application/json", Authorization: `Bearer ${token}` } }
         : {}),
       body: JSON.stringify(payload),
     });
     const result = (await response.json()) as { error?: string };
     if (!response.ok) throw new Error(result.error || "操作失败");
-  }, []);
+  }, [accessToken]);
 
   const runCloudMutation = useCallback(async (
     label: string,
@@ -374,15 +381,18 @@ export function RecruitmentTracker({
   }, [cloudAction]);
 
   const loadCloud = useCallback(async () => {
-    const supabase = getSupabaseBrowserClient();
-    const { data } = supabase ? await supabase.auth.getSession() : { data: { session: null } };
-    const session = data.session;
-    if (!session) throw new Error("未登录");
+    let token = accessToken;
+    if (!token) {
+      const supabase = getSupabaseBrowserClient();
+      const { data } = supabase ? await supabase.auth.getSession() : { data: { session: null } };
+      token = data.session?.access_token ?? null;
+    }
+    if (!token) throw new Error("未登录");
     const response = await fetch("/api/workspace", {
       method: "GET",
       headers: {
         "content-type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
+        Authorization: `Bearer ${token}`,
       },
     });
     const result = (await response.json()) as {
@@ -393,17 +403,24 @@ export function RecruitmentTracker({
     if (!safeApplications(result.applications)) throw new Error("投递数据解析失败");
     if (!safeInterviews(result.interviews)) throw new Error("面试数据解析失败");
     const groupsData = (Array.isArray(result.groups) ? result.groups : []) as GroupInfo[];
-    setApplications(
-      result.applications.map((item) => ({
+    const normalizedApplications = result.applications.map((item) => ({
         ...item,
         visibility: item.visibility ?? "private",
         industryTags: Array.isArray(item.industryTags) ? item.industryTags.filter(Boolean) : [],
         companyScale: item.companyScale ?? "",
         isOwner: item.isOwner ?? true,
-      })),
-    );
-    setInterviews(normalizeInterviews(result.interviews));
+      }));
+    const normalizedInterviews = normalizeInterviews(result.interviews);
+    setApplications(normalizedApplications);
+    setInterviews(normalizedInterviews);
     setGroups(groupsData);
+    if (workspaceCacheKey) {
+      try {
+        localStorage.setItem(workspaceCacheKey, JSON.stringify({ applications: normalizedApplications, interviews: normalizedInterviews, groups: groupsData }));
+      } catch {
+        // Storage is an optional fast-start cache.
+      }
+    }
     if (groupsData.length > 0) {
       const saved = localStorage.getItem("activeGroupId");
       const current = activeGroupId ? groupsData.find((g) => g.id === activeGroupId) : null;
@@ -413,10 +430,30 @@ export function RecruitmentTracker({
       setActiveGroupId(null);
     }
     return groupsData;
-  }, [activeGroupId]);
+  }, [accessToken, activeGroupId, workspaceCacheKey]);
 
   const loadLocal = useCallback(() => {
     try {
+      if (workspaceCacheKey) {
+        const cached = localStorage.getItem(workspaceCacheKey);
+        if (cached) {
+          const parsed = JSON.parse(cached) as { applications?: unknown; interviews?: unknown; groups?: unknown };
+          if (safeApplications(parsed.applications)) {
+            const cachedApplications = parsed.applications.map((item) => ({
+              ...item,
+              visibility: item.visibility ?? "private",
+              industryTags: Array.isArray(item.industryTags) ? item.industryTags.filter(Boolean) : [],
+              companyScale: item.companyScale ?? "",
+              isOwner: item.isOwner ?? true,
+            }));
+            setApplications(cachedApplications);
+            setLocalBackup(cachedApplications);
+          }
+          if (safeInterviews(parsed.interviews)) setInterviews(normalizeInterviews(parsed.interviews));
+          if (Array.isArray(parsed.groups)) setGroups(parsed.groups as GroupInfo[]);
+          return;
+        }
+      }
       const raw = localStorage.getItem("applications");
       const interviewsRaw = localStorage.getItem("interviews");
       if (raw) {
@@ -433,7 +470,7 @@ export function RecruitmentTracker({
     } catch {
       // ignore
     }
-  }, []);
+  }, [workspaceCacheKey]);
 
   const saveLocal = useCallback(
     (items: Application[]) => {
@@ -460,10 +497,11 @@ export function RecruitmentTracker({
 
   // ────────────────────────────────── lifecycle
   useEffect(() => {
+    loadLocal();
     if (user) {
-      loadCloud().catch(() => loadLocal());
-    } else {
-      loadLocal();
+      loadCloud().catch(() => {
+        setNotice("暂时无法同步云端，已显示本机缓存");
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

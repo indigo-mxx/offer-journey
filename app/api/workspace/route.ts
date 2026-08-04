@@ -41,16 +41,18 @@ async function groupsForUser(supabase: Awaited<ReturnType<typeof getUserFromAcce
     .order("joined_at", { ascending: true });
   if (!memberships?.length) return [];
   const groupIds = memberships.map((m) => m.group_id);
-  const { data: groupRows } = await supabase
-    .from("groups")
-    .select("id, name, owner_id, invite_code")
-    .in("id", groupIds);
+  const [{ data: groupRows }, { data: allMembers }] = await Promise.all([
+    supabase
+      .from("groups")
+      .select("id, name, owner_id, invite_code")
+      .in("id", groupIds),
+    supabase
+      .from("group_members")
+      .select("group_id, user_id, role, joined_at")
+      .in("group_id", groupIds)
+      .order("joined_at", { ascending: true }),
+  ]);
   const groupMap = new Map((groupRows ?? []).map((g) => [g.id, g]));
-  const { data: allMembers } = await supabase
-    .from("group_members")
-    .select("group_id, user_id, role, joined_at")
-    .in("group_id", groupIds)
-    .order("joined_at", { ascending: true });
   const memberUserIds = [...new Set((allMembers ?? []).map((m) => m.user_id))];
   const { data: profiles } = memberUserIds.length
     ? await supabase.from("profiles").select("id, email, display_name").in("id", memberUserIds)
@@ -87,9 +89,12 @@ export async function GET(request: Request) {
   if (!current) return json({ error: "请先登录" }, 401);
   const { supabase, user } = current;
 
-  const [{ data: rows, error: applicationError }, { data: interviewRows, error: interviewError }] = await Promise.all([
-    supabase.from("applications").select("*").order("updated_at", { ascending: false }),
-    supabase.from("interviews").select("*").order("scheduled_at", { ascending: true }),
+  const [[{ data: rows, error: applicationError }, { data: interviewRows, error: interviewError }], groups] = await Promise.all([
+    Promise.all([
+      supabase.from("applications").select("*").order("updated_at", { ascending: false }),
+      supabase.from("interviews").select("*").order("scheduled_at", { ascending: true }),
+    ]),
+    groupsForUser(supabase, user.id),
   ]);
   if (applicationError || interviewError) {
     return json({ error: applicationError?.message ?? interviewError?.message ?? "云端同步失败" }, 400);
@@ -139,7 +144,7 @@ export async function GET(request: Request) {
     updatedAt: row.updated_at,
   }));
 
-  return json({ user, applications, interviews, groups: await groupsForUser(supabase, user.id) });
+  return json({ user, applications, interviews, groups });
 }
 
 export async function POST(request: Request) {
