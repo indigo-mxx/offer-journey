@@ -325,6 +325,7 @@ export function RecruitmentTracker({
   const [groupName, setGroupName] = useState("秋招搭子小组");
   const [inviteCode, setInviteCode] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
+  const selectAllRef = useRef<HTMLInputElement>(null);
   const inviteHandledRef = useRef(false);
   const busy = pendingAction !== null;
   const workspaceCacheKey = user ? `workspace-cache:${user.email}` : null;
@@ -610,6 +611,28 @@ export function RecruitmentTracker({
       return sortDirection === "asc" ? result : -result;
     });
   }, [query, statusFilter, batchFilter, industryFilter, scaleFilter, positionFilter, locationFilter, view, ownApplications, friendApplications, sortKey, sortDirection]);
+
+  const filteredIds = useMemo(() => filtered.map((item) => item.id), [filtered]);
+  const selectedFilteredCount = useMemo(
+    () => filteredIds.filter((id) => selectedApplicationIds.includes(id)).length,
+    [filteredIds, selectedApplicationIds],
+  );
+  const allFilteredSelected = filteredIds.length > 0 && selectedFilteredCount === filteredIds.length;
+  const partiallyFilteredSelected = selectedFilteredCount > 0 && !allFilteredSelected;
+
+  const toggleFilteredSelection = useCallback(() => {
+    setSelectedApplicationIds((current) => {
+      const selected = new Set(current);
+      if (filteredIds.every((id) => selected.has(id))) {
+        return current.filter((id) => !filteredIds.includes(id));
+      }
+      return [...new Set([...current, ...filteredIds])];
+    });
+  }, [filteredIds]);
+
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = partiallyFilteredSelected;
+  }, [partiallyFilteredSelected, companyView]);
 
   // ────────────────────────────────── company grouping
   const companyGrouped = useMemo(() => {
@@ -1171,6 +1194,7 @@ export function RecruitmentTracker({
       .filter((item) => companyKey(item.company) === companyKey(selectedCompany))
       .sort((a, b) => compareApplications(a, b, sortKey) * (sortDirection === "asc" ? 1 : -1));
   }, [selectedCompany, view, ownApplications, friendApplications, sortKey, sortDirection]);
+  const allCompanyApplicationsSelected = companyApplications.length > 0 && companyApplications.every((item) => selectedApplicationIds.includes(item.id));
 
   // ────────────────────────────────── render
   const selectedCompanyValue = companyOptions.includes(form.company.trim()) ? form.company.trim() : "__new__";
@@ -1322,6 +1346,9 @@ export function RecruitmentTracker({
                   <span className="display-mode-label">按公司查看</span>
                   {view === "mine" && (
                     <>
+                      <button className="secondary-button batch-select-button" onClick={toggleFilteredSelection} disabled={filteredIds.length === 0}>
+                        {allFilteredSelected ? "取消当前筛选" : `全选当前筛选${filteredIds.length ? `（${filteredIds.length}）` : ""}`}
+                      </button>
                       <button className="secondary-button" onClick={exportData}>导出</button>
                       <input ref={importRef} type="file" accept=".json" onChange={importData} className="hidden" />
                       <button className="secondary-button" onClick={() => importRef.current?.click()}>导入</button>
@@ -1375,7 +1402,7 @@ export function RecruitmentTracker({
             {view === "mine" && selectedApplicationIds.length > 0 && (
               <div className="batch-action-bar" role="region" aria-label="批量修改投递">
                 <div className="batch-selection-copy">
-                  <strong>已选择 {selectedApplicationIds.length} 个岗位</strong>
+                  <strong>已选择 {selectedApplicationIds.length} 个岗位{selectedFilteredCount !== selectedApplicationIds.length && `（当前筛选内 ${selectedFilteredCount} 个）`}</strong>
                   <button type="button" onClick={() => setSelectedApplicationIds([])}>取消选择</button>
                 </div>
                 <label>
@@ -1423,7 +1450,7 @@ export function RecruitmentTracker({
                     <table className="data-table company-merge-table">
                       <thead>
                         <tr>
-                          {view === "mine" && <th className="selection-column"><span className="visually-hidden">选择</span></th>}
+                          {view === "mine" && <th className="selection-column"><input ref={selectAllRef} type="checkbox" aria-label="全选当前筛选结果" checked={allFilteredSelected} onChange={toggleFilteredSelection} /></th>}
                           <th><button className="sort-button" onClick={() => toggleSort("company")}>公司 {sortIndicator("company")}</button></th>
                           <th>岗位</th>
                           <th>行业 / 规模</th>
@@ -1503,7 +1530,7 @@ export function RecruitmentTracker({
                 <table className="data-table">
                   <thead>
                       <tr>
-                        {view === "mine" && <th className="selection-column"><span className="visually-hidden">选择</span></th>}
+                        {view === "mine" && <th className="selection-column"><input ref={selectAllRef} type="checkbox" aria-label="全选当前筛选结果" checked={allFilteredSelected} onChange={toggleFilteredSelection} /></th>}
                         <th><button className="sort-button" onClick={() => toggleSort("company")}>公司 {sortIndicator("company")}</button></th>
                       <th><button className="sort-button" onClick={() => toggleSort("position")}>岗位 {sortIndicator("position")}</button></th>
                       <th>地点</th>
@@ -2052,7 +2079,7 @@ export function RecruitmentTracker({
               <table className="data-table company-detail-table">
                 <thead>
                   <tr>
-                    {view === "mine" && <th className="selection-column"><span className="visually-hidden">选择</span></th>}
+                    {view === "mine" && <th className="selection-column"><input type="checkbox" aria-label="全选当前公司的岗位" checked={allCompanyApplicationsSelected} onChange={() => toggleCompanySelection(companyApplications.map((item) => item.id))} /></th>}
                     <th><button className="sort-button" onClick={() => toggleSort("position")}>岗位 {sortIndicator("position")}</button></th>
                     <th>地点</th>
                     <th>批次</th>
