@@ -395,6 +395,8 @@ export function RecruitmentTracker({
   const [batchPositions, setBatchPositions] = useState<BatchPositionEntry[]>([{ position: "", base: "" }]);
   const [selectedApplicationIds, setSelectedApplicationIds] = useState<string[]>([]);
   const [batchStatus, setBatchStatus] = useState<ApplicationStatus | "">("");
+  const [batchCompanyNature, setBatchCompanyNature] = useState("");
+  const [batchCompanySubtype, setBatchCompanySubtype] = useState("");
   const [batchVisibility, setBatchVisibility] = useState<Visibility | "">("");
   const [batchGroupId, setBatchGroupId] = useState("");
   const [batchFinalOutcome, setBatchFinalOutcome] = useState("");
@@ -979,8 +981,8 @@ export function RecruitmentTracker({
 
   const applyBatchChanges = useCallback(async () => {
     if (selectedApplicationIds.length === 0) return;
-    if (!batchStatus && !batchVisibility) {
-      setNotice("请选择要批量修改的进度或公开范围");
+    if (!batchStatus && !batchCompanyNature && !batchVisibility) {
+      setNotice("请选择要批量修改的进度、单位性质或公开范围");
       return;
     }
     if (batchStatus === "流程结束" && !batchFinalOutcome) {
@@ -998,15 +1000,21 @@ export function RecruitmentTracker({
     }
     const now = new Date().toISOString();
     const selectedSet = new Set(selectedApplicationIds);
+    const classificationCompanyKeys = batchCompanyNature
+      ? new Set(ownApplications.filter((item) => selectedSet.has(item.id)).map((item) => companyKey(item.company)))
+      : new Set<string>();
     const changed = ownApplications
-      .filter((item) => selectedSet.has(item.id))
+      .filter((item) => selectedSet.has(item.id) || classificationCompanyKeys.has(companyKey(item.company)))
       .map((item) => ({
         ...item,
-        ...(batchStatus ? { status: batchStatus } : {}),
-        ...(batchStatus === "流程结束" ? { finalOutcome: batchFinalOutcome, rejectionReason: "" } : {}),
-        ...(batchStatus === "已拒绝" ? { finalOutcome: "", rejectionReason: batchRejectionReason } : {}),
-        ...(batchStatus && !["流程结束", "已拒绝"].includes(batchStatus) ? { finalOutcome: "", rejectionReason: "" } : {}),
-        ...(batchVisibility ? {
+        ...(selectedSet.has(item.id) && batchStatus ? { status: batchStatus } : {}),
+        ...(selectedSet.has(item.id) && batchStatus === "流程结束" ? { finalOutcome: batchFinalOutcome, rejectionReason: "" } : {}),
+        ...(selectedSet.has(item.id) && batchStatus === "已拒绝" ? { finalOutcome: "", rejectionReason: batchRejectionReason } : {}),
+        ...(selectedSet.has(item.id) && batchStatus && !["流程结束", "已拒绝"].includes(batchStatus) ? { finalOutcome: "", rejectionReason: "" } : {}),
+        ...(classificationCompanyKeys.has(companyKey(item.company)) ? {
+          industryTags: tagsWithClassification(batchCompanyNature, batchCompanySubtype, item.industryTags ?? []),
+        } : {}),
+        ...(selectedSet.has(item.id) && batchVisibility ? {
           visibility: batchVisibility,
           groupId: batchVisibility === "private" ? null : shareGroupId,
         } : {}),
@@ -1020,12 +1028,14 @@ export function RecruitmentTracker({
     setApplications((current) => current.map((item) => changedMap.get(item.id) ?? item));
     setSelectedApplicationIds([]);
     setBatchStatus("");
+    setBatchCompanyNature("");
+    setBatchCompanySubtype("");
     setBatchVisibility("");
     setBatchGroupId("");
     setBatchFinalOutcome("");
     setBatchRejectionReason("");
     setNotice(`已批量更新 ${changed.length} 条投递`);
-  }, [selectedApplicationIds, batchStatus, batchVisibility, batchGroupId, batchFinalOutcome, batchRejectionReason, defaultGroupId, ownApplications, user, runCloudMutation]);
+  }, [selectedApplicationIds, batchStatus, batchCompanyNature, batchCompanySubtype, batchVisibility, batchGroupId, batchFinalOutcome, batchRejectionReason, defaultGroupId, ownApplications, user, runCloudMutation]);
 
   const addInterview = useCallback(
     async (item: Interview) => {
@@ -1725,6 +1735,7 @@ export function RecruitmentTracker({
               <div className="batch-action-bar" role="region" aria-label="批量修改投递">
                 <div className="batch-selection-copy">
                   <strong>已选择 {selectedApplicationIds.length} 个岗位{selectedFilteredCount !== selectedApplicationIds.length && `（当前筛选内 ${selectedFilteredCount} 个）`}</strong>
+                  <small>单位性质会同步到所选岗位所属的公司资料</small>
                   <button type="button" onClick={() => setSelectedApplicationIds([])}>取消选择</button>
                 </div>
                 <label>
@@ -1734,6 +1745,27 @@ export function RecruitmentTracker({
                     {STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
                   </select>
                 </label>
+                <label>
+                  <span>统一单位性质</span>
+                  <select
+                    value={batchCompanyNature}
+                    onChange={(e) => { setBatchCompanyNature(e.target.value); setBatchCompanySubtype(""); }}
+                  >
+                    <option value="">保持不变</option>
+                    {COMPANY_NATURE_OPTIONS.map(({ value }) => <option key={value} value={value}>{value}</option>)}
+                  </select>
+                </label>
+                {batchCompanyNature && (
+                  <label>
+                    <span>统一单位细分</span>
+                    <select value={batchCompanySubtype} onChange={(e) => setBatchCompanySubtype(e.target.value)}>
+                      <option value="">暂不填写</option>
+                      {(COMPANY_NATURE_OPTIONS.find((option) => option.value === batchCompanyNature)?.subtypes ?? []).map((subtype) => (
+                        <option key={subtype} value={subtype}>{subtype}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 {batchStatus === "流程结束" && (
                   <label>
                     <span>最终状态</span>
@@ -2593,6 +2625,7 @@ export function RecruitmentTracker({
                 <div className="batch-action-bar company-modal-batch">
                   <div className="batch-selection-copy">
                     <strong>已选择 {selectedApplicationIds.length} 个岗位</strong>
+                    <small>统一设置后会同步更新这些岗位的公司资料</small>
                     <button type="button" onClick={() => setSelectedApplicationIds([])}>取消选择</button>
                   </div>
                   <label>
@@ -2602,6 +2635,27 @@ export function RecruitmentTracker({
                       {STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
                     </select>
                   </label>
+                  <label>
+                    <span>统一单位性质</span>
+                    <select
+                      value={batchCompanyNature}
+                      onChange={(e) => { setBatchCompanyNature(e.target.value); setBatchCompanySubtype(""); }}
+                    >
+                      <option value="">保持不变</option>
+                      {COMPANY_NATURE_OPTIONS.map(({ value }) => <option key={value} value={value}>{value}</option>)}
+                    </select>
+                  </label>
+                  {batchCompanyNature && (
+                    <label>
+                      <span>统一单位细分</span>
+                      <select value={batchCompanySubtype} onChange={(e) => setBatchCompanySubtype(e.target.value)}>
+                        <option value="">暂不填写</option>
+                        {(COMPANY_NATURE_OPTIONS.find((option) => option.value === batchCompanyNature)?.subtypes ?? []).map((subtype) => (
+                          <option key={subtype} value={subtype}>{subtype}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
                   {batchStatus === "流程结束" && (
                     <label>
                       <span>最终状态</span>

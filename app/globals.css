@@ -747,7 +747,9 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
   background: linear-gradient(90deg, #eef7f0, #f8fbf8);
 }
 .batch-selection-copy { min-width: 170px; margin-right: auto; }
-.batch-selection-copy strong { display: block; color: var(--brand); font-size: 13px; }
+.batch-selection-copy strong, .batch-selection-copy small { display: block; }
+.batch-selection-copy strong { color: var(--brand); font-size: 13px; }
+.batch-selection-copy small { margin-top: 3px; color: var(--muted); font-size: 9px; line-height: 1.35; }
 .batch-selection-copy button { margin-top: 5px; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 10px; text-decoration: underline; }
 .batch-action-bar label > span { display: block; margin-bottom: 5px; color: var(--muted); font-size: 10px; }
 .batch-action-bar select, .batch-action-bar input { min-width: 135px; min-height: 38px; padding: 0 9px; border: 1px solid #c8d8cc; border-radius: 8px; background: white; color: var(--ink); }
