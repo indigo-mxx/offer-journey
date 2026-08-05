@@ -381,6 +381,30 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .company-merge-meta span { padding: 3px 6px; border-radius: 999px; background: var(--brand-soft); color: var(--brand); font-size: 9px; }
 .company-merge-meta .company-nature-tag { background: #153f35; color: #fff; font-weight: 700; }
 .company-merge-meta .company-subtype-tag { background: #e9f2ea; color: #27634f; font-weight: 650; }
+.kanban-board-wrap { overflow-x: auto; padding: 18px; background: #f7f7f3; }
+.kanban-board { min-width: 1120px; display: grid; grid-template-columns: repeat(5, minmax(205px, 1fr)); gap: 12px; align-items: start; }
+.kanban-column { overflow: hidden; border: 1px solid #dde4dd; border-radius: 13px; background: rgba(255,255,255,.62); }
+.kanban-column-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 13px 14px; border-bottom: 1px solid #e5e9e4; background: #f3f6f3; }
+.kanban-column-head strong, .kanban-column-head small { display: block; }
+.kanban-column-head strong { font-size: 13px; }
+.kanban-column-head small { margin-top: 3px; color: var(--muted); font-size: 9px; }
+.kanban-column-head > span { min-width: 24px; padding: 3px 6px; border-radius: 999px; background: #e4ebe5; color: #52655a; font-size: 10px; font-weight: 750; text-align: center; }
+.kanban-interview .kanban-column-head { background: #eef3f8; }
+.kanban-offer .kanban-column-head { background: #edf6ef; }
+.kanban-closed .kanban-column-head { background: #f5f1ef; }
+.kanban-card-list { display: grid; gap: 9px; max-height: 610px; overflow-y: auto; padding: 10px; }
+.kanban-card { padding: 12px; border: 1px solid #e0e6e0; border-radius: 11px; background: #fffefa; box-shadow: 0 5px 14px rgba(36,55,42,.045); }
+.kanban-card-head { display: flex; align-items: center; gap: 7px; }
+.kanban-card-head input { width: 15px; height: 15px; accent-color: var(--brand); }
+.kanban-company { min-width: 0; overflow: hidden; padding: 0; border: 0; background: transparent; color: var(--brand); font-size: 11px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+.privacy-dot { width: 8px; height: 8px; flex: none; margin-left: auto; border-radius: 50%; background: #acb3ad; }
+.privacy-dot.progress { background: #d49a45; }
+.privacy-dot.full { background: #4e9775; }
+.kanban-position { display: -webkit-box; overflow: hidden; margin-top: 9px; color: var(--ink); font-size: 13px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.kanban-meta { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 9px; color: var(--muted); font-size: 9px; }
+.kanban-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 11px; padding-top: 10px; border-top: 1px dashed #e2e7e2; }
+.kanban-card-foot .status-select { min-width: 0; max-width: 130px; }
+.kanban-empty { display: grid; min-height: 92px; place-items: center; color: #a0a6a0; font-size: 11px; }
 .position-count {
   width: auto;
   min-width: 92px;
@@ -493,6 +517,20 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .workspace h2, .modal h2 { margin: 0; font-family: "STSong","SimSun",serif; font-size: 25px; }
 .data-actions { color: var(--muted); font-size: 12px; }
 .list-insights { display: grid; grid-template-columns: minmax(170px, .55fr) 1.45fr; gap: 24px; align-items: center; margin: 24px 25px 26px; padding: 21px 22px; border: 1px solid #dce8df; border-radius: 14px; background: linear-gradient(115deg, #f7fbf8, #fffdf8); }
+.action-center { margin: 22px 25px 0; padding: 20px 21px; border: 1px solid #d8e3da; border-radius: 14px; background: #fbfcf9; }
+.action-center-head { display: flex; align-items: end; justify-content: space-between; gap: 18px; }
+.action-center-head span { color: var(--brand); font-size: 10px; font-weight: 800; letter-spacing: .1em; }
+.action-center-head h3 { margin: 4px 0 0; font-family: "STSong","SimSun",serif; font-size: 20px; }
+.action-center-head > small { color: var(--muted); font-size: 10px; }
+.action-reminder-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 15px; }
+.action-reminder { min-width: 0; display: grid; align-content: start; padding: 13px 14px; border: 1px solid #e1e7e1; border-left: 3px solid #9db8a7; border-radius: 10px; background: white; }
+.action-reminder.upcoming { border-left-color: #4f80a5; }
+.action-reminder.result { border-left-color: #d09a4c; }
+.action-reminder.stale { border-left-color: #a9867d; }
+.action-reminder > span { color: var(--muted); font-size: 9px; font-weight: 750; }
+.action-reminder > strong { overflow: hidden; margin-top: 5px; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.action-reminder > small { margin-top: 5px; color: var(--muted); font-size: 9px; line-height: 1.45; }
+.action-reminder > button { justify-self: start; margin-top: 10px; padding: 0; border: 0; background: transparent; color: var(--brand); font-size: 10px; font-weight: 750; }
 .list-insights-copy > span { color: var(--brand); font-size: 11px; font-weight: 750; letter-spacing: .08em; }
 .list-insights-copy h3 { margin: 5px 0 7px; color: var(--ink); font-family: "STSong","SimSun",serif; font-size: 21px; }
 .list-insights-copy p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.65; }
@@ -655,9 +693,28 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 .selection-column { width: 46px !important; min-width: 46px !important; text-align: center !important; }
 .selection-column input { width: 17px; height: 17px; accent-color: var(--brand); cursor: pointer; }
 .company-row-actions { flex-wrap: wrap; }
-.company-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 0 27px 18px; }
+.company-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 18px 27px; }
 .company-summary span { padding: 12px 13px; border: 1px solid #dbe8de; border-radius: 12px; background: #f7fbf8; color: var(--muted); font-size: 12px; }
 .company-summary b { display: block; margin-bottom: 3px; color: var(--ink); font-size: 19px; }
+.company-timeline { margin: 0 27px 18px; border: 1px solid #dfe8e1; border-radius: 12px; background: #fbfdfb; }
+.company-timeline summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; color: var(--brand); font-size: 12px; font-weight: 750; cursor: pointer; list-style: none; }
+.company-timeline summary::-webkit-details-marker { display: none; }
+.company-timeline summary::after { content: "＋"; margin-left: 4px; font-size: 15px; }
+.company-timeline[open] summary::after { content: "－"; }
+.company-timeline summary small { margin-left: auto; color: var(--muted); font-size: 9px; font-weight: 500; }
+.company-timeline-list { max-height: 260px; overflow-y: auto; padding: 2px 14px 13px; border-top: 1px solid #e8ede9; }
+.company-timeline-event { display: grid; grid-template-columns: 94px 12px 1fr; gap: 9px; padding: 11px 0; }
+.company-timeline-event time { color: var(--muted); font-size: 9px; }
+.company-timeline-event i { position: relative; width: 9px; height: 9px; margin-top: 2px; border: 2px solid #7aa28a; border-radius: 50%; background: white; }
+.company-timeline-event i::after { content: ""; position: absolute; top: 9px; left: 2px; width: 1px; height: calc(100% + 36px); background: #dce7df; }
+.company-timeline-event:last-child i::after { display: none; }
+.company-timeline-event.interview i { border-color: #6689ad; }
+.company-timeline-event > div { min-width: 0; }
+.company-timeline-event > div span, .company-timeline-event > div strong, .company-timeline-event > div small { display: block; }
+.company-timeline-event > div span { color: var(--brand); font-size: 9px; font-weight: 750; }
+.company-timeline-event > div strong { margin-top: 3px; font-size: 11px; }
+.company-timeline-event > div small { margin-top: 3px; color: var(--muted); font-size: 9px; }
+.company-timeline-event > div button { margin-top: 7px; padding: 0; border: 0; background: transparent; color: var(--brand); font-size: 9px; font-weight: 700; }
 .company-job-list { display: grid; gap: 10px; max-height: 48vh; overflow: auto; padding: 0 27px 27px; }
 .company-job-card { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 14px; padding: 14px 15px; border: 1px solid #e0e9e2; border-radius: 13px; background: rgba(255,255,255,.75); }
 .company-job-main strong, .company-job-main span, .company-job-main small { display: block; }
@@ -719,6 +776,7 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 }
 .privacy-field small { display: block; margin-top: 7px; color: var(--muted); font-size: 11px; }
 .form-actions { justify-content: flex-end; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); }
+.form-actions .form-delete-button { margin-right: auto; }
 .toast {
   position: fixed; right: 26px; bottom: 26px; z-index: 30; padding: 13px 17px;
   border-radius: 9px; background: #1e2c25; color: white; box-shadow: 0 12px 35px rgba(22,35,27,.26);
@@ -924,7 +982,7 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 .insight-kpis strong { margin-top: 8px; color: var(--brand); font-family: Georgia, serif; font-size: 28px; }
 .insight-kpis small { margin-top: 6px; color: #8c9a90; font-size: 10px; }
 .insights-grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 13px; margin-top: 13px; }
-.insight-card { min-height: 220px; padding: 19px; border: 1px solid #dfe9e1; border-radius: 15px; background: rgba(255,255,255,.76); box-shadow: 0 8px 24px rgba(39,74,51,.04); }
+.insights-panel .insight-card { min-height: 220px; padding: 19px; border: 1px solid #dfe9e1; border-radius: 15px; background: rgba(255,255,255,.76); box-shadow: 0 8px 24px rgba(39,74,51,.04); }
 .insight-card-head { display: flex; justify-content: space-between; gap: 12px; }
 .insight-card-head h3 { margin: 3px 0 0; font-size: 17px; }
 .insight-card-head small { color: #8c9a90; font-size: 10px; }
@@ -1020,6 +1078,7 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
   .toolbar-row { align-items: stretch; flex-direction: column; padding: 13px; }
   .toolbar-actions { justify-content: flex-start; }
   .toolbar-actions .display-switch { order: -1; }
+  .display-switch { max-width: 100%; overflow-x: auto; }
   .quick-filter-row { align-items: stretch; flex-direction: column; gap: 10px; padding: 0 13px 13px; }
   .quick-status-list { width: calc(100% + 26px); margin-inline: -13px; padding-inline: 13px; }
   .filter-overview { justify-content: space-between; white-space: normal; }
@@ -1034,6 +1093,12 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
   .sort-control { width: 100%; }
   .sort-control select { flex: 1; }
   .company-view { padding: 0; }
+  .kanban-board-wrap { padding: 13px; scroll-snap-type: x proximity; }
+  .kanban-board { min-width: max-content; grid-template-columns: repeat(5, 260px); }
+  .kanban-column { scroll-snap-align: start; }
+  .action-center { margin: 18px 13px 0; padding: 17px; }
+  .action-center-head { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .action-reminder-list { grid-template-columns: 1fr; }
   .company-merge-table { min-width: 0; table-layout: fixed; }
   .company-merge-row { padding: 16px 0; }
   .company-merge-row > td { align-items: flex-start; }
@@ -1061,6 +1126,9 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
   .form-grid { grid-template-columns: 1fr; }
   .full-field { grid-column: auto; }
   .company-summary { grid-template-columns: repeat(2, 1fr); padding-inline: 18px; }
+  .company-timeline { margin-inline: 18px; }
+  .company-timeline summary small { display: none; }
+  .company-timeline-event { grid-template-columns: 72px 12px 1fr; }
   .company-job-list { padding-inline: 18px; }
   .company-job-card { grid-template-columns: 1fr auto; }
   .company-job-card .compact-button { grid-column: 1 / -1; justify-self: start; }

@@ -67,10 +67,18 @@ function ModalPortal({ children }: { children: ReactNode }) {
 }
 
 // ──────────────────────────────────────────────── constants
-const STATUSES: ApplicationStatus[] = ["简历投递", "简历筛选", "笔试", "一面", "二面", "终面", "HR面", "Offer", "已拒绝", "流程结束"];
+const STATUSES: ApplicationStatus[] = ["准备投递", "简历投递", "已投递", "简历筛选", "笔试", "一面", "二面", "终面", "HR面", "Offer", "已拒绝", "流程结束"];
 const INTERVIEW_STATUSES: ApplicationStatus[] = ["一面", "二面", "终面", "HR面"];
 const CLOSED_STATUSES: ApplicationStatus[] = ["已拒绝", "流程结束"];
-const QUICK_STATUS_FILTERS = ["全部状态", "简历投递", "笔试", "面试进行中", "Offer", "流程已结束"];
+const RESUME_STATUSES: ApplicationStatus[] = ["准备投递", "简历投递", "已投递", "简历筛选"];
+const QUICK_STATUS_FILTERS = ["全部状态", "简历阶段", "笔试", "面试进行中", "Offer", "流程已结束"];
+const KANBAN_COLUMNS: { key: string; label: string; hint: string; statuses: ApplicationStatus[] }[] = [
+  { key: "resume", label: "简历阶段", hint: "准备、投递与筛选", statuses: RESUME_STATUSES },
+  { key: "test", label: "笔试", hint: "测评与笔试", statuses: ["笔试"] },
+  { key: "interview", label: "面试中", hint: "一面至 HR 面", statuses: INTERVIEW_STATUSES },
+  { key: "offer", label: "Offer", hint: "已获得录用", statuses: ["Offer"] },
+  { key: "closed", label: "已结束", hint: "拒绝或主动终止", statuses: CLOSED_STATUSES },
+];
 
 const BATCHES = ["秋招", "提前批", "日常实习", "其他"];
 
@@ -173,6 +181,13 @@ function formatDate(value: string) {
   return `${date.getMonth() + 1}月${date.getDate()}日`;
 }
 
+function formatDateTime(value: string) {
+  if (!value) return "时间待定";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
 function companyKey(value: string) {
   return value.trim().toLocaleLowerCase();
 }
@@ -187,6 +202,7 @@ function companyClassification(tags: string[] = []) {
 
 function matchesStatusFilter(status: ApplicationStatus, filter: string) {
   if (filter === "全部状态") return true;
+  if (filter === "简历阶段") return RESUME_STATUSES.includes(status);
   if (filter === "面试进行中") return INTERVIEW_STATUSES.includes(status);
   if (filter === "流程已结束") return CLOSED_STATUSES.includes(status);
   return status === filter;
@@ -358,7 +374,7 @@ export function RecruitmentTracker({
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [showProcessingHint, setShowProcessingHint] = useState(false);
   const [view, setView] = useState<"mine" | "friends" | "sharing">("mine");
-  const [companyView, setCompanyView] = useState(true);
+  const [listMode, setListMode] = useState<"company" | "position" | "kanban">("company");
   const [sortKey, setSortKey] = useState<SortKey>("appliedAt");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [query, setQuery] = useState("");
@@ -725,7 +741,7 @@ export function RecruitmentTracker({
 
   useEffect(() => {
     if (selectAllRef.current) selectAllRef.current.indeterminate = partiallyFilteredSelected;
-  }, [partiallyFilteredSelected, companyView]);
+  }, [partiallyFilteredSelected, listMode]);
 
   // ────────────────────────────────── company grouping
   const companyGrouped = useMemo(() => {
@@ -778,6 +794,73 @@ export function RecruitmentTracker({
       { label: "已共享给搭子", value: sharedCount, unit: "个", detail: `占全部岗位 ${rate(sharedCount)}%`, progress: rate(sharedCount), color: "#9b6b9c" },
     ];
   }, [filtered]);
+
+  const actionReminders = useMemo(() => {
+    const now = Date.now();
+    const appById = new Map(ownApplications.map((item) => [item.id, item]));
+    const upcomingApplicationIds = new Set<string>();
+    const reminders: Array<{
+      id: string;
+      kind: "upcoming" | "result" | "stale";
+      label: string;
+      title: string;
+      detail: string;
+      priority: number;
+      application: Application;
+      interview?: Interview;
+    }> = [];
+
+    for (const interview of interviews) {
+      const application = appById.get(interview.applicationId);
+      if (!application) continue;
+      const scheduledAt = new Date(interview.scheduledAt).getTime();
+      if (!Number.isFinite(scheduledAt)) continue;
+      const daysAway = (scheduledAt - now) / 86_400_000;
+      if (daysAway >= 0 && daysAway <= 14) {
+        upcomingApplicationIds.add(application.id);
+        reminders.push({
+          id: `upcoming-${interview.id}`,
+          kind: "upcoming",
+          label: "即将面试",
+          title: `${application.company} · ${interview.round || "面试"}`,
+          detail: `${formatDateTime(interview.scheduledAt)} · ${application.position}`,
+          priority: scheduledAt,
+          application,
+          interview,
+        });
+      } else if (daysAway < 0 && daysAway >= -30 && (!interview.result || interview.result === "待定")) {
+        reminders.push({
+          id: `result-${interview.id}`,
+          kind: "result",
+          label: "待补结果",
+          title: `${application.company} · ${interview.round || "面试"}`,
+          detail: `${formatDateTime(interview.scheduledAt)} · 记录结果与复盘`,
+          priority: now + 1_000_000_000 + Math.abs(scheduledAt - now),
+          application,
+          interview,
+        });
+      }
+    }
+
+    for (const application of ownApplications) {
+      if ([...CLOSED_STATUSES, "Offer"].includes(application.status) || upcomingApplicationIds.has(application.id)) continue;
+      const lastTouched = new Date(application.updatedAt || `${application.appliedAt}T00:00:00`).getTime();
+      const staleDays = Math.floor((now - lastTouched) / 86_400_000);
+      if (Number.isFinite(lastTouched) && staleDays >= 7) {
+        reminders.push({
+          id: `stale-${application.id}`,
+          kind: "stale",
+          label: `${staleDays} 天未更新`,
+          title: `${application.company} · ${application.position}`,
+          detail: `当前进度：${application.status}，建议确认后续安排`,
+          priority: now + 2_000_000_000 - staleDays,
+          application,
+        });
+      }
+    }
+
+    return reminders.sort((a, b) => a.priority - b.priority).slice(0, 6);
+  }, [ownApplications, interviews]);
 
   const toggleSort = useCallback((key: SortKey) => {
     if (sortKey === key) {
@@ -975,13 +1058,14 @@ export function RecruitmentTracker({
 
   const removeInterview = useCallback(
     async (item: Interview) => {
-      if (!confirm(`确定删除这条面试记录吗？`)) return;
+      if (!confirm(`确定删除这条面试记录吗？`)) return false;
       if (user) {
         const removed = await runCloudMutation("删除面试记录中", { action: "deleteInterview", id: item.id });
-        if (!removed) return;
+        if (!removed) return false;
       }
       setInterviews((prev) => prev.filter((entry) => entry.id !== item.id));
       setNotice("面试记录已删除");
+      return true;
     },
     [user, runCloudMutation],
   );
@@ -1176,6 +1260,21 @@ export function RecruitmentTracker({
       setNotice("公司和岗位不能为空");
       return;
     }
+    if (!editingId) {
+      const seenInBatch = new Set<string>();
+      const duplicates = positions.filter((item) => {
+        const key = `${companyKey(form.company)}|${item.position.toLocaleLowerCase()}|${item.base.toLocaleLowerCase()}`;
+        const repeatedInBatch = seenInBatch.has(key);
+        seenInBatch.add(key);
+        const alreadyExists = ownApplications.some((application) =>
+          companyKey(application.company) === companyKey(form.company) &&
+          application.position.trim().toLocaleLowerCase() === item.position.toLocaleLowerCase() &&
+          (application.base ?? "").trim().toLocaleLowerCase() === item.base.toLocaleLowerCase(),
+        );
+        return repeatedInBatch || alreadyExists;
+      });
+      if (duplicates.length > 0 && !confirm(`发现 ${duplicates.length} 个可能重复的岗位：${duplicates.map((item) => item.position).join("、")}。仍要继续添加吗？`)) return;
+    }
     if (form.status === "流程结束" && !form.finalOutcome) {
       setNotice("请选择流程最终走到的状态");
       return;
@@ -1351,6 +1450,38 @@ export function RecruitmentTracker({
       .sort((a, b) => compareApplications(a, b, sortKey) * (sortDirection === "asc" ? 1 : -1));
   }, [selectedCompany, view, ownApplications, friendApplications, sortKey, sortDirection]);
   const allCompanyApplicationsSelected = companyApplications.length > 0 && companyApplications.every((item) => selectedApplicationIds.includes(item.id));
+  const companyApplicationIds = useMemo(() => new Set(companyApplications.map((item) => item.id)), [companyApplications]);
+  const companyInterviews = useMemo(
+    () => interviews.filter((item) => companyApplicationIds.has(item.applicationId)),
+    [interviews, companyApplicationIds],
+  );
+  const companyTimeline = useMemo(() => {
+    const applicationMap = new Map(companyApplications.map((item) => [item.id, item]));
+    const deliveryEvents = companyApplications.map((item) => ({
+      id: `application-${item.id}`,
+      date: item.appliedAt ? `${item.appliedAt}T00:00:00` : item.createdAt ?? item.updatedAt,
+      type: "投递",
+      title: item.position,
+      detail: `${item.batch} · ${item.base || "地点待定"} · ${item.status}`,
+      tone: "delivery",
+      interview: undefined as Interview | undefined,
+    }));
+    const interviewEvents = companyInterviews.map((item) => {
+      const application = applicationMap.get(item.applicationId);
+      return {
+        id: `interview-${item.id}`,
+        date: item.scheduledAt,
+        type: item.round || "面试",
+        title: application?.position ?? "关联岗位",
+        detail: [item.format, item.result, item.interviewer].filter(Boolean).join(" · ") || "等待补充面试信息",
+        tone: "interview",
+        interview: item,
+      };
+    });
+    return [...deliveryEvents, ...interviewEvents]
+      .filter((item) => item.date)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [companyApplications, companyInterviews]);
 
   // ────────────────────────────────── render
   const selectedCompanyValue = companyOptions.includes(form.company.trim()) ? form.company.trim() : "__new__";
@@ -1497,8 +1628,9 @@ export function RecruitmentTracker({
                     <span className="readonly-note">好友进度仅供查看</span>
                   )}
                   <div className="display-switch" aria-label="清单显示方式">
-                    <button type="button" className={companyView ? "active" : ""} aria-pressed={companyView} onClick={() => setCompanyView(true)}>公司合并</button>
-                    <button type="button" className={!companyView ? "active" : ""} aria-pressed={!companyView} onClick={() => setCompanyView(false)}>岗位明细</button>
+                    <button type="button" className={listMode === "company" ? "active" : ""} aria-pressed={listMode === "company"} onClick={() => setListMode("company")}>公司合并</button>
+                    <button type="button" className={listMode === "position" ? "active" : ""} aria-pressed={listMode === "position"} onClick={() => setListMode("position")}>岗位明细</button>
+                    <button type="button" className={listMode === "kanban" ? "active" : ""} aria-pressed={listMode === "kanban"} onClick={() => setListMode("kanban")}>进度看板</button>
                   </div>
                   {view === "mine" && (
                     <>
@@ -1562,6 +1694,7 @@ export function RecruitmentTracker({
                 </label>
                 <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                   <option>全部状态</option>
+                  <option>简历阶段</option>
                   <option>面试进行中</option>
                   <option>流程已结束</option>
                   {STATUSES.map((s) => <option key={s}>{s}</option>)}
@@ -1642,7 +1775,7 @@ export function RecruitmentTracker({
               </div>
             )}
 
-            {companyView ? (
+            {listMode === "company" ? (
               <div className="company-view">
                 {companyGrouped.length === 0 ? (
                   <div className="empty-state">
@@ -1736,6 +1869,61 @@ export function RecruitmentTracker({
                   </div>
                 )}
               </div>
+            ) : listMode === "kanban" ? (
+              <div className="kanban-board-wrap">
+                <div className="kanban-board" aria-label="投递进度看板">
+                  {KANBAN_COLUMNS.map((column) => {
+                    const columnItems = filtered.filter((item) => column.statuses.includes(item.status));
+                    return (
+                      <section className={`kanban-column kanban-${column.key}`} key={column.key}>
+                        <header className="kanban-column-head">
+                          <div><strong>{column.label}</strong><small>{column.hint}</small></div>
+                          <span>{columnItems.length}</span>
+                        </header>
+                        <div className="kanban-card-list">
+                          {columnItems.length === 0 ? (
+                            <div className="kanban-empty">暂无岗位</div>
+                          ) : columnItems.map((item) => (
+                            <article className="kanban-card" key={item.id}>
+                              <div className="kanban-card-head">
+                                {view === "mine" && (
+                                  <input
+                                    type="checkbox"
+                                    aria-label={`选择 ${item.company} ${item.position}`}
+                                    checked={selectedApplicationIds.includes(item.id)}
+                                    onChange={() => toggleApplicationSelection(item.id)}
+                                  />
+                                )}
+                                <button type="button" className="kanban-company" onClick={() => openCompany(item.company)}>{item.company}</button>
+                                <span className={`privacy-dot ${item.visibility}`} title={visibilityLabel(item.visibility)} />
+                              </div>
+                              <strong className="kanban-position">{item.position}</strong>
+                              <div className="kanban-meta">
+                                <span>{item.base || "地点待定"}</span>
+                                <span>{formatDate(item.appliedAt)}</span>
+                              </div>
+                              <div className="kanban-card-foot">
+                                {view === "mine" ? (
+                                  <select
+                                    className={`status-select ${statusTone(item.status)}`}
+                                    value={item.status}
+                                    onChange={(event) => chooseStatus(item, event.target.value as ApplicationStatus)}
+                                    disabled={busy}
+                                    aria-label={`修改 ${item.company} ${item.position} 的进度`}
+                                  >
+                                    {STATUSES.map((status) => <option key={status}>{status}</option>)}
+                                  </select>
+                                ) : <span className={`status-badge ${statusTone(item.status)}`}>{item.status}</span>}
+                                {view === "mine" && <button type="button" className="action-btn" onClick={() => openEdit(item)}>编辑</button>}
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      </section>
+                    );
+                  })}
+                </div>
+              </div>
             ) : (
               <div className="table-wrap">
                 <table className="data-table">
@@ -1818,6 +2006,33 @@ export function RecruitmentTracker({
                   </tbody>
                 </table>
               </div>
+            )}
+
+            {view === "mine" && actionReminders.length > 0 && (
+              <section className="action-center" aria-label="待跟进提醒">
+                <div className="action-center-head">
+                  <div>
+                    <span>待跟进提醒</span>
+                    <h3>接下来要处理的事情</h3>
+                  </div>
+                  <small>根据面试安排和最近更新时间自动生成</small>
+                </div>
+                <div className="action-reminder-list">
+                  {actionReminders.map((reminder) => (
+                    <article className={`action-reminder ${reminder.kind}`} key={reminder.id}>
+                      <span>{reminder.label}</span>
+                      <strong>{reminder.title}</strong>
+                      <small>{reminder.detail}</small>
+                      <button
+                        type="button"
+                        onClick={() => reminder.interview ? openInterviewEdit(reminder.interview) : openEdit(reminder.application)}
+                      >
+                        {reminder.kind === "upcoming" ? "查看安排" : reminder.kind === "result" ? "补充结果" : "更新进度"} →
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              </section>
             )}
 
             {filtered.length > 0 && (
@@ -2101,7 +2316,7 @@ export function RecruitmentTracker({
         {/* ────────────────────────────────── interview form modal */}
         {isInterviewOpen && (
           <ModalPortal>
-          <div className="modal-overlay" onClick={closeInterviewForm}>
+          <div className="modal-overlay">
             <div className="modal" onClick={(e) => e.stopPropagation()}>
               <h2>{editingInterviewId ? "编辑面试" : "添加面试"}</h2>
               <form onSubmit={submitInterviewForm}>
@@ -2194,6 +2409,20 @@ export function RecruitmentTracker({
                   </label>
                 </div>
                 <div className="form-actions">
+                  {editingInterviewId && (
+                    <button
+                      type="button"
+                      className="danger-button form-delete-button"
+                      disabled={busy}
+                      onClick={async () => {
+                        const item = interviews.find((interview) => interview.id === editingInterviewId);
+                        if (!item) return;
+                        if (await removeInterview(item)) closeInterviewForm();
+                      }}
+                    >
+                      删除记录
+                    </button>
+                  )}
                   <button type="button" className="secondary-button" onClick={closeInterviewForm}>取消</button>
                   <button type="submit" className="primary-button" disabled={busy}>
                     {busy ? "保存中…" : editingInterviewId ? "保存修改" : "添加面试"}
@@ -2208,7 +2437,7 @@ export function RecruitmentTracker({
         {/* ────────────────────────────────── company edit modal */}
         {editingCompanyName && (
           <ModalPortal>
-            <div className="modal-overlay modal-overlay-elevated" onClick={closeCompanyEdit}>
+            <div className="modal-overlay modal-overlay-elevated">
               <div className="modal company-edit-modal" onClick={(event) => event.stopPropagation()}>
                 <div className="modal-head">
                   <div>
@@ -2334,6 +2563,32 @@ export function RecruitmentTracker({
                   <button type="button" className="close-button" onClick={closeCompany} aria-label="关闭">×</button>
                 </div>
               </div>
+              <div className="company-summary">
+                <span><b>{companyApplications.length}</b>岗位总数</span>
+                <span><b>{companyApplications.filter((item) => ![...CLOSED_STATUSES, "Offer"].includes(item.status)).length}</b>进行中</span>
+                <span><b>{companyInterviews.length}</b>面试记录</span>
+                <span><b>{companyApplications.filter((item) => item.visibility !== "private").length}</b>已共享</span>
+              </div>
+              {companyTimeline.length > 0 && (
+                <details className="company-timeline">
+                  <summary>
+                    <span>投递与面试时间线</span>
+                    <small>{companyTimeline.length} 个节点 · 点击展开</small>
+                  </summary>
+                  <div className="company-timeline-list">
+                    {companyTimeline.map((event) => (
+                      <article className={`company-timeline-event ${event.tone}`} key={event.id}>
+                        <time>{formatDateTime(event.date)}</time>
+                        <i aria-hidden="true" />
+                        <div>
+                          <span>{event.type}</span><strong>{event.title}</strong><small>{event.detail}</small>
+                          {view === "mine" && event.interview && <button type="button" onClick={() => { closeCompany(); openInterviewEdit(event.interview!); }}>编辑面试记录</button>}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </details>
+              )}
               {view === "mine" && selectedApplicationIds.length > 0 && (
                 <div className="batch-action-bar company-modal-batch">
                   <div className="batch-selection-copy">
@@ -2408,11 +2663,11 @@ export function RecruitmentTracker({
                           <input type="checkbox" aria-label={`选择 ${item.position}`} checked={selectedApplicationIds.includes(item.id)} onChange={() => toggleApplicationSelection(item.id)} />
                         </td>
                       )}
-                      <td className="company-detail-position">{item.position}</td>
-                      <td className="cell-muted">{item.base || "—"}</td>
-                      <td><span className="batch-tag">{item.batch}</span></td>
-                      <td className="cell-muted">{formatDate(item.appliedAt)}</td>
-                      <td><div className="status-result-cell">{view === "mine" ? (
+                      <td className="company-detail-position" data-label="岗位">{item.position}</td>
+                      <td className="cell-muted" data-label="地点">{item.base || "—"}</td>
+                      <td data-label="批次"><span className="batch-tag">{item.batch}</span></td>
+                      <td className="cell-muted" data-label="投递日期">{formatDate(item.appliedAt)}</td>
+                      <td data-label="面试进度"><div className="status-result-cell">{view === "mine" ? (
                         <select
                           className={`status-select ${statusTone(item.status)}`}
                           value={item.status}
@@ -2424,12 +2679,16 @@ export function RecruitmentTracker({
                       ) : <span className={`status-badge ${statusTone(item.status)}`}>{item.status}</span>}
                         {item.finalOutcome && <small>最终：{item.finalOutcome}</small>}
                         {item.rejectionReason && <small>原因：{item.rejectionReason}</small>}
+                        {companyInterviews.filter((interview) => interview.applicationId === item.id).length > 0 && (
+                          <small>{companyInterviews.filter((interview) => interview.applicationId === item.id).length} 场面试记录</small>
+                        )}
                       </div></td>
-                      <td className="cell-actions">
+                      <td className="cell-actions" data-label="操作">
                         {view === "mine" && <div className="action-buttons">
                           <button className="action-btn" onClick={() => openEdit(item)} title="编辑岗位信息">编辑岗位</button>
                           <button className="action-btn" onClick={() => { const src = item; closeCompany(); openCreate(src); }} title="复制创建同公司新岗位">复制</button>
-                          <button className="action-btn danger" onClick={() => removeApplication(item)} title="删除">✕</button>
+                          <button className="action-btn" onClick={() => { closeCompany(); openInterviewCreate(item.id); }} title="添加面试">添加面试</button>
+                          <button className="action-btn danger" onClick={() => removeApplication(item)} title="删除">删除</button>
                         </div>}
                       </td>
                     </tr>
