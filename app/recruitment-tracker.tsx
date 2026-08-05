@@ -1257,12 +1257,6 @@ export function RecruitmentTracker({
 
   return (
     <div className="app-shell">
-      <datalist id="base-options">
-        {baseOptions.map((option) => <option key={option} value={option} />)}
-      </datalist>
-      <datalist id="platform-options">
-        {platformOptions.map((option) => <option key={option} value={option} />)}
-      </datalist>
       <datalist id="rejection-reason-options">
         {REJECTION_REASON_OPTIONS.map((option) => <option key={option} value={option} />)}
       </datalist>
@@ -1453,7 +1447,7 @@ export function RecruitmentTracker({
                   {companyScaleOptions.map((s) => <option key={s}>{s}</option>)}
                 </select>
                 <input value={positionFilter} onChange={(e) => setPositionFilter(e.target.value)} placeholder="岗位筛选" />
-                <input list="base-options" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} placeholder="选择或输入地点" />
+                <input value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} placeholder="输入地点筛选" />
                 <button className="secondary-button" onClick={clearFilters}>清除筛选</button>
               </div>
             </div>
@@ -1761,12 +1755,17 @@ export function RecruitmentTracker({
                               placeholder={`岗位 ${index + 1}，例如：算法工程师`}
                               required={index === 0}
                             />
-                            <input
-                              list="base-options"
-                              value={entry.base}
-                              onChange={(e) => setBatchPositions((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, base: e.target.value } : item))}
-                              placeholder="该岗位 Base 地点"
-                            />
+                            <div className="choice-field">
+                              <select
+                                value={baseOptions.includes(entry.base) ? entry.base : ""}
+                                onChange={(e) => setBatchPositions((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, base: e.target.value } : item))}
+                                aria-label={`岗位 ${index + 1} 的 Base 地点`}
+                              >
+                                <option value="">自定义 / 多地点</option>
+                                {baseOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                              </select>
+                              {!baseOptions.includes(entry.base) && <input value={entry.base} onChange={(e) => setBatchPositions((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, base: e.target.value } : item))} placeholder="输入城市或多个地点" />}
+                            </div>
                             {batchPositions.length > 1 && (
                               <button type="button" className="action-btn danger" onClick={() => setBatchPositions((prev) => prev.filter((_, itemIndex) => itemIndex !== index))} title="移除此岗位">✕</button>
                             )}
@@ -1784,8 +1783,14 @@ export function RecruitmentTracker({
                   </div>
                   {editingId && (
                     <label>
-                      <span>Base 地点（可选或自定义）</span>
-                      <input list="base-options" value={form.base} onChange={(e) => updateFormField("base", e.target.value)} placeholder="选择城市，或输入多个地点" />
+                      <span>Base 地点</span>
+                      <div className="choice-field">
+                        <select value={baseOptions.includes(form.base) ? form.base : ""} onChange={(e) => updateFormField("base", e.target.value)}>
+                          <option value="">自定义 / 多地点</option>
+                          {baseOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                        {!baseOptions.includes(form.base) && <input value={form.base} onChange={(e) => updateFormField("base", e.target.value)} placeholder="输入城市或多个地点" />}
+                      </div>
                     </label>
                   )}
                   <label>
@@ -1820,8 +1825,14 @@ export function RecruitmentTracker({
                     </label>
                   )}
                   <label>
-                    <span>投递渠道（可选或自定义）</span>
-                    <input list="platform-options" value={form.channel} onChange={(e) => updateFormField("channel", e.target.value)} placeholder="选择官网、内推或招聘平台" />
+                    <span>投递渠道</span>
+                    <div className="choice-field">
+                      <select value={platformOptions.includes(form.channel) ? form.channel : ""} onChange={(e) => updateFormField("channel", e.target.value)}>
+                        <option value="">自定义输入</option>
+                        {platformOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                      </select>
+                      {!platformOptions.includes(form.channel) && <input value={form.channel} onChange={(e) => updateFormField("channel", e.target.value)} placeholder="输入投递渠道" />}
+                    </div>
                   </label>
                   <label>
                     <span>链接</span>
