@@ -31,12 +31,16 @@ interface FormState {
   rejectionReason: string;
   visibility: Visibility;
   groupId: string;
+  companyNature: string;
+  companySubtype: string;
   industryTags: string[];
   companyScale: string;
 }
 
 interface CompanyFormState {
   name: string;
+  companyNature: string;
+  companySubtype: string;
   industryTags: string[];
   companyScale: string;
 }
@@ -94,6 +98,17 @@ const COMPANY_SCALE_OPTIONS = [
   "未知", "1-50人", "51-200人", "201-500人", "501-2000人", "2001-10000人", "10000+人",
 ];
 
+const COMPANY_NATURE_PREFIX = "单位性质：";
+const COMPANY_SUBTYPE_PREFIX = "单位细分：";
+const COMPANY_NATURE_OPTIONS = [
+  { value: "国企", subtypes: ["中央企业", "地方国企", "国有银行 / 金融", "国有高校 / 研究院"] },
+  { value: "民企", subtypes: ["大型民企", "上市民企", "创业公司", "民营金融"] },
+  { value: "外企", subtypes: ["跨国企业", "外资研发中心", "合资企业"] },
+  { value: "事业单位", subtypes: ["高校", "科研院所", "医院", "公共服务机构"] },
+  { value: "行政单位", subtypes: ["党政机关", "公务员岗位", "街道 / 基层单位"] },
+  { value: "其他", subtypes: ["社会组织", "国际组织", "其他单位"] },
+];
+
 const FINAL_OUTCOME_OPTIONS = ["简历挂", "笔试挂", "一面挂", "二面挂", "终面挂", "HR 面挂", "薪资不满足", "岗位关闭", "主动终止", "其他"];
 const REJECTION_REASON_OPTIONS = ["薪资不满足", "岗位 / 方向不匹配", "已接受其他 Offer", "地点或到岗时间不合适", "个人原因", "其他"];
 
@@ -112,12 +127,16 @@ const EMPTY_FORM: FormState = {
   rejectionReason: "",
   visibility: "private",
   groupId: "",
+  companyNature: "",
+  companySubtype: "",
   industryTags: [],
   companyScale: "",
 };
 
 const EMPTY_COMPANY_FORM: CompanyFormState = {
   name: "",
+  companyNature: "",
+  companySubtype: "",
   industryTags: [],
   companyScale: "",
 };
@@ -147,6 +166,24 @@ function formatDate(value: string) {
 
 function companyKey(value: string) {
   return value.trim().toLocaleLowerCase();
+}
+
+function companyClassification(tags: string[] = []) {
+  const companyNature = tags.find((tag) => tag.startsWith(COMPANY_NATURE_PREFIX))?.slice(COMPANY_NATURE_PREFIX.length) ?? "";
+  const companySubtype = tags.find((tag) => tag.startsWith(COMPANY_SUBTYPE_PREFIX))?.slice(COMPANY_SUBTYPE_PREFIX.length) ?? "";
+  return { companyNature, companySubtype };
+}
+
+function industryOnly(tags: string[] = []) {
+  return tags.filter((tag) => !tag.startsWith(COMPANY_NATURE_PREFIX) && !tag.startsWith(COMPANY_SUBTYPE_PREFIX));
+}
+
+function tagsWithClassification(companyNature: string, companySubtype: string, industryTags: string[]) {
+  return [
+    ...(companyNature ? [`${COMPANY_NATURE_PREFIX}${companyNature}`] : []),
+    ...(companySubtype ? [`${COMPANY_SUBTYPE_PREFIX}${companySubtype}`] : []),
+    ...industryOnly(industryTags),
+  ];
 }
 
 function statusTone(status: ApplicationStatus) {
@@ -309,7 +346,7 @@ export function RecruitmentTracker({
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("全部状态");
   const [batchFilter, setBatchFilter] = useState("全部批次");
-  const [industryFilter, setIndustryFilter] = useState("全部行业");
+  const [industryFilter, setIndustryFilter] = useState("全部行业方向");
   const [scaleFilter, setScaleFilter] = useState("全部规模");
   const [positionFilter, setPositionFilter] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
@@ -569,7 +606,7 @@ export function RecruitmentTracker({
   );
 
   const industryOptions = useMemo(
-    () => [...new Set([...INDUSTRY_OPTIONS, ...applications.flatMap((item) => item.industryTags ?? [])])].filter(Boolean),
+    () => [...new Set([...INDUSTRY_OPTIONS, ...applications.flatMap((item) => industryOnly(item.industryTags ?? []))])].filter(Boolean),
     [applications],
   );
 
@@ -611,7 +648,7 @@ export function RecruitmentTracker({
     }
     if (statusFilter !== "全部状态") items = items.filter((item) => item.status === statusFilter);
     if (batchFilter !== "全部批次") items = items.filter((item) => item.batch === batchFilter);
-    if (industryFilter !== "全部行业") items = items.filter((item) => item.industryTags?.includes(industryFilter));
+    if (industryFilter !== "全部行业方向") items = items.filter((item) => industryOnly(item.industryTags ?? []).includes(industryFilter));
     if (scaleFilter !== "全部规模") items = items.filter((item) => item.companyScale === scaleFilter);
     if (positionFilter) items = items.filter((item) => item.position.toLocaleLowerCase().includes(positionFilter.toLocaleLowerCase()));
     if (locationFilter) items = items.filter((item) => (item.base ?? "").toLocaleLowerCase().includes(locationFilter.toLocaleLowerCase()));
@@ -658,7 +695,9 @@ export function RecruitmentTracker({
           key,
           company: apps[0].company,
           applications: apps,
-          industryTags: [...new Set(apps.flatMap((app) => app.industryTags ?? []))],
+          industryTags: [...new Set(apps.flatMap((app) => industryOnly(app.industryTags ?? [])))],
+          companyNature: companyClassification(apps[0].industryTags ?? []).companyNature,
+          companySubtype: companyClassification(apps[0].industryTags ?? []).companySubtype,
           companyScale: apps.find((app) => app.companyScale)?.companyScale ?? "",
           bases: [...new Set(apps.map((app) => app.base).filter(Boolean))],
           latestAppliedAt: latest?.appliedAt ?? "",
@@ -1001,7 +1040,7 @@ export function RecruitmentTracker({
     setQuery("");
     setStatusFilter("全部状态");
     setBatchFilter("全部批次");
-    setIndustryFilter("全部行业");
+    setIndustryFilter("全部行业方向");
     setScaleFilter("全部规模");
     setPositionFilter("");
     setLocationFilter("");
@@ -1011,6 +1050,7 @@ export function RecruitmentTracker({
   function openCreate(source?: Application) {
     setBatchPositions([{ position: "", base: source?.base ?? "" }]);
     if (source) {
+      const classification = companyClassification(source.industryTags ?? []);
       setForm({
         company: source.company,
         position: "",
@@ -1026,7 +1066,9 @@ export function RecruitmentTracker({
         rejectionReason: "",
         visibility: source.visibility,
         groupId: source.groupId ?? defaultGroupId,
-        industryTags: source.industryTags ?? [],
+        companyNature: classification.companyNature,
+        companySubtype: classification.companySubtype,
+        industryTags: industryOnly(source.industryTags ?? []),
         companyScale: source.companyScale ?? "",
       });
     } else {
@@ -1038,6 +1080,7 @@ export function RecruitmentTracker({
 
   function openEdit(item: Application, status = item.status) {
     setSelectedCompany(null);
+    const classification = companyClassification(item.industryTags ?? []);
     setBatchPositions([{ position: item.position, base: item.base ?? "" }]);
     setForm({
       company: item.company,
@@ -1054,7 +1097,9 @@ export function RecruitmentTracker({
       rejectionReason: item.rejectionReason ?? "",
       visibility: item.visibility,
       groupId: item.groupId ?? defaultGroupId,
-      industryTags: item.industryTags ?? [],
+      companyNature: classification.companyNature,
+      companySubtype: classification.companySubtype,
+      industryTags: industryOnly(item.industryTags ?? []),
       companyScale: item.companyScale ?? "",
     });
     setEditingId(item.id);
@@ -1091,6 +1136,7 @@ export function RecruitmentTracker({
       return;
     }
     const shareGroupId = form.groupId || defaultGroupId;
+    const industryTags = tagsWithClassification(form.companyNature, form.companySubtype, form.industryTags);
     if (form.visibility !== "private" && !shareGroupId) {
       setNotice("请先创建或加入小组，再设置共享范围");
       return;
@@ -1112,7 +1158,7 @@ export function RecruitmentTracker({
         rejectionReason: form.rejectionReason,
         visibility: form.visibility,
         groupId: form.visibility === "private" ? null : shareGroupId,
-        industryTags: form.industryTags,
+        industryTags,
         companyScale: form.companyScale,
       });
     } else {
@@ -1133,7 +1179,7 @@ export function RecruitmentTracker({
           rejectionReason: form.rejectionReason,
           visibility: form.visibility,
           groupId: form.visibility === "private" ? null : shareGroupId,
-          industryTags: form.industryTags,
+          industryTags,
           companyScale: form.companyScale,
           createdAt: now,
           updatedAt: now,
@@ -1203,9 +1249,13 @@ export function RecruitmentTracker({
 
   function openCompanyEdit(company: string) {
     const companyItems = ownApplications.filter((item) => companyKey(item.company) === companyKey(company));
+    const companyTags = [...new Set(companyItems.flatMap((item) => item.industryTags ?? []))];
+    const classification = companyClassification(companyTags);
     setCompanyForm({
       name: company,
-      industryTags: [...new Set(companyItems.flatMap((item) => item.industryTags ?? []))],
+      companyNature: classification.companyNature,
+      companySubtype: classification.companySubtype,
+      industryTags: industryOnly(companyTags),
       companyScale: companyItems.find((item) => item.companyScale)?.companyScale ?? "",
     });
     setEditingCompanyName(company);
@@ -1224,12 +1274,13 @@ export function RecruitmentTracker({
       return;
     }
     const now = new Date().toISOString();
+    const industryTags = tagsWithClassification(companyForm.companyNature, companyForm.companySubtype, companyForm.industryTags);
     const changed = ownApplications
       .filter((item) => companyKey(item.company) === companyKey(editingCompanyName))
       .map((item) => ({
         ...item,
         company: companyForm.name.trim(),
-        industryTags: companyForm.industryTags,
+        industryTags,
         companyScale: companyForm.companyScale,
         updatedAt: now,
       }));
@@ -1439,7 +1490,7 @@ export function RecruitmentTracker({
                   {BATCHES.map((b) => <option key={b}>{b}</option>)}
                 </select>
                 <select value={industryFilter} onChange={(e) => setIndustryFilter(e.target.value)}>
-                  <option>全部行业</option>
+                  <option>全部行业方向</option>
                   {industryOptions.map((i) => <option key={i}>{i}</option>)}
                 </select>
                 <select value={scaleFilter} onChange={(e) => setScaleFilter(e.target.value)}>
@@ -1547,6 +1598,8 @@ export function RecruitmentTracker({
                                 {group.company}
                               </button>
                               <div className="company-merge-meta">
+                                {group.companyNature && <span className="company-nature-tag">{group.companyNature}</span>}
+                                {group.companySubtype && <span className="company-subtype-tag">{group.companySubtype}</span>}
                                 {group.industryTags.slice(0, 2).map((tag) => <span key={tag}>{tag}</span>)}
                                 {group.companyScale && <span>{group.companyScale}</span>}
                               </div>
@@ -1559,6 +1612,8 @@ export function RecruitmentTracker({
                             </td>
                             <td data-label="行业 / 规模">
                               <div className="company-merge-meta">
+                                {group.companyNature && <span className="company-nature-tag">{group.companyNature}</span>}
+                                {group.companySubtype && <span className="company-subtype-tag">{group.companySubtype}</span>}
                                 {group.industryTags.slice(0, 3).map((tag) => <span key={tag}>{tag}</span>)}
                                 {group.companyScale && <span>{group.companyScale}</span>}
                               </div>
@@ -1853,8 +1908,29 @@ export function RecruitmentTracker({
                     <span>3</span>
                     <div><strong>公司资料与共享</strong><small>公开时仅向所选小组成员展示</small></div>
                   </div>
+                  <label>
+                    <span>单位性质（大类）</span>
+                    <select
+                      value={form.companyNature}
+                      onChange={(event) => setForm((current) => ({ ...current, companyNature: event.target.value, companySubtype: "" }))}
+                    >
+                      <option value="">暂不填写</option>
+                      {COMPANY_NATURE_OPTIONS.map(({ value }) => <option key={value} value={value}>{value}</option>)}
+                    </select>
+                  </label>
+                  {form.companyNature && (
+                    <label>
+                      <span>单位细分</span>
+                      <select value={form.companySubtype} onChange={(event) => updateFormField("companySubtype", event.target.value)}>
+                        <option value="">暂不填写</option>
+                        {(COMPANY_NATURE_OPTIONS.find((option) => option.value === form.companyNature)?.subtypes ?? []).map((subtype) => (
+                          <option key={subtype} value={subtype}>{subtype}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
                   <label className="full-width">
-                    <span>行业标签</span>
+                    <span>行业方向</span>
                     <div className="tag-selector">
                       {INDUSTRY_OPTIONS.map((tag: string) => (
                         <button
@@ -2071,8 +2147,32 @@ export function RecruitmentTracker({
                         {companyScaleOptions.map((scale) => <option key={scale} value={scale}>{scale}</option>)}
                       </select>
                     </label>
+                    <label>
+                      <span>单位性质（大类）</span>
+                      <select
+                        value={companyForm.companyNature}
+                        onChange={(event) => setCompanyForm((current) => ({ ...current, companyNature: event.target.value, companySubtype: "" }))}
+                      >
+                        <option value="">暂不填写</option>
+                        {COMPANY_NATURE_OPTIONS.map(({ value }) => <option key={value} value={value}>{value}</option>)}
+                      </select>
+                    </label>
+                    {companyForm.companyNature && (
+                      <label>
+                        <span>单位细分</span>
+                        <select
+                          value={companyForm.companySubtype}
+                          onChange={(event) => setCompanyForm((current) => ({ ...current, companySubtype: event.target.value }))}
+                        >
+                          <option value="">暂不填写</option>
+                          {(COMPANY_NATURE_OPTIONS.find((option) => option.value === companyForm.companyNature)?.subtypes ?? []).map((subtype) => (
+                            <option key={subtype} value={subtype}>{subtype}</option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
                     <label className="full-width">
-                      <span>行业标签</span>
+                      <span>行业方向</span>
                       <div className="tag-selector">
                         {INDUSTRY_OPTIONS.map((tag) => (
                           <button

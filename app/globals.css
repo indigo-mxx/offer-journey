@@ -337,6 +337,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .company-merge-name .company-link { font-family: "STSong","SimSun",serif; font-size: 16px; text-align: left; }
 .company-merge-meta { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
 .company-merge-meta span { padding: 3px 6px; border-radius: 999px; background: var(--brand-soft); color: var(--brand); font-size: 9px; }
+.company-merge-meta .company-nature-tag { background: #153f35; color: #fff; font-weight: 700; }
+.company-merge-meta .company-subtype-tag { background: #e9f2ea; color: #27634f; font-weight: 650; }
 .position-count {
   width: auto;
   min-width: 92px;
