@@ -21,6 +21,33 @@ function visibility(value: unknown): Visibility {
   return value === "progress" || value === "full" ? value : "private";
 }
 
+const FINAL_OUTCOME_PREFIX = "【最终结果】";
+const REJECTION_REASON_PREFIX = "【拒绝原因】";
+
+function resolutionFromNote(value: string) {
+  const finalOutcome = value.match(/【最终结果】([^\n]*)/)?.[1]?.trim() ?? "";
+  const rejectionReason = value.match(/【拒绝原因】([^\n]*)/)?.[1]?.trim() ?? "";
+  const note = value
+    .replace(/【最终结果】[^\n]*\n?/g, "")
+    .replace(/【拒绝原因】[^\n]*\n?/g, "")
+    .trim();
+  return { finalOutcome, rejectionReason, note };
+}
+
+function noteWithResolution(note: unknown, status: string, finalOutcome: unknown, rejectionReason: unknown) {
+  const cleanNote = textValue(note, 3000)
+    .replace(/【最终结果】[^\n]*\n?/g, "")
+    .replace(/【拒绝原因】[^\n]*\n?/g, "")
+    .trim();
+  const result = status === "流程结束" ? textValue(finalOutcome, 80) : "";
+  const reason = status === "已拒绝" ? textValue(rejectionReason, 200) : "";
+  return [
+    result ? `${FINAL_OUTCOME_PREFIX}${result}` : "",
+    reason ? `${REJECTION_REASON_PREFIX}${reason}` : "",
+    cleanNote,
+  ].filter(Boolean).join("\n");
+}
+
 function accessToken(request: Request) {
   const header = request.headers.get("authorization") ?? "";
   return header.startsWith("Bearer ") ? header.slice(7) : "";
@@ -108,6 +135,7 @@ export async function GET(request: Request) {
   const applications = (rows ?? []).map((row) => {
     const isOwner = row.owner_id === user.id;
     const progressOnly = !isOwner && row.visibility === "progress";
+    const resolution = progressOnly ? { finalOutcome: "", rejectionReason: "", note: "" } : resolutionFromNote(row.note ?? "");
     return {
       id: row.id,
       ownerEmail: profileMap.get(row.owner_id)?.email ?? "",
@@ -126,7 +154,9 @@ export async function GET(request: Request) {
       channel: progressOnly ? "" : row.channel,
       link: progressOnly ? "" : row.link,
       salary: progressOnly ? "" : row.salary,
-      note: progressOnly ? "" : row.note,
+      note: resolution.note,
+      finalOutcome: resolution.finalOutcome,
+      rejectionReason: resolution.rejectionReason,
       updatedAt: row.updated_at,
     };
   });
@@ -186,14 +216,15 @@ export async function POST(request: Request) {
           channel: textValue(value.channel, 100),
           link: textValue(value.link, 1000),
           salary: textValue(value.salary, 100),
-          note: textValue(value.note, 3000),
+          note: noteWithResolution(value.note, textValue(value.status, 40) || "准备投递", value.finalOutcome, value.rejectionReason),
         };
       });
       if (payload.some((item) => !item.company || !item.position)) return json({ error: "公司和岗位不能为空" }, 400);
       const { error } = await supabase.from("applications").upsert(payload, { onConflict: "id" });
       if (error) return json({ error: error.message }, 400);
     } else if (action === "updateStatus") {
-      const { error } = await supabase.from("applications").update({ status: textValue(body.status, 40) }).eq("id", textValue(body.id, 80)).eq("owner_id", user.id);
+      const status = textValue(body.status, 40);
+      const { error } = await supabase.from("applications").update({ status, note: noteWithResolution(body.note, status, body.finalOutcome, body.rejectionReason) }).eq("id", textValue(body.id, 80)).eq("owner_id", user.id);
       if (error) return json({ error: error.message }, 400);
     } else if (action === "deleteApplication") {
       const { error } = await supabase.from("applications").delete().eq("id", textValue(body.id, 80)).eq("owner_id", user.id);

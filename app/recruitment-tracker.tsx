@@ -27,6 +27,8 @@ interface FormState {
   link: string;
   salary: string;
   note: string;
+  finalOutcome: string;
+  rejectionReason: string;
   visibility: Visibility;
   groupId: string;
   industryTags: string[];
@@ -92,6 +94,9 @@ const COMPANY_SCALE_OPTIONS = [
   "未知", "1-50人", "51-200人", "201-500人", "501-2000人", "2001-10000人", "10000+人",
 ];
 
+const FINAL_OUTCOME_OPTIONS = ["简历挂", "笔试挂", "一面挂", "二面挂", "终面挂", "HR 面挂", "薪资不满足", "岗位关闭", "主动终止", "其他"];
+const REJECTION_REASON_OPTIONS = ["薪资不满足", "岗位 / 方向不匹配", "已接受其他 Offer", "地点或到岗时间不合适", "个人原因", "其他"];
+
 const EMPTY_FORM: FormState = {
   company: "",
   position: "",
@@ -103,6 +108,8 @@ const EMPTY_FORM: FormState = {
   link: "",
   salary: "",
   note: "",
+  finalOutcome: "",
+  rejectionReason: "",
   visibility: "private",
   groupId: "",
   industryTags: [],
@@ -317,6 +324,8 @@ export function RecruitmentTracker({
   const [batchStatus, setBatchStatus] = useState<ApplicationStatus | "">("");
   const [batchVisibility, setBatchVisibility] = useState<Visibility | "">("");
   const [batchGroupId, setBatchGroupId] = useState("");
+  const [batchFinalOutcome, setBatchFinalOutcome] = useState("");
+  const [batchRejectionReason, setBatchRejectionReason] = useState("");
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [isInterviewOpen, setIsInterviewOpen] = useState(false);
   const [editingInterviewId, setEditingInterviewId] = useState<string | null>(null);
@@ -654,6 +663,7 @@ export function RecruitmentTracker({
           bases: [...new Set(apps.map((app) => app.base).filter(Boolean))],
           latestAppliedAt: latest?.appliedAt ?? "",
           statuses: [...new Set(apps.map((app) => app.status))],
+          conclusions: [...new Set(apps.flatMap((app) => [app.finalOutcome, app.rejectionReason]).filter(Boolean))],
           visibilities: [...new Set(apps.map((app) => app.visibility))],
           sharedCount: apps.filter((app) => app.visibility !== "private").length,
         };
@@ -756,15 +766,32 @@ export function RecruitmentTracker({
 
   const updateStatus = useCallback(
     async (id: string, status: ApplicationStatus) => {
+      const current = applications.find((item) => item.id === id);
+      if (!current) return;
       if (user) {
-        const saved = await runCloudMutation("更新面试进度中", { action: "updateStatus", id, status });
+        const saved = await runCloudMutation("更新面试进度中", {
+          action: "updateStatus",
+          id,
+          status,
+          note: current.note,
+          finalOutcome: "",
+          rejectionReason: "",
+        });
         if (!saved) return;
       }
-      setApplications((prev) => prev.map((item) => (item.id === id ? { ...item, status } : item)));
+      setApplications((prev) => prev.map((item) => (item.id === id ? { ...item, status, finalOutcome: "", rejectionReason: "" } : item)));
       setNotice("进度已更新");
     },
-    [user, runCloudMutation],
+    [applications, user, runCloudMutation],
   );
+
+  const chooseStatus = useCallback((item: Application, status: ApplicationStatus) => {
+    if (status === "流程结束" || status === "已拒绝") {
+      openEdit(item, status);
+      return;
+    }
+    void updateStatus(item.id, status);
+  }, [updateStatus]);
 
   const toggleApplicationSelection = useCallback((id: string) => {
     setSelectedApplicationIds((current) => current.includes(id)
@@ -787,6 +814,14 @@ export function RecruitmentTracker({
       setNotice("请选择要批量修改的进度或公开范围");
       return;
     }
+    if (batchStatus === "流程结束" && !batchFinalOutcome) {
+      setNotice("请选择批量流程结束的最终状态");
+      return;
+    }
+    if (batchStatus === "已拒绝" && !batchRejectionReason.trim()) {
+      setNotice("请填写批量拒绝原因");
+      return;
+    }
     const shareGroupId = batchGroupId || defaultGroupId;
     if (batchVisibility && batchVisibility !== "private" && !shareGroupId) {
       setNotice("请先创建或加入小组，再批量共享给搭子");
@@ -799,6 +834,9 @@ export function RecruitmentTracker({
       .map((item) => ({
         ...item,
         ...(batchStatus ? { status: batchStatus } : {}),
+        ...(batchStatus === "流程结束" ? { finalOutcome: batchFinalOutcome, rejectionReason: "" } : {}),
+        ...(batchStatus === "已拒绝" ? { finalOutcome: "", rejectionReason: batchRejectionReason } : {}),
+        ...(batchStatus && !["流程结束", "已拒绝"].includes(batchStatus) ? { finalOutcome: "", rejectionReason: "" } : {}),
         ...(batchVisibility ? {
           visibility: batchVisibility,
           groupId: batchVisibility === "private" ? null : shareGroupId,
@@ -815,8 +853,10 @@ export function RecruitmentTracker({
     setBatchStatus("");
     setBatchVisibility("");
     setBatchGroupId("");
+    setBatchFinalOutcome("");
+    setBatchRejectionReason("");
     setNotice(`已批量更新 ${changed.length} 条投递`);
-  }, [selectedApplicationIds, batchStatus, batchVisibility, batchGroupId, defaultGroupId, ownApplications, user, runCloudMutation]);
+  }, [selectedApplicationIds, batchStatus, batchVisibility, batchGroupId, batchFinalOutcome, batchRejectionReason, defaultGroupId, ownApplications, user, runCloudMutation]);
 
   const addInterview = useCallback(
     async (item: Interview) => {
@@ -982,6 +1022,8 @@ export function RecruitmentTracker({
         link: source.link ?? "",
         salary: source.salary ?? "",
         note: source.note ?? "",
+        finalOutcome: "",
+        rejectionReason: "",
         visibility: source.visibility,
         groupId: source.groupId ?? defaultGroupId,
         industryTags: source.industryTags ?? [],
@@ -994,7 +1036,7 @@ export function RecruitmentTracker({
     setIsFormOpen(true);
   }
 
-  function openEdit(item: Application) {
+  function openEdit(item: Application, status = item.status) {
     setSelectedCompany(null);
     setBatchPositions([{ position: item.position, base: item.base ?? "" }]);
     setForm({
@@ -1003,11 +1045,13 @@ export function RecruitmentTracker({
       base: item.base ?? "",
       batch: item.batch,
       appliedAt: item.appliedAt,
-      status: item.status,
+      status,
       channel: item.channel ?? "",
       link: item.link ?? "",
       salary: item.salary ?? "",
       note: item.note ?? "",
+      finalOutcome: item.finalOutcome ?? "",
+      rejectionReason: item.rejectionReason ?? "",
       visibility: item.visibility,
       groupId: item.groupId ?? defaultGroupId,
       industryTags: item.industryTags ?? [],
@@ -1038,6 +1082,14 @@ export function RecruitmentTracker({
       setNotice("公司和岗位不能为空");
       return;
     }
+    if (form.status === "流程结束" && !form.finalOutcome) {
+      setNotice("请选择流程最终走到的状态");
+      return;
+    }
+    if (form.status === "已拒绝" && !form.rejectionReason.trim()) {
+      setNotice("请填写拒绝原因");
+      return;
+    }
     const shareGroupId = form.groupId || defaultGroupId;
     if (form.visibility !== "private" && !shareGroupId) {
       setNotice("请先创建或加入小组，再设置共享范围");
@@ -1056,6 +1108,8 @@ export function RecruitmentTracker({
         link: form.link,
         salary: form.salary,
         note: form.note,
+        finalOutcome: form.finalOutcome,
+        rejectionReason: form.rejectionReason,
         visibility: form.visibility,
         groupId: form.visibility === "private" ? null : shareGroupId,
         industryTags: form.industryTags,
@@ -1075,6 +1129,8 @@ export function RecruitmentTracker({
           link: form.link,
           salary: form.salary,
           note: form.note,
+          finalOutcome: form.finalOutcome,
+          rejectionReason: form.rejectionReason,
           visibility: form.visibility,
           groupId: form.visibility === "private" ? null : shareGroupId,
           industryTags: form.industryTags,
@@ -1206,6 +1262,9 @@ export function RecruitmentTracker({
       </datalist>
       <datalist id="platform-options">
         {platformOptions.map((option) => <option key={option} value={option} />)}
+      </datalist>
+      <datalist id="rejection-reason-options">
+        {REJECTION_REASON_OPTIONS.map((option) => <option key={option} value={option} />)}
       </datalist>
       {showProcessingHint && pendingAction && (
         <div className="processing-overlay" role="status" aria-live="polite" aria-busy="true">
@@ -1412,6 +1471,21 @@ export function RecruitmentTracker({
                     {STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
                   </select>
                 </label>
+                {batchStatus === "流程结束" && (
+                  <label>
+                    <span>最终状态</span>
+                    <select value={batchFinalOutcome} onChange={(e) => setBatchFinalOutcome(e.target.value)}>
+                      <option value="">请选择</option>
+                      {FINAL_OUTCOME_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                    </select>
+                  </label>
+                )}
+                {batchStatus === "已拒绝" && (
+                  <label>
+                    <span>拒绝原因</span>
+                    <input list="rejection-reason-options" value={batchRejectionReason} onChange={(e) => setBatchRejectionReason(e.target.value)} placeholder="填写或选择原因" />
+                  </label>
+                )}
                 <label>
                   <span>批量公开</span>
                   <select value={batchVisibility} onChange={(e) => setBatchVisibility(e.target.value as Visibility | "")}>
@@ -1503,6 +1577,7 @@ export function RecruitmentTracker({
                               <div className="company-status-summary">
                                 {group.statuses.slice(0, 3).map((status) => <span key={status} className={`status-badge ${statusTone(status)}`}>{status}</span>)}
                                 {group.statuses.length > 3 && <span className="cell-muted">+{group.statuses.length - 3}</span>}
+                                {group.conclusions.slice(0, 2).map((conclusion) => <span key={conclusion} className="company-conclusion">{conclusion}</span>)}
                               </div>
                             </td>
                             <td data-label="公开状态">
@@ -1572,16 +1647,19 @@ export function RecruitmentTracker({
                           <td className="cell-muted">{item.base || "—"}</td>
                           <td><span className="batch-tag">{item.batch}</span></td>
                           <td className="cell-muted">{formatDate(item.appliedAt)}</td>
-                          <td>{view === "mine" ? (
+                          <td><div className="status-result-cell">{view === "mine" ? (
                             <select
                               className={`status-select ${statusTone(item.status)}`}
                               value={item.status}
-                              onChange={(e) => updateStatus(item.id, e.target.value as ApplicationStatus)}
+                              onChange={(e) => chooseStatus(item, e.target.value as ApplicationStatus)}
                               disabled={busy}
                             >
                               {STATUSES.map((s) => <option key={s}>{s}</option>)}
                             </select>
-                          ) : <span className={`status-badge ${statusTone(item.status)}`}>{item.status}</span>}</td>
+                          ) : <span className={`status-badge ${statusTone(item.status)}`}>{item.status}</span>}
+                            {item.finalOutcome && <small>最终：{item.finalOutcome}</small>}
+                            {item.rejectionReason && <small>原因：{item.rejectionReason}</small>}
+                          </div></td>
                           <td className="cell-actions">
                             {view === "mine" && (
                               <div className="action-buttons">
@@ -1726,6 +1804,21 @@ export function RecruitmentTracker({
                       {STATUSES.map((s) => <option key={s}>{s}</option>)}
                     </select>
                   </label>
+                  {form.status === "流程结束" && (
+                    <label>
+                      <span>最终走到哪一步 *</span>
+                      <select value={form.finalOutcome} onChange={(e) => updateFormField("finalOutcome", e.target.value)} required>
+                        <option value="">请选择最终状态</option>
+                        {FINAL_OUTCOME_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                      </select>
+                    </label>
+                  )}
+                  {form.status === "已拒绝" && (
+                    <label className="full-width">
+                      <span>拒绝原因 *</span>
+                      <input list="rejection-reason-options" value={form.rejectionReason} onChange={(e) => updateFormField("rejectionReason", e.target.value)} placeholder="例如：薪资不满足、已接受其他 Offer" required />
+                    </label>
+                  )}
                   <label>
                     <span>投递渠道（可选或自定义）</span>
                     <input list="platform-options" value={form.channel} onChange={(e) => updateFormField("channel", e.target.value)} placeholder="选择官网、内推或招聘平台" />
@@ -2050,6 +2143,21 @@ export function RecruitmentTracker({
                       {STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
                     </select>
                   </label>
+                  {batchStatus === "流程结束" && (
+                    <label>
+                      <span>最终状态</span>
+                      <select value={batchFinalOutcome} onChange={(e) => setBatchFinalOutcome(e.target.value)}>
+                        <option value="">请选择</option>
+                        {FINAL_OUTCOME_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                      </select>
+                    </label>
+                  )}
+                  {batchStatus === "已拒绝" && (
+                    <label>
+                      <span>拒绝原因</span>
+                      <input list="rejection-reason-options" value={batchRejectionReason} onChange={(e) => setBatchRejectionReason(e.target.value)} placeholder="填写或选择原因" />
+                    </label>
+                  )}
                   <label>
                     <span>批量公开</span>
                     <select value={batchVisibility} onChange={(e) => setBatchVisibility(e.target.value as Visibility | "")}>
@@ -2100,16 +2208,19 @@ export function RecruitmentTracker({
                       <td className="cell-muted">{item.base || "—"}</td>
                       <td><span className="batch-tag">{item.batch}</span></td>
                       <td className="cell-muted">{formatDate(item.appliedAt)}</td>
-                      <td>{view === "mine" ? (
+                      <td><div className="status-result-cell">{view === "mine" ? (
                         <select
                           className={`status-select ${statusTone(item.status)}`}
                           value={item.status}
-                          onChange={(e) => updateStatus(item.id, e.target.value as ApplicationStatus)}
+                          onChange={(e) => chooseStatus(item, e.target.value as ApplicationStatus)}
                           disabled={busy}
                         >
                           {STATUSES.map((s) => <option key={s}>{s}</option>)}
                         </select>
-                      ) : <span className={`status-badge ${statusTone(item.status)}`}>{item.status}</span>}</td>
+                      ) : <span className={`status-badge ${statusTone(item.status)}`}>{item.status}</span>}
+                        {item.finalOutcome && <small>最终：{item.finalOutcome}</small>}
+                        {item.rejectionReason && <small>原因：{item.rejectionReason}</small>}
+                      </div></td>
                       <td className="cell-actions">
                         {view === "mine" && <div className="action-buttons">
                           <button className="action-btn" onClick={() => openEdit(item)} title="编辑岗位信息">编辑岗位</button>

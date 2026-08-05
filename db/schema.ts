@@ -36,6 +36,8 @@ export type Application = {
   link: string;
   salary: string;
   note: string;
+  finalOutcome?: string;
+  rejectionReason?: string;
   visibility: Visibility;
   createdAt?: string;
   updatedAt: string;
