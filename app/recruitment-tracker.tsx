@@ -68,6 +68,9 @@ function ModalPortal({ children }: { children: ReactNode }) {
 
 // ──────────────────────────────────────────────── constants
 const STATUSES: ApplicationStatus[] = ["简历投递", "简历筛选", "笔试", "一面", "二面", "终面", "HR面", "Offer", "已拒绝", "流程结束"];
+const INTERVIEW_STATUSES: ApplicationStatus[] = ["一面", "二面", "终面", "HR面"];
+const CLOSED_STATUSES: ApplicationStatus[] = ["已拒绝", "流程结束"];
+const QUICK_STATUS_FILTERS = ["全部状态", "简历投递", "笔试", "面试进行中", "Offer", "流程已结束"];
 
 const BATCHES = ["秋招", "提前批", "日常实习", "其他"];
 
@@ -91,7 +94,7 @@ const INDUSTRY_OPTIONS = [
   "半导体", "具身智能", "智能驾驶", "软件", "游戏", "汽车", "机器人", "AI / 大模型",
   "互联网 / 平台", "互联网/电商", "硬件 / 消费电子", "通信", "金融科技", "金融/银行",
   "生物医药", "医疗健康", "化工", "能源电力", "制造业", "快消/零售", "咨询/四大",
-  "地产/建筑", "教育", "国企/央企", "事业单位", "研究院", "外企", "创业公司", "其他",
+  "地产/建筑", "教育", "研究院", "公共服务", "其他",
 ];
 
 const COMPANY_SCALE_OPTIONS = [
@@ -100,12 +103,18 @@ const COMPANY_SCALE_OPTIONS = [
 
 const COMPANY_NATURE_PREFIX = "单位性质：";
 const COMPANY_SUBTYPE_PREFIX = "单位细分：";
+const LEGACY_COMPANY_NATURE_TAGS = new Map([
+  ["国企/央企", "国企"],
+  ["事业单位", "事业单位"],
+  ["外企", "外企"],
+  ["创业公司", "私企"],
+]);
 const COMPANY_NATURE_OPTIONS = [
-  { value: "国企", subtypes: ["中央企业", "地方国企", "国有银行 / 金融", "国有高校 / 研究院"] },
-  { value: "民企", subtypes: ["大型民企", "上市民企", "创业公司", "民营金融"] },
-  { value: "外企", subtypes: ["跨国企业", "外资研发中心", "合资企业"] },
-  { value: "事业单位", subtypes: ["高校", "科研院所", "医院", "公共服务机构"] },
-  { value: "行政单位", subtypes: ["党政机关", "公务员岗位", "街道 / 基层单位"] },
+  { value: "国企", subtypes: ["央企总部", "央企子公司", "地方国企", "国有金融机构"] },
+  { value: "私企", subtypes: ["上市公司", "大型民企", "成长型公司", "初创公司"] },
+  { value: "外企", subtypes: ["欧美外企", "日韩外企", "外资研发中心", "合资企业"] },
+  { value: "事业单位", subtypes: ["高校", "科研院所", "公立医院", "其他事业单位"] },
+  { value: "行政单位", subtypes: ["中央机关", "地方机关", "基层机关", "参公单位"] },
   { value: "其他", subtypes: ["社会组织", "国际组织", "其他单位"] },
 ];
 
@@ -169,13 +178,22 @@ function companyKey(value: string) {
 }
 
 function companyClassification(tags: string[] = []) {
-  const companyNature = tags.find((tag) => tag.startsWith(COMPANY_NATURE_PREFIX))?.slice(COMPANY_NATURE_PREFIX.length) ?? "";
+  const storedNature = tags.find((tag) => tag.startsWith(COMPANY_NATURE_PREFIX))?.slice(COMPANY_NATURE_PREFIX.length) ?? "";
+  const legacyNature = tags.map((tag) => LEGACY_COMPANY_NATURE_TAGS.get(tag)).find(Boolean) ?? "";
+  const companyNature = storedNature === "民企" ? "私企" : storedNature || legacyNature;
   const companySubtype = tags.find((tag) => tag.startsWith(COMPANY_SUBTYPE_PREFIX))?.slice(COMPANY_SUBTYPE_PREFIX.length) ?? "";
   return { companyNature, companySubtype };
 }
 
+function matchesStatusFilter(status: ApplicationStatus, filter: string) {
+  if (filter === "全部状态") return true;
+  if (filter === "面试进行中") return INTERVIEW_STATUSES.includes(status);
+  if (filter === "流程已结束") return CLOSED_STATUSES.includes(status);
+  return status === filter;
+}
+
 function industryOnly(tags: string[] = []) {
-  return tags.filter((tag) => !tag.startsWith(COMPANY_NATURE_PREFIX) && !tag.startsWith(COMPANY_SUBTYPE_PREFIX));
+  return tags.filter((tag) => !tag.startsWith(COMPANY_NATURE_PREFIX) && !tag.startsWith(COMPANY_SUBTYPE_PREFIX) && !LEGACY_COMPANY_NATURE_TAGS.has(tag));
 }
 
 function tagsWithClassification(companyNature: string, companySubtype: string, industryTags: string[]) {
@@ -346,10 +364,12 @@ export function RecruitmentTracker({
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("全部状态");
   const [batchFilter, setBatchFilter] = useState("全部批次");
+  const [companyNatureFilter, setCompanyNatureFilter] = useState("全部单位性质");
   const [industryFilter, setIndustryFilter] = useState("全部行业方向");
   const [scaleFilter, setScaleFilter] = useState("全部规模");
   const [positionFilter, setPositionFilter] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
@@ -610,6 +630,14 @@ export function RecruitmentTracker({
     [applications],
   );
 
+  const companyNatureOptions = useMemo(
+    () => [...new Set([
+      ...COMPANY_NATURE_OPTIONS.map((option) => option.value),
+      ...applications.map((item) => companyClassification(item.industryTags ?? []).companyNature).filter(Boolean),
+    ])],
+    [applications],
+  );
+
   const companyScaleOptions = useMemo(
     () => [...new Set([...COMPANY_SCALE_OPTIONS, ...applications.map((item) => item.companyScale).filter(Boolean)])],
     [applications],
@@ -643,11 +671,14 @@ export function RecruitmentTracker({
           item.company.toLocaleLowerCase().includes(q) ||
           item.position.toLocaleLowerCase().includes(q) ||
           (item.base ?? "").toLocaleLowerCase().includes(q) ||
-          (item.note ?? "").toLocaleLowerCase().includes(q),
+          (item.note ?? "").toLocaleLowerCase().includes(q) ||
+          (item.channel ?? "").toLocaleLowerCase().includes(q) ||
+          (item.industryTags ?? []).join(" ").toLocaleLowerCase().includes(q),
       );
     }
-    if (statusFilter !== "全部状态") items = items.filter((item) => item.status === statusFilter);
+    if (statusFilter !== "全部状态") items = items.filter((item) => matchesStatusFilter(item.status, statusFilter));
     if (batchFilter !== "全部批次") items = items.filter((item) => item.batch === batchFilter);
+    if (companyNatureFilter !== "全部单位性质") items = items.filter((item) => companyClassification(item.industryTags ?? []).companyNature === companyNatureFilter);
     if (industryFilter !== "全部行业方向") items = items.filter((item) => industryOnly(item.industryTags ?? []).includes(industryFilter));
     if (scaleFilter !== "全部规模") items = items.filter((item) => item.companyScale === scaleFilter);
     if (positionFilter) items = items.filter((item) => item.position.toLocaleLowerCase().includes(positionFilter.toLocaleLowerCase()));
@@ -656,7 +687,23 @@ export function RecruitmentTracker({
       const result = compareApplications(a, b, sortKey);
       return sortDirection === "asc" ? result : -result;
     });
-  }, [query, statusFilter, batchFilter, industryFilter, scaleFilter, positionFilter, locationFilter, view, ownApplications, friendApplications, sortKey, sortDirection]);
+  }, [query, statusFilter, batchFilter, companyNatureFilter, industryFilter, scaleFilter, positionFilter, locationFilter, view, ownApplications, friendApplications, sortKey, sortDirection]);
+
+  const activeFilterCount = useMemo(() => [
+    query.trim(),
+    statusFilter !== "全部状态",
+    batchFilter !== "全部批次",
+    companyNatureFilter !== "全部单位性质",
+    industryFilter !== "全部行业方向",
+    scaleFilter !== "全部规模",
+    positionFilter.trim(),
+    locationFilter.trim(),
+  ].filter(Boolean).length, [query, statusFilter, batchFilter, companyNatureFilter, industryFilter, scaleFilter, positionFilter, locationFilter]);
+
+  const quickStatusCounts = useMemo(() => {
+    const source = view === "friends" ? friendApplications : ownApplications;
+    return new Map(QUICK_STATUS_FILTERS.map((filter) => [filter, source.filter((item) => matchesStatusFilter(item.status, filter)).length]));
+  }, [view, ownApplications, friendApplications]);
 
   const filteredIds = useMemo(() => filtered.map((item) => item.id), [filtered]);
   const selectedFilteredCount = useMemo(
@@ -1040,10 +1087,12 @@ export function RecruitmentTracker({
     setQuery("");
     setStatusFilter("全部状态");
     setBatchFilter("全部批次");
+    setCompanyNatureFilter("全部单位性质");
     setIndustryFilter("全部行业方向");
     setScaleFilter("全部规模");
     setPositionFilter("");
     setLocationFilter("");
+    setFiltersExpanded(false);
   }, []);
 
   // ────────────────────────────────── form
@@ -1435,7 +1484,7 @@ export function RecruitmentTracker({
                   <input
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="搜索公司、岗位、地点、备注…"
+                    placeholder="搜索公司、岗位、地点、标签、渠道…"
                     className="search-input"
                   />
                 </div>
@@ -1447,7 +1496,10 @@ export function RecruitmentTracker({
                   ) : (
                     <span className="readonly-note">好友进度仅供查看</span>
                   )}
-                  <span className="display-mode-label">按公司查看</span>
+                  <div className="display-switch" aria-label="清单显示方式">
+                    <button type="button" className={companyView ? "active" : ""} aria-pressed={companyView} onClick={() => setCompanyView(true)}>公司合并</button>
+                    <button type="button" className={!companyView ? "active" : ""} aria-pressed={!companyView} onClick={() => setCompanyView(false)}>岗位明细</button>
+                  </div>
                   {view === "mine" && (
                     <>
                       <button className="secondary-button batch-select-button" onClick={toggleFilteredSelection} disabled={filteredIds.length === 0}>
@@ -1460,7 +1512,34 @@ export function RecruitmentTracker({
                   )}
                 </div>
               </div>
-              <div className="filter-row">
+              <div className="quick-filter-row">
+                <div className="quick-status-list" aria-label="快捷进度筛选">
+                  {QUICK_STATUS_FILTERS.map((filter) => (
+                    <button
+                      type="button"
+                      key={filter}
+                      className={statusFilter === filter ? "active" : ""}
+                      aria-pressed={statusFilter === filter}
+                      onClick={() => setStatusFilter(filter)}
+                    >
+                      {filter === "全部状态" ? "全部" : filter}
+                      <span>{quickStatusCounts.get(filter) ?? 0}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="filter-overview">
+                  <span><strong>{companyGrouped.length}</strong> 家公司 · <strong>{filtered.length}</strong> 个岗位</span>
+                  <button
+                    type="button"
+                    className={`filter-toggle ${filtersExpanded ? "active" : ""}`}
+                    aria-expanded={filtersExpanded}
+                    onClick={() => setFiltersExpanded((expanded) => !expanded)}
+                  >
+                    {filtersExpanded ? "收起筛选" : "更多筛选"}{activeFilterCount > 0 && <b>{activeFilterCount}</b>}
+                  </button>
+                </div>
+              </div>
+              {filtersExpanded && <div className="filter-row">
                 <label className="sort-control">
                   <span>排序</span>
                   <select value={sortKey} onChange={(e) => {
@@ -1483,11 +1562,17 @@ export function RecruitmentTracker({
                 </label>
                 <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                   <option>全部状态</option>
+                  <option>面试进行中</option>
+                  <option>流程已结束</option>
                   {STATUSES.map((s) => <option key={s}>{s}</option>)}
                 </select>
                 <select value={batchFilter} onChange={(e) => setBatchFilter(e.target.value)}>
                   <option>全部批次</option>
                   {BATCHES.map((b) => <option key={b}>{b}</option>)}
+                </select>
+                <select value={companyNatureFilter} onChange={(e) => setCompanyNatureFilter(e.target.value)}>
+                  <option>全部单位性质</option>
+                  {companyNatureOptions.map((nature) => <option key={nature}>{nature}</option>)}
                 </select>
                 <select value={industryFilter} onChange={(e) => setIndustryFilter(e.target.value)}>
                   <option>全部行业方向</option>
@@ -1499,8 +1584,8 @@ export function RecruitmentTracker({
                 </select>
                 <input value={positionFilter} onChange={(e) => setPositionFilter(e.target.value)} placeholder="岗位筛选" />
                 <input value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} placeholder="输入地点筛选" />
-                <button className="secondary-button" onClick={clearFilters}>清除筛选</button>
-              </div>
+                {activeFilterCount > 0 && <button className="secondary-button" onClick={clearFilters}>清除全部</button>}
+              </div>}
             </div>
 
             {view === "mine" && selectedApplicationIds.length > 0 && (
@@ -1561,8 +1646,12 @@ export function RecruitmentTracker({
               <div className="company-view">
                 {companyGrouped.length === 0 ? (
                   <div className="empty-state">
-                    <p>暂无投递记录</p>
-                    {view === "mine" && <button className="primary-button" onClick={() => openCreate()}>添加第一条投递</button>}
+                    <span>{activeFilterCount > 0 ? "⌕" : "＋"}</span>
+                    <h3>{activeFilterCount > 0 ? "没有符合条件的记录" : "还没有投递记录"}</h3>
+                    <p>{activeFilterCount > 0 ? "换个筛选条件，已有数据不会受影响。" : "从第一家公司和岗位开始整理你的秋招进度。"}</p>
+                    {activeFilterCount > 0
+                      ? <button className="secondary-button" onClick={clearFilters}>清除全部筛选</button>
+                      : view === "mine" && <button className="primary-button" onClick={() => openCreate()}>添加第一条投递</button>}
                   </div>
                 ) : (
                   <div className="table-wrap">
@@ -1597,12 +1686,12 @@ export function RecruitmentTracker({
                               <button className="company-link" onClick={() => openCompany(group.company)}>
                                 {group.company}
                               </button>
-                              <div className="company-merge-meta">
-                                {group.companyNature && <span className="company-nature-tag">{group.companyNature}</span>}
-                                {group.companySubtype && <span className="company-subtype-tag">{group.companySubtype}</span>}
-                                {group.industryTags.slice(0, 2).map((tag) => <span key={tag}>{tag}</span>)}
-                                {group.companyScale && <span>{group.companyScale}</span>}
-                              </div>
+                              {(group.companyNature || group.companySubtype) && (
+                                <div className="company-merge-meta">
+                                  {group.companyNature && <span className="company-nature-tag">{group.companyNature}</span>}
+                                  {group.companySubtype && <span className="company-subtype-tag">{group.companySubtype}</span>}
+                                </div>
+                              )}
                             </td>
                             <td data-label="岗位">
                               <button className="position-count" onClick={() => openCompany(group.company)}>
@@ -1612,8 +1701,6 @@ export function RecruitmentTracker({
                             </td>
                             <td data-label="行业 / 规模">
                               <div className="company-merge-meta">
-                                {group.companyNature && <span className="company-nature-tag">{group.companyNature}</span>}
-                                {group.companySubtype && <span className="company-subtype-tag">{group.companySubtype}</span>}
                                 {group.industryTags.slice(0, 3).map((tag) => <span key={tag}>{tag}</span>)}
                                 {group.companyScale && <span>{group.companyScale}</span>}
                               </div>
@@ -1661,16 +1748,21 @@ export function RecruitmentTracker({
                       <th>批次</th>
                       <th><button className="sort-button" onClick={() => toggleSort("appliedAt")}>投递日期 {sortIndicator("appliedAt")}</button></th>
                       <th><button className="sort-button" onClick={() => toggleSort("status")}>面试进度 {sortIndicator("status")}</button></th>
+                      <th>公开状态</th>
                       <th>操作</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.length === 0 ? (
                         <tr>
-                          <td colSpan={view === "mine" ? 8 : 7} className="empty-row">
+                          <td colSpan={view === "mine" ? 9 : 8} className="empty-row">
                             <div className="empty-state">
-                              <p>暂无投递记录</p>
-                              {view === "mine" && <button className="primary-button" onClick={() => openCreate()}>添加第一条投递</button>}
+                              <span>{activeFilterCount > 0 ? "⌕" : "＋"}</span>
+                              <h3>{activeFilterCount > 0 ? "没有符合条件的记录" : "还没有投递记录"}</h3>
+                              <p>{activeFilterCount > 0 ? "换个筛选条件，已有数据不会受影响。" : "从第一家公司和岗位开始整理你的秋招进度。"}</p>
+                              {activeFilterCount > 0
+                                ? <button className="secondary-button" onClick={clearFilters}>清除全部筛选</button>
+                                : view === "mine" && <button className="primary-button" onClick={() => openCreate()}>添加第一条投递</button>}
                             </div>
                         </td>
                       </tr>
@@ -1687,16 +1779,16 @@ export function RecruitmentTracker({
                               />
                             </td>
                           )}
-                          <td className="cell-company">
+                          <td className="cell-company" data-label="公司">
                             <button className="company-link" onClick={() => openCompany(item.company)}>
                               {item.company}
                             </button>
                           </td>
-                          <td>{item.position}</td>
-                          <td className="cell-muted">{item.base || "—"}</td>
-                          <td><span className="batch-tag">{item.batch}</span></td>
-                          <td className="cell-muted">{formatDate(item.appliedAt)}</td>
-                          <td><div className="status-result-cell">{view === "mine" ? (
+                          <td data-label="岗位">{item.position}</td>
+                          <td className="cell-muted" data-label="地点">{item.base || "—"}</td>
+                          <td data-label="批次"><span className="batch-tag">{item.batch}</span></td>
+                          <td className="cell-muted" data-label="投递日期">{formatDate(item.appliedAt)}</td>
+                          <td data-label="面试进度"><div className="status-result-cell">{view === "mine" ? (
                             <select
                               className={`status-select ${statusTone(item.status)}`}
                               value={item.status}
@@ -1709,13 +1801,14 @@ export function RecruitmentTracker({
                             {item.finalOutcome && <small>最终：{item.finalOutcome}</small>}
                             {item.rejectionReason && <small>原因：{item.rejectionReason}</small>}
                           </div></td>
-                          <td className="cell-actions">
+                          <td data-label="公开状态"><span className={`privacy-tag ${item.visibility}`}>{visibilityLabel(item.visibility)}</span></td>
+                          <td className="cell-actions" data-label="操作">
                             {view === "mine" && (
                               <div className="action-buttons">
                                 <button className="action-btn" onClick={() => openEdit(item)} title="编辑岗位信息">编辑岗位</button>
                                 <button className="action-btn" onClick={() => openCreate(item)} title="复制创建同公司新岗位">复制</button>
-                                <button className="action-btn" onClick={() => openInterviewCreate(item.id)} title="添加面试">+面</button>
-                                <button className="action-btn danger" onClick={() => removeApplication(item)} title="删除">✕</button>
+                                <button className="action-btn" onClick={() => openInterviewCreate(item.id)} title="添加面试">添加面试</button>
+                                <button className="action-btn danger" onClick={() => removeApplication(item)} title="删除">删除</button>
                               </div>
                             )}
                           </td>
