@@ -380,6 +380,169 @@ function SharingPanel({
 }
 
 // ──────────────────────────────────────────────── main component
+type DashboardRange = "all" | "30" | "90";
+
+function DashboardPanel({
+  applications,
+  range,
+  onRangeChange,
+  onOpenApplications,
+}: {
+  applications: Application[];
+  range: DashboardRange;
+  onRangeChange: (range: DashboardRange) => void;
+  onOpenApplications: () => void;
+}) {
+  const dashboard = useMemo(() => {
+    const total = applications.length;
+    const percentage = (count: number) => total ? Math.round((count / total) * 100) : 0;
+    const active = applications.filter((item) => ![...CLOSED_STATUSES, "Offer"].includes(item.status)).length;
+    const interview = applications.filter((item) => INTERVIEW_STATUSES.includes(item.status)).length;
+    const offers = applications.filter((item) => item.status === "Offer").length;
+    const progressed = applications.filter((item) => !RESUME_STATUSES.includes(item.status)).length;
+    const companyCount = new Set(applications.map((item) => companyKey(item.company))).size;
+    const sharedCount = applications.filter((item) => item.visibility !== "private").length;
+
+    const rank = (values: string[]) => [...new Map(
+      values.map((value) => value.trim() || "未填写").map((value) => [value, 0]),
+    ).keys()].map((label) => ({
+      label,
+      count: values.filter((value) => (value.trim() || "未填写") === label).length,
+    })).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "zh-CN")).slice(0, 5);
+
+    const sixMonths = Array.from({ length: 6 }, (_, index) => {
+      const date = new Date();
+      date.setDate(1);
+      date.setMonth(date.getMonth() - (5 - index));
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+      return { key, label: `${date.getMonth() + 1}月`, count: applications.filter((item) => item.appliedAt?.startsWith(key)).length };
+    });
+
+    return {
+      total,
+      active,
+      interview,
+      offers,
+      companyCount,
+      sharedCount,
+      responseRate: percentage(progressed),
+      offerRate: percentage(offers),
+      funnel: [
+        { label: "岗位记录", count: total, hint: "全部状态" },
+        { label: "进入笔试", count: applications.filter((item) => item.status === "笔试" || INTERVIEW_STATUSES.includes(item.status) || item.status === "Offer").length, hint: "笔试及后续阶段" },
+        { label: "进入面试", count: applications.filter((item) => INTERVIEW_STATUSES.includes(item.status) || item.status === "Offer").length, hint: "一面至 Offer" },
+        { label: "获得 Offer", count: offers, hint: "录用结果" },
+      ],
+      statuses: KANBAN_COLUMNS.map((column) => ({ label: column.label, count: applications.filter((item) => column.statuses.includes(item.status)).length })),
+      trend: sixMonths,
+      dimensions: {
+        channels: rank(applications.map((item) => item.channel ?? "")),
+        locations: rank(applications.flatMap((item) => (item.base || "未填写").split(/[、,，/]/))),
+        batches: rank(applications.map((item) => item.batch)),
+        industries: rank(applications.flatMap((item) => {
+          const tags = industryOnly(item.industryTags ?? []);
+          return tags.length ? tags : ["未标注"];
+        })),
+        natures: rank(applications.map((item) => companyClassification(item.industryTags ?? []).companyNature || "未标注")),
+        outcomes: rank(applications.filter((item) => CLOSED_STATUSES.includes(item.status)).map((item) => item.finalOutcome || item.rejectionReason || "未注明")),
+      },
+    };
+  }, [applications]);
+
+  const maxTrend = Math.max(...dashboard.trend.map((item) => item.count), 1);
+  const maxFunnel = Math.max(dashboard.total, 1);
+  const renderRanks = (title: string, subtitle: string, items: Array<{ label: string; count: number }>) => (
+    <article className="dashboard-card dashboard-rank-card">
+      <div className="dashboard-card-head"><div><span>{subtitle}</span><h3>{title}</h3></div></div>
+      {items.length ? <div className="dashboard-bar-list">
+        {items.map((item) => (
+          <div className="dashboard-bar-row" key={item.label}>
+            <strong title={item.label}>{item.label}</strong>
+            <div><i style={{ width: `${dashboard.total ? Math.max((item.count / dashboard.total) * 100, 3) : 0}%` }} /></div>
+            <b>{item.count}</b>
+          </div>
+        ))}
+      </div> : <p className="dashboard-empty">暂无可分析的记录</p>}
+    </article>
+  );
+
+  return (
+    <section className="analytics-dashboard" aria-label="投递数据看板">
+      <header className="dashboard-head">
+        <div>
+          <p className="section-kicker">APPLICATION ANALYTICS</p>
+          <h2>投递数据看板</h2>
+          <p>从投递节奏、流程推进和目标覆盖三个角度，查看当前求职进展。</p>
+        </div>
+        <div className="dashboard-actions">
+          <div className="dashboard-range" aria-label="统计时间范围">
+            {(["all", "90", "30"] as DashboardRange[]).map((value) => (
+              <button key={value} type="button" className={range === value ? "active" : ""} onClick={() => onRangeChange(value)}>
+                {value === "all" ? "全部" : `近 ${value} 天`}
+              </button>
+            ))}
+          </div>
+          <button type="button" className="secondary-button dashboard-list-button" onClick={onOpenApplications}>查看投递清单</button>
+        </div>
+      </header>
+
+      {dashboard.total === 0 ? (
+        <div className="dashboard-empty-state"><strong>这个时间范围内还没有投递记录</strong><span>切换统计范围，或回到投递清单新增第一条记录。</span></div>
+      ) : <>
+        <div className="dashboard-kpis">
+          <article><span>岗位投递</span><strong>{dashboard.total}</strong><small>{dashboard.companyCount} 家公司</small></article>
+          <article><span>活跃流程</span><strong>{dashboard.active}</strong><small>仍在持续推进</small></article>
+          <article><span>面试阶段</span><strong>{dashboard.interview}</strong><small>一面至 HR 面</small></article>
+          <article><span>Offer</span><strong>{dashboard.offers}</strong><small>Offer 率 {dashboard.offerRate}%</small></article>
+          <article><span>流程推进率</span><strong>{dashboard.responseRate}%</strong><small>已走出简历阶段</small></article>
+          <article><span>已共享记录</span><strong>{dashboard.sharedCount}</strong><small>可与搭子同步进展</small></article>
+        </div>
+
+        <div className="dashboard-grid dashboard-grid-primary">
+          <article className="dashboard-card dashboard-funnel-card">
+            <div className="dashboard-card-head"><div><span>流程转化</span><h3>从投递到 Offer</h3></div><small>按当前记录状态计算</small></div>
+            <div className="dashboard-funnel-list">
+              {dashboard.funnel.map((step) => (
+                <div className="dashboard-funnel-row" key={step.label}>
+                  <div><strong>{step.label}</strong><small>{step.hint}</small></div>
+                  <div className="dashboard-funnel-track"><i style={{ width: `${Math.max((step.count / maxFunnel) * 100, step.count ? 7 : 0)}%` }} /></div>
+                  <b>{step.count}<small>{dashboard.total ? ` · ${Math.round((step.count / dashboard.total) * 100)}%` : ""}</small></b>
+                </div>
+              ))}
+            </div>
+          </article>
+          <article className="dashboard-card dashboard-status-card">
+            <div className="dashboard-card-head"><div><span>当前分布</span><h3>流程状态</h3></div></div>
+            <div className="dashboard-status-list">
+              {dashboard.statuses.map((item) => (
+                <div key={item.label}><span>{item.label}</span><strong>{item.count}</strong></div>
+              ))}
+            </div>
+          </article>
+        </div>
+
+        <div className="dashboard-grid dashboard-grid-secondary">
+          <article className="dashboard-card dashboard-trend-card">
+            <div className="dashboard-card-head"><div><span>投递节奏</span><h3>近六个月趋势</h3></div><small>按投递日期汇总</small></div>
+            <div className="dashboard-trend-bars">
+              {dashboard.trend.map((item) => <div key={item.key}><strong>{item.count}</strong><i style={{ height: `${Math.max((item.count / maxTrend) * 100, item.count ? 8 : 0)}%` }} /><span>{item.label}</span></div>)}
+            </div>
+          </article>
+          {renderRanks("投递渠道", "来源偏好", dashboard.dimensions.channels)}
+          {renderRanks("目标地点", "地域覆盖", dashboard.dimensions.locations)}
+        </div>
+
+        <div className="dashboard-grid dashboard-grid-tertiary">
+          {renderRanks("投递批次", "计划节奏", dashboard.dimensions.batches)}
+          {renderRanks("行业方向", "目标赛道", dashboard.dimensions.industries)}
+          {renderRanks("单位性质", "组织类型", dashboard.dimensions.natures)}
+          {renderRanks("流程结论", "结束原因", dashboard.dimensions.outcomes)}
+        </div>
+      </>}
+    </section>
+  );
+}
+
 export function RecruitmentTracker({
   user,
   accessToken,
@@ -394,7 +557,8 @@ export function RecruitmentTracker({
   const [ready, setReady] = useState(false);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [showProcessingHint, setShowProcessingHint] = useState(false);
-  const [view, setView] = useState<"mine" | "friends" | "sharing">("mine");
+  const [view, setView] = useState<"mine" | "friends" | "sharing" | "dashboard">("mine");
+  const [dashboardRange, setDashboardRange] = useState<DashboardRange>("all");
   const [listMode, setListMode] = useState<"company" | "position" | "kanban">("company");
   const [sortKey, setSortKey] = useState<SortKey>("appliedAt");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
@@ -663,6 +827,15 @@ export function RecruitmentTracker({
     () => applications.filter((item) => item.isOwner !== false),
     [applications],
   );
+
+  const dashboardApplications = useMemo(() => {
+    if (dashboardRange === "all") return ownApplications;
+    const cutoff = new Date();
+    cutoff.setHours(0, 0, 0, 0);
+    cutoff.setDate(cutoff.getDate() - Number(dashboardRange));
+    const cutoffValue = cutoff.toISOString().slice(0, 10);
+    return ownApplications.filter((item) => item.appliedAt && item.appliedAt >= cutoffValue);
+  }, [dashboardRange, ownApplications]);
 
   const friendApplications = useMemo(
     () => applications.filter((item) => item.isOwner === false),
@@ -1721,6 +1894,12 @@ export function RecruitmentTracker({
             我的投递 <span>{ownApplications.length}</span>
           </button>
           <button
+            className={view === "dashboard" ? "active" : ""}
+            onClick={() => { setView("dashboard"); setSelectedApplicationIds([]); }}
+          >
+            数据看板
+          </button>
+          <button
             className={view === "friends" ? "active" : ""}
             onClick={() => { setView("friends"); setSelectedApplicationIds([]); }}
             disabled={!user}
@@ -1736,7 +1915,14 @@ export function RecruitmentTracker({
           </button>
         </nav>
 
-        {view === "sharing" && user ? (
+        {view === "dashboard" ? (
+          <DashboardPanel
+            applications={dashboardApplications}
+            range={dashboardRange}
+            onRangeChange={setDashboardRange}
+            onOpenApplications={() => setView("mine")}
+          />
+        ) : view === "sharing" && user ? (
           <SharingPanel
             groups={groups}
             activeGroupId={activeGroupId}
