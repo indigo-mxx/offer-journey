@@ -747,6 +747,41 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 .autocomplete-option:hover, .autocomplete-option:focus-visible { background: #eef7f0; }
 .autocomplete-option strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .autocomplete-option small { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.select-field { position: relative; min-width: 0; }
+.select-trigger { width: 100%; min-height: 43px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 10px 0 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); text-align: left; }
+.select-trigger > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.select-trigger > span.placeholder { color: #92978f; }
+.select-trigger i { width: 24px; height: 28px; display: grid; flex: none; place-items: center; border-left: 1px solid #e7ebe6; color: var(--brand); font-size: 17px; font-style: normal; }
+.select-trigger:hover { border-color: #a8c2af; background: #fbfdfb; }
+.select-trigger:disabled { cursor: not-allowed; opacity: .55; }
+.select-popover { position: absolute; top: calc(100% + 6px); right: 0; left: 0; z-index: 20; overflow: hidden; border: 1px solid #bfd3c5; border-radius: 11px; background: rgba(255,253,250,.99); box-shadow: 0 16px 32px rgba(29,55,40,.17); }
+.select-search { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 7px; padding: 9px 10px; border-bottom: 1px solid #e9eee9; color: #78927e; }
+.select-search input { min-width: 0; min-height: 28px !important; padding: 0 !important; border: 0 !important; outline: 0; background: transparent !important; color: var(--ink); font-size: 12px; }
+.select-options { max-height: 236px; overflow-y: auto; }
+.select-options button { width: 100%; display: grid; gap: 2px; padding: 10px 12px; border: 0; border-bottom: 1px solid #eef2ee; background: transparent; color: var(--ink); text-align: left; }
+.select-options button:last-child { border-bottom: 0; }
+.select-options button:hover, .select-options button.selected { background: #edf7ef; }
+.select-options button.selected strong::after { content: "✓"; float: right; color: var(--brand); }
+.select-options strong { font-size: 12px; }
+.select-options small { color: var(--muted); font-size: 10px; }
+.select-empty { margin: 0; padding: 16px 12px; color: var(--muted); font-size: 12px; text-align: center; }
+.filter-row > .select-field { min-width: 132px; }
+.sort-control .select-field { min-width: 126px; }
+.sort-control .select-trigger { min-height: 32px; border: 0; border-radius: 7px; background: rgba(255,255,255,.78); }
+.sort-control .select-trigger i { height: 23px; }
+.batch-action-bar .select-field { min-width: 135px; }
+.batch-action-bar .select-trigger { min-height: 38px; padding-inline: 9px; border-color: #c8d8cc; }
+.batch-action-bar .select-trigger i { height: 25px; }
+.inline-status-editor .select-field { width: 100%; }
+.inline-status-editor .select-trigger { min-height: 34px; padding-inline: 8px; border-color: #d7d8cf; border-radius: 7px; font-size: 11px; }
+.inline-status-editor .select-trigger i { height: 22px; }
+.select-field.status-select { min-width: 100px; max-width: 130px; padding: 0; border: 0; background: transparent; }
+.status-select .select-trigger { min-height: 33px; padding: 0 7px 0 8px; border: 1px solid #d7ddd8; border-radius: 7px; background: #f0f4f1; color: #3d5549; font-size: 12px; font-weight: 700; }
+.status-select .select-trigger i { height: 22px; border-left-color: rgba(61,85,73,.12); }
+.status-select.interview .select-trigger { border-color: #d4ddea; background: #edf2f8; color: #46698f; }
+.status-select.test .select-trigger { border-color: #ead9bc; background: #faf2e5; color: #9a651d; }
+.status-select.offer .select-trigger { border-color: #b9d7c8; background: #e3f2ea; color: #1d7252; }
+.status-select.closed .select-trigger { border-color: #ddd9d7; background: #f0efed; color: #85827e; }
 .choice-field { display: grid; gap: 7px; }
 .choice-field select, .choice-field input { width: 100%; min-height: 40px; border: 1px solid var(--line); border-radius: 8px; background: #fffefa; color: var(--ink); }
 .choice-field select { padding: 0 10px; }
@@ -1167,13 +1202,13 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
   .filter-toggle { flex: none; }
   .batch-action-bar { align-items: stretch; flex-direction: column; }
   .batch-selection-copy { width: 100%; margin: 0; }
-  .batch-action-bar label, .batch-action-bar select { width: 100%; }
+  .batch-action-bar label, .batch-action-bar .select-field { width: 100%; }
   .batch-share-hint { width: 100%; }
   .share-setup-prompt { align-items: flex-start; flex-direction: column; }
   .filter-row { align-items: stretch; padding: 0 13px 13px; }
-  .filter-row > select, .filter-row > input { min-width: calc(50% - 4px); flex: 1; }
+  .filter-row > .select-field, .filter-row > input { min-width: calc(50% - 4px); flex: 1; }
   .sort-control { width: 100%; }
-  .sort-control select { flex: 1; }
+  .sort-control .select-field { flex: 1; }
   .company-view { padding: 0; }
   .kanban-board-wrap { padding: 13px; scroll-snap-type: x proximity; }
   .kanban-board { min-width: max-content; grid-template-columns: repeat(5, 260px); }

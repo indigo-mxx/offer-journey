@@ -384,6 +384,87 @@ function SharingPanel({
 // ──────────────────────────────────────────────── main component
 type DashboardRange = "all" | "30" | "90";
 
+type DropdownOption = { value: string; label: string; hint?: string };
+
+function DropdownSelect({
+  value,
+  options,
+  onChange,
+  placeholder = "请选择",
+  ariaLabel,
+  disabled = false,
+  className = "",
+}: {
+  value: string;
+  options: DropdownOption[];
+  onChange: (value: string) => void;
+  placeholder?: string;
+  ariaLabel: string;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const rootRef = useRef<HTMLDivElement>(null);
+  const selected = options.find((option) => option.value === value);
+  const filteredOptions = options.filter((option) => `${option.label} ${option.hint ?? ""}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutside = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnPageScroll = (event: Event) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest(".select-popover")) return;
+      setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutside, true);
+    window.addEventListener("scroll", closeOnPageScroll, true);
+    window.addEventListener("wheel", closeOnPageScroll, true);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutside, true);
+      window.removeEventListener("scroll", closeOnPageScroll, true);
+      window.removeEventListener("wheel", closeOnPageScroll, true);
+    };
+  }, [open]);
+
+  return (
+    <div className={`select-field ${className}`} ref={rootRef}>
+      <button
+        type="button"
+        className="select-trigger"
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        disabled={disabled}
+        onClick={() => { setQuery(""); setOpen((current) => !current); }}
+      >
+        <span className={selected ? "" : "placeholder"}>{selected?.label ?? placeholder}</span><i aria-hidden="true">⌄</i>
+      </button>
+      {open && (
+        <div className="select-popover" role="listbox" aria-label={ariaLabel}>
+          <label className="select-search"><span>⌕</span><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="输入关键词筛选" /></label>
+          <div className="select-options">
+            {filteredOptions.length ? filteredOptions.map((option) => (
+              <button
+                type="button"
+                key={option.value}
+                className={option.value === value ? "selected" : ""}
+                role="option"
+                aria-selected={option.value === value}
+                onClick={() => { onChange(option.value); setOpen(false); }}
+              >
+                <strong>{option.label}</strong>{option.hint && <small>{option.hint}</small>}
+              </button>
+            )) : <p className="select-empty">没有匹配的选项</p>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DashboardPanel({
   applications,
   range,
@@ -592,6 +673,23 @@ export function RecruitmentTracker({
   const [batchGroupId, setBatchGroupId] = useState("");
   const [batchFinalOutcome, setBatchFinalOutcome] = useState("");
   const [batchRejectionReason, setBatchRejectionReason] = useState("");
+
+  useEffect(() => {
+    const closeAutocompleteOnPageScroll = (event: Event) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest(".autocomplete-menu")) return;
+      setCompanyAutocompleteOpen(false);
+      setPositionAutocompleteIndex(null);
+      setBaseAutocompleteIndex(null);
+      setChannelAutocompleteOpen(false);
+    };
+    window.addEventListener("scroll", closeAutocompleteOnPageScroll, true);
+    window.addEventListener("wheel", closeAutocompleteOnPageScroll, true);
+    return () => {
+      window.removeEventListener("scroll", closeAutocompleteOnPageScroll, true);
+      window.removeEventListener("wheel", closeAutocompleteOnPageScroll, true);
+    };
+  }, []);
   const [inlineStatusEditor, setInlineStatusEditor] = useState<{
     applicationId: string;
     status: "流程结束" | "已拒绝";
@@ -1221,14 +1319,13 @@ export function RecruitmentTracker({
         <div className={`inline-status-editor ${compact ? "compact" : ""}`}>
           <span className={`status-badge ${statusTone(editor.status)}`}>{editor.status}</span>
           {editor.status === "流程结束" ? (
-            <select
+            <DropdownSelect
               value={editor.finalOutcome}
-              onChange={(event) => setInlineStatusEditor((current) => current ? { ...current, finalOutcome: event.target.value } : current)}
-              aria-label="选择流程最终状态"
-            >
-              <option value="">选择最终状态</option>
-              {FINAL_OUTCOME_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-            </select>
+              onChange={(finalOutcome) => setInlineStatusEditor((current) => current ? { ...current, finalOutcome } : current)}
+              options={FINAL_OUTCOME_OPTIONS.map((option) => ({ value: option, label: option }))}
+              placeholder="选择最终状态"
+              ariaLabel="选择流程最终状态"
+            />
           ) : (
             <input
               list="rejection-reason-options"
@@ -1245,17 +1342,14 @@ export function RecruitmentTracker({
         </div>
       );
     }
-    return (
-      <select
-        className={`status-select ${statusTone(item.status)}`}
-        value={item.status}
-        onChange={(event) => chooseStatus(item, event.target.value as ApplicationStatus)}
-        disabled={busy}
-        aria-label={`修改 ${item.company} ${item.position} 的进度`}
-      >
-        {STATUSES.map((status) => <option key={status}>{status}</option>)}
-      </select>
-    );
+    return <DropdownSelect
+      className={`status-select ${statusTone(item.status)}`}
+      value={item.status}
+      onChange={(status) => chooseStatus(item, status as ApplicationStatus)}
+      options={STATUSES.map((status) => ({ value: status, label: status }))}
+      disabled={busy}
+      ariaLabel={`修改 ${item.company} ${item.position} 的进度`}
+    />;
   };
 
   const toggleApplicationSelection = useCallback((id: string) => {
@@ -2006,16 +2100,13 @@ export function RecruitmentTracker({
               {filtersExpanded && <div className="filter-row">
                 <label className="sort-control">
                   <span>排序</span>
-                  <select value={sortKey} onChange={(e) => {
-                    const key = e.target.value as SortKey;
+                  <DropdownSelect value={sortKey} onChange={(value) => {
+                    const key = value as SortKey;
                     setSortKey(key);
                     setSortDirection(key === "appliedAt" ? "desc" : "asc");
-                  }}>
-                    <option value="appliedAt">投递时间</option>
-                    <option value="company">公司名称</option>
-                    <option value="status">面试进度</option>
-                    <option value="position">岗位名称</option>
-                  </select>
+                  }} options={[
+                    { value: "appliedAt", label: "投递时间" }, { value: "company", label: "公司名称" }, { value: "status", label: "面试进度" }, { value: "position", label: "岗位名称" },
+                  ]} ariaLabel="选择排序方式" />
                   <button
                     type="button"
                     onClick={() => setSortDirection((direction) => direction === "asc" ? "desc" : "asc")}
@@ -2024,29 +2115,11 @@ export function RecruitmentTracker({
                     {sortDirection === "asc" ? "升序 ↑" : "降序 ↓"}
                   </button>
                 </label>
-                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                  <option>全部状态</option>
-                  <option>简历阶段</option>
-                  <option>面试进行中</option>
-                  <option>流程已结束</option>
-                  {STATUSES.map((s) => <option key={s}>{s}</option>)}
-                </select>
-                <select value={batchFilter} onChange={(e) => setBatchFilter(e.target.value)}>
-                  <option>全部批次</option>
-                  {BATCHES.map((b) => <option key={b}>{b}</option>)}
-                </select>
-                <select value={companyNatureFilter} onChange={(e) => setCompanyNatureFilter(e.target.value)}>
-                  <option>全部单位性质</option>
-                  {companyNatureOptions.map((nature) => <option key={nature}>{nature}</option>)}
-                </select>
-                <select value={industryFilter} onChange={(e) => setIndustryFilter(e.target.value)}>
-                  <option>全部行业方向</option>
-                  {industryOptions.map((i) => <option key={i}>{i}</option>)}
-                </select>
-                <select value={scaleFilter} onChange={(e) => setScaleFilter(e.target.value)}>
-                  <option>全部规模</option>
-                  {companyScaleOptions.map((s) => <option key={s}>{s}</option>)}
-                </select>
+                <DropdownSelect value={statusFilter} onChange={setStatusFilter} options={["全部状态", "简历阶段", "面试进行中", "流程已结束", ...STATUSES].map((option) => ({ value: option, label: option }))} ariaLabel="筛选状态" />
+                <DropdownSelect value={batchFilter} onChange={setBatchFilter} options={["全部批次", ...BATCHES].map((option) => ({ value: option, label: option }))} ariaLabel="筛选批次" />
+                <DropdownSelect value={companyNatureFilter} onChange={setCompanyNatureFilter} options={["全部单位性质", ...companyNatureOptions].map((option) => ({ value: option, label: option }))} ariaLabel="筛选单位性质" />
+                <DropdownSelect value={industryFilter} onChange={setIndustryFilter} options={["全部行业方向", ...industryOptions].map((option) => ({ value: option, label: option }))} ariaLabel="筛选行业方向" />
+                <DropdownSelect value={scaleFilter} onChange={setScaleFilter} options={["全部规模", ...companyScaleOptions].map((option) => ({ value: option, label: option }))} ariaLabel="筛选公司规模" />
                 <input value={positionFilter} onChange={(e) => setPositionFilter(e.target.value)} placeholder="岗位筛选" />
                 <input value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} placeholder="输入地点筛选" />
                 {activeFilterCount > 0 && <button className="secondary-button" onClick={clearFilters}>清除全部</button>}
@@ -2062,39 +2135,22 @@ export function RecruitmentTracker({
                 </div>
                 <label>
                   <span>批量进度</span>
-                  <select value={batchStatus} onChange={(e) => setBatchStatus(e.target.value as ApplicationStatus | "")}>
-                    <option value="">保持不变</option>
-                    {STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
-                  </select>
+                  <DropdownSelect value={batchStatus} onChange={(status) => setBatchStatus(status as ApplicationStatus | "")} options={STATUSES.map((option) => ({ value: option, label: option }))} placeholder="保持不变" ariaLabel="批量设置进度" />
                 </label>
                 <label>
                   <span>统一单位性质</span>
-                  <select
-                    value={batchCompanyNature}
-                    onChange={(e) => { setBatchCompanyNature(e.target.value); setBatchCompanySubtype(""); }}
-                  >
-                    <option value="">保持不变</option>
-                    {COMPANY_NATURE_OPTIONS.map(({ value }) => <option key={value} value={value}>{value}</option>)}
-                  </select>
+                  <DropdownSelect value={batchCompanyNature} onChange={(companyNature) => { setBatchCompanyNature(companyNature); setBatchCompanySubtype(""); }} options={COMPANY_NATURE_OPTIONS.map(({ value }) => ({ value, label: value }))} placeholder="保持不变" ariaLabel="批量设置单位性质" />
                 </label>
                 {batchCompanyNature && (
                   <label>
                     <span>统一单位细分</span>
-                    <select value={batchCompanySubtype} onChange={(e) => setBatchCompanySubtype(e.target.value)}>
-                      <option value="">暂不填写</option>
-                      {(COMPANY_NATURE_OPTIONS.find((option) => option.value === batchCompanyNature)?.subtypes ?? []).map((subtype) => (
-                        <option key={subtype} value={subtype}>{subtype}</option>
-                      ))}
-                    </select>
+                    <DropdownSelect value={batchCompanySubtype} onChange={setBatchCompanySubtype} options={(COMPANY_NATURE_OPTIONS.find((option) => option.value === batchCompanyNature)?.subtypes ?? []).map((subtype) => ({ value: subtype, label: subtype }))} placeholder="暂不填写" ariaLabel="批量设置单位细分" />
                   </label>
                 )}
                 {batchStatus === "流程结束" && (
                   <label>
                     <span>最终状态</span>
-                    <select value={batchFinalOutcome} onChange={(e) => setBatchFinalOutcome(e.target.value)}>
-                      <option value="">请选择</option>
-                      {FINAL_OUTCOME_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-                    </select>
+                    <DropdownSelect value={batchFinalOutcome} onChange={setBatchFinalOutcome} options={FINAL_OUTCOME_OPTIONS.map((option) => ({ value: option, label: option }))} placeholder="请选择" ariaLabel="批量选择最终状态" />
                   </label>
                 )}
                 {batchStatus === "已拒绝" && (
@@ -2105,17 +2161,12 @@ export function RecruitmentTracker({
                 )}
                 <label>
                   <span>批量公开</span>
-                  <select value={batchVisibility} onChange={(e) => setBatchVisibility(e.target.value as Visibility | "")}>
-                    <option value="">保持不变</option>
-                    {VISIBILITY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                  </select>
+                  <DropdownSelect value={batchVisibility} onChange={(visibility) => setBatchVisibility(visibility as Visibility | "")} options={VISIBILITY_OPTIONS.map((option) => ({ value: option.value, label: option.label }))} placeholder="保持不变" ariaLabel="批量设置公开范围" />
                 </label>
                 {batchVisibility && batchVisibility !== "private" && (groups.length > 0 ? (
                   <label>
                     <span>共享给</span>
-                    <select value={batchGroupId || defaultGroupId} onChange={(e) => setBatchGroupId(e.target.value)}>
-                      {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-                    </select>
+                    <DropdownSelect value={batchGroupId || defaultGroupId} onChange={setBatchGroupId} options={groups.map((group) => ({ value: group.id, label: group.name }))} ariaLabel="选择共享小组" />
                   </label>
                 ) : (
                   <div className="batch-share-hint">
@@ -2593,9 +2644,7 @@ export function RecruitmentTracker({
                   )}
                   <label>
                     <span>批次</span>
-                    <select value={form.batch} onChange={(e) => updateFormField("batch", e.target.value)}>
-                      {BATCHES.map((b) => <option key={b}>{b}</option>)}
-                    </select>
+                    <DropdownSelect value={form.batch} onChange={(batch) => updateFormField("batch", batch)} options={BATCHES.map((batch) => ({ value: batch, label: batch }))} ariaLabel="选择投递批次" />
                   </label>
                   <label>
                     <span>投递日期</span>
@@ -2603,17 +2652,12 @@ export function RecruitmentTracker({
                   </label>
                   <label>
                     <span>状态</span>
-                    <select value={form.status} onChange={(e) => updateFormField("status", e.target.value)}>
-                      {STATUSES.map((s) => <option key={s}>{s}</option>)}
-                    </select>
+                    <DropdownSelect value={form.status} onChange={(status) => updateFormField("status", status)} options={STATUSES.map((status) => ({ value: status, label: status }))} ariaLabel="选择当前状态" />
                   </label>
                   {form.status === "流程结束" && (
                     <label>
                       <span>最终走到哪一步 *</span>
-                      <select value={form.finalOutcome} onChange={(e) => updateFormField("finalOutcome", e.target.value)} required>
-                        <option value="">请选择最终状态</option>
-                        {FINAL_OUTCOME_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-                      </select>
+                      <DropdownSelect value={form.finalOutcome} onChange={(finalOutcome) => updateFormField("finalOutcome", finalOutcome)} options={FINAL_OUTCOME_OPTIONS.map((option) => ({ value: option, label: option }))} placeholder="请选择最终状态" ariaLabel="选择最终状态" />
                     </label>
                   )}
                   {form.status === "已拒绝" && (
@@ -2661,10 +2705,7 @@ export function RecruitmentTracker({
                   </label>
                   <label>
                     <span>公司规模</span>
-                    <select value={form.companyScale} onChange={(e) => updateFormField("companyScale", e.target.value)}>
-                      <option value="">不限</option>
-                      {companyScaleOptions.map((s) => <option key={s}>{s}</option>)}
-                    </select>
+                    <DropdownSelect value={form.companyScale} onChange={(companyScale) => updateFormField("companyScale", companyScale)} options={companyScaleOptions.map((option) => ({ value: option, label: option }))} placeholder="不限" ariaLabel="选择公司规模" />
                   </label>
                   <div className="form-section-heading full-width">
                     <span>3</span>
@@ -2672,23 +2713,12 @@ export function RecruitmentTracker({
                   </div>
                   <label>
                     <span>单位性质（大类）</span>
-                    <select
-                      value={form.companyNature}
-                      onChange={(event) => setForm((current) => ({ ...current, companyNature: event.target.value, companySubtype: "" }))}
-                    >
-                      <option value="">暂不填写</option>
-                      {COMPANY_NATURE_OPTIONS.map(({ value }) => <option key={value} value={value}>{value}</option>)}
-                    </select>
+                    <DropdownSelect value={form.companyNature} onChange={(companyNature) => setForm((current) => ({ ...current, companyNature, companySubtype: "" }))} options={COMPANY_NATURE_OPTIONS.map(({ value }) => ({ value, label: value }))} placeholder="暂不填写" ariaLabel="选择单位性质" />
                   </label>
                   {form.companyNature && (
                     <label>
                       <span>单位细分</span>
-                      <select value={form.companySubtype} onChange={(event) => updateFormField("companySubtype", event.target.value)}>
-                        <option value="">暂不填写</option>
-                        {(COMPANY_NATURE_OPTIONS.find((option) => option.value === form.companyNature)?.subtypes ?? []).map((subtype) => (
-                          <option key={subtype} value={subtype}>{subtype}</option>
-                        ))}
-                      </select>
+                      <DropdownSelect value={form.companySubtype} onChange={(companySubtype) => updateFormField("companySubtype", companySubtype)} options={(COMPANY_NATURE_OPTIONS.find((option) => option.value === form.companyNature)?.subtypes ?? []).map((subtype) => ({ value: subtype, label: subtype }))} placeholder="暂不填写" ariaLabel="选择单位细分" />
                     </label>
                   )}
                   <label className="full-width">
@@ -2729,21 +2759,12 @@ export function RecruitmentTracker({
                   </label>
                   <label className="full-width">
                     <span>可见性</span>
-                    <select value={form.visibility} onChange={(e) => updateFormField("visibility", e.target.value as Visibility)}>
-                      {VISIBILITY_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                    </select>
+                    <DropdownSelect value={form.visibility} onChange={(visibility) => updateFormField("visibility", visibility as Visibility)} options={VISIBILITY_OPTIONS.map((option) => ({ value: option.value, label: option.label }))} ariaLabel="选择公开范围" />
                   </label>
                   {form.visibility !== "private" && groups.length > 0 && (
                     <label className="full-width">
                       <span>共享到小组</span>
-                      <select
-                        value={form.groupId || defaultGroupId}
-                        onChange={(e) => updateFormField("groupId", e.target.value)}
-                        required
-                      >
-                        <option value="">选择小组…</option>
-                        {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-                      </select>
+                      <DropdownSelect value={form.groupId || defaultGroupId} onChange={(groupId) => updateFormField("groupId", groupId)} options={groups.map((group) => ({ value: group.id, label: group.name }))} placeholder="选择小组…" ariaLabel="选择共享小组" />
                     </label>
                   )}
                   {form.visibility !== "private" && groups.length === 0 && (
@@ -2777,18 +2798,7 @@ export function RecruitmentTracker({
                 <div className="form-grid">
                   <label className="full-width">
                     关联岗位
-                    <select
-                      value={interviewForm.applicationId}
-                      onChange={(e) => setInterviewForm((prev) => ({ ...prev, applicationId: e.target.value }))}
-                      required
-                    >
-                      <option value="">选择岗位…</option>
-                      {ownApplications.map((app) => (
-                        <option key={app.id} value={app.id}>
-                          {app.company} - {app.position}
-                        </option>
-                      ))}
-                    </select>
+                    <DropdownSelect value={interviewForm.applicationId} onChange={(applicationId) => setInterviewForm((prev) => ({ ...prev, applicationId }))} options={ownApplications.map((app) => ({ value: app.id, label: `${app.company} - ${app.position}` }))} placeholder="选择岗位…" ariaLabel="选择关联岗位" />
                   </label>
                   <label>
                     面试时间 *
@@ -2809,33 +2819,15 @@ export function RecruitmentTracker({
                   </label>
                   <label>
                     轮次
-                    <select
-                      value={interviewForm.round}
-                      onChange={(e) => setInterviewForm((prev) => ({ ...prev, round: e.target.value }))}
-                    >
-                      <option value="">选择轮次</option>
-                      {INTERVIEW_ROUNDS.map((r) => <option key={r}>{r}</option>)}
-                    </select>
+                    <DropdownSelect value={interviewForm.round} onChange={(round) => setInterviewForm((prev) => ({ ...prev, round }))} options={INTERVIEW_ROUNDS.map((option) => ({ value: option, label: option }))} placeholder="选择轮次" ariaLabel="选择面试轮次" />
                   </label>
                   <label>
                     形式
-                    <select
-                      value={interviewForm.format}
-                      onChange={(e) => setInterviewForm((prev) => ({ ...prev, format: e.target.value }))}
-                    >
-                      <option value="">选择形式</option>
-                      {INTERVIEW_FORMATS.map((f) => <option key={f}>{f}</option>)}
-                    </select>
+                    <DropdownSelect value={interviewForm.format} onChange={(format) => setInterviewForm((prev) => ({ ...prev, format }))} options={INTERVIEW_FORMATS.map((option) => ({ value: option, label: option }))} placeholder="选择形式" ariaLabel="选择面试形式" />
                   </label>
                   <label>
                     结果
-                    <select
-                      value={interviewForm.result}
-                      onChange={(e) => setInterviewForm((prev) => ({ ...prev, result: e.target.value }))}
-                    >
-                      <option value="">选择结果</option>
-                      {INTERVIEW_RESULTS.map((r) => <option key={r}>{r}</option>)}
-                    </select>
+                    <DropdownSelect value={interviewForm.result} onChange={(result) => setInterviewForm((prev) => ({ ...prev, result }))} options={INTERVIEW_RESULTS.map((option) => ({ value: option, label: option }))} placeholder="选择结果" ariaLabel="选择面试结果" />
                   </label>
                   <label>
                     面试官
@@ -2915,36 +2907,16 @@ export function RecruitmentTracker({
                     </label>
                     <label className="full-width">
                       <span>公司规模</span>
-                      <select
-                        value={companyForm.companyScale}
-                        onChange={(event) => setCompanyForm((current) => ({ ...current, companyScale: event.target.value }))}
-                      >
-                        <option value="">暂不填写</option>
-                        {companyScaleOptions.map((scale) => <option key={scale} value={scale}>{scale}</option>)}
-                      </select>
+                      <DropdownSelect value={companyForm.companyScale} onChange={(companyScale) => setCompanyForm((current) => ({ ...current, companyScale }))} options={companyScaleOptions.map((scale) => ({ value: scale, label: scale }))} placeholder="暂不填写" ariaLabel="选择公司规模" />
                     </label>
                     <label>
                       <span>单位性质（大类）</span>
-                      <select
-                        value={companyForm.companyNature}
-                        onChange={(event) => setCompanyForm((current) => ({ ...current, companyNature: event.target.value, companySubtype: "" }))}
-                      >
-                        <option value="">暂不填写</option>
-                        {COMPANY_NATURE_OPTIONS.map(({ value }) => <option key={value} value={value}>{value}</option>)}
-                      </select>
+                      <DropdownSelect value={companyForm.companyNature} onChange={(companyNature) => setCompanyForm((current) => ({ ...current, companyNature, companySubtype: "" }))} options={COMPANY_NATURE_OPTIONS.map(({ value }) => ({ value, label: value }))} placeholder="暂不填写" ariaLabel="选择单位性质" />
                     </label>
                     {companyForm.companyNature && (
                       <label>
                         <span>单位细分</span>
-                        <select
-                          value={companyForm.companySubtype}
-                          onChange={(event) => setCompanyForm((current) => ({ ...current, companySubtype: event.target.value }))}
-                        >
-                          <option value="">暂不填写</option>
-                          {(COMPANY_NATURE_OPTIONS.find((option) => option.value === companyForm.companyNature)?.subtypes ?? []).map((subtype) => (
-                            <option key={subtype} value={subtype}>{subtype}</option>
-                          ))}
-                        </select>
+                        <DropdownSelect value={companyForm.companySubtype} onChange={(companySubtype) => setCompanyForm((current) => ({ ...current, companySubtype }))} options={(COMPANY_NATURE_OPTIONS.find((option) => option.value === companyForm.companyNature)?.subtypes ?? []).map((subtype) => ({ value: subtype, label: subtype }))} placeholder="暂不填写" ariaLabel="选择单位细分" />
                       </label>
                     )}
                     <label className="full-width">
@@ -3052,39 +3024,22 @@ export function RecruitmentTracker({
                   </div>
                   <label>
                     <span>批量进度</span>
-                    <select value={batchStatus} onChange={(e) => setBatchStatus(e.target.value as ApplicationStatus | "")}>
-                      <option value="">保持不变</option>
-                      {STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
-                    </select>
+                    <DropdownSelect value={batchStatus} onChange={(status) => setBatchStatus(status as ApplicationStatus | "")} options={STATUSES.map((option) => ({ value: option, label: option }))} placeholder="保持不变" ariaLabel="批量设置进度" />
                   </label>
                   <label>
                     <span>统一单位性质</span>
-                    <select
-                      value={batchCompanyNature}
-                      onChange={(e) => { setBatchCompanyNature(e.target.value); setBatchCompanySubtype(""); }}
-                    >
-                      <option value="">保持不变</option>
-                      {COMPANY_NATURE_OPTIONS.map(({ value }) => <option key={value} value={value}>{value}</option>)}
-                    </select>
+                    <DropdownSelect value={batchCompanyNature} onChange={(companyNature) => { setBatchCompanyNature(companyNature); setBatchCompanySubtype(""); }} options={COMPANY_NATURE_OPTIONS.map(({ value }) => ({ value, label: value }))} placeholder="保持不变" ariaLabel="批量设置单位性质" />
                   </label>
                   {batchCompanyNature && (
                     <label>
                       <span>统一单位细分</span>
-                      <select value={batchCompanySubtype} onChange={(e) => setBatchCompanySubtype(e.target.value)}>
-                        <option value="">暂不填写</option>
-                        {(COMPANY_NATURE_OPTIONS.find((option) => option.value === batchCompanyNature)?.subtypes ?? []).map((subtype) => (
-                          <option key={subtype} value={subtype}>{subtype}</option>
-                        ))}
-                      </select>
+                      <DropdownSelect value={batchCompanySubtype} onChange={setBatchCompanySubtype} options={(COMPANY_NATURE_OPTIONS.find((option) => option.value === batchCompanyNature)?.subtypes ?? []).map((subtype) => ({ value: subtype, label: subtype }))} placeholder="暂不填写" ariaLabel="批量设置单位细分" />
                     </label>
                   )}
                   {batchStatus === "流程结束" && (
                     <label>
                       <span>最终状态</span>
-                      <select value={batchFinalOutcome} onChange={(e) => setBatchFinalOutcome(e.target.value)}>
-                        <option value="">请选择</option>
-                        {FINAL_OUTCOME_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-                      </select>
+                      <DropdownSelect value={batchFinalOutcome} onChange={setBatchFinalOutcome} options={FINAL_OUTCOME_OPTIONS.map((option) => ({ value: option, label: option }))} placeholder="请选择" ariaLabel="批量选择最终状态" />
                     </label>
                   )}
                   {batchStatus === "已拒绝" && (
@@ -3095,17 +3050,12 @@ export function RecruitmentTracker({
                   )}
                   <label>
                     <span>批量公开</span>
-                    <select value={batchVisibility} onChange={(e) => setBatchVisibility(e.target.value as Visibility | "")}>
-                      <option value="">保持不变</option>
-                      {VISIBILITY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                  </select>
+                    <DropdownSelect value={batchVisibility} onChange={(visibility) => setBatchVisibility(visibility as Visibility | "")} options={VISIBILITY_OPTIONS.map((option) => ({ value: option.value, label: option.label }))} placeholder="保持不变" ariaLabel="批量设置公开范围" />
                 </label>
                 {batchVisibility && batchVisibility !== "private" && (groups.length > 0 ? (
                   <label>
                     <span>共享给</span>
-                    <select value={batchGroupId || defaultGroupId} onChange={(e) => setBatchGroupId(e.target.value)}>
-                      {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-                    </select>
+                    <DropdownSelect value={batchGroupId || defaultGroupId} onChange={setBatchGroupId} options={groups.map((group) => ({ value: group.id, label: group.name }))} ariaLabel="选择共享小组" />
                   </label>
                 ) : (
                   <div className="batch-share-hint">
