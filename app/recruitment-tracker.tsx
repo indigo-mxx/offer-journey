@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { match } from "pinyin-pro";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import type { Application, Interview, GroupInfo, ApplicationStatus, Visibility } from "@/db/schema";
 import type { ChatGPTUser } from "./chatgpt-auth";
@@ -190,6 +191,17 @@ function formatDateTime(value: string) {
 
 function companyKey(value: string) {
   return value.trim().toLocaleLowerCase();
+}
+
+function autocompleteScore(value: string, query: string) {
+  const keyword = query.trim().toLocaleLowerCase();
+  if (!keyword) return 0;
+  const normalized = value.toLocaleLowerCase();
+  if (normalized.startsWith(keyword)) return 100;
+  if (normalized.includes(keyword)) return 80;
+  const matchedIndexes = match(value, keyword, { precision: "start", lastPrecision: "start", insensitive: true });
+  if (!matchedIndexes) return 0;
+  return matchedIndexes[0] === 0 ? 70 : 50;
 }
 
 function companyClassification(tags: string[] = []) {
@@ -393,6 +405,8 @@ export function RecruitmentTracker({
   const [companyForm, setCompanyForm] = useState<CompanyFormState>(EMPTY_COMPANY_FORM);
   const [form, setForm] = useState(EMPTY_FORM);
   const [batchPositions, setBatchPositions] = useState<BatchPositionEntry[]>([{ position: "", base: "" }]);
+  const [companyAutocompleteOpen, setCompanyAutocompleteOpen] = useState(false);
+  const [positionAutocompleteIndex, setPositionAutocompleteIndex] = useState<number | "edit" | null>(null);
   const [selectedApplicationIds, setSelectedApplicationIds] = useState<string[]>([]);
   const [batchStatus, setBatchStatus] = useState<ApplicationStatus | "">("");
   const [batchCompanyNature, setBatchCompanyNature] = useState("");
@@ -639,11 +653,6 @@ export function RecruitmentTracker({
     [applications],
   );
 
-  const companyOptions = useMemo(
-    () => [...new Set(ownApplications.map((item) => item.company.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-CN")),
-    [ownApplications],
-  );
-
   const friendApplications = useMemo(
     () => applications.filter((item) => item.isOwner === false),
     [applications],
@@ -653,6 +662,31 @@ export function RecruitmentTracker({
     () => [...new Set([...INDUSTRY_OPTIONS, ...applications.flatMap((item) => industryOnly(item.industryTags ?? []))])].filter(Boolean),
     [applications],
   );
+
+  const companySuggestions = useMemo(() => {
+    const uniqueCompanies = [...new Map(ownApplications.map((item) => [companyKey(item.company), item])).values()];
+    return uniqueCompanies
+      .map((item) => ({ item, score: autocompleteScore(item.company, form.company) }))
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score || (b.item.updatedAt ?? "").localeCompare(a.item.updatedAt ?? ""))
+      .slice(0, 6)
+      .map(({ item }) => item);
+  }, [ownApplications, form.company]);
+
+  const positionSuggestions = useMemo(() => {
+    const candidates = [...new Map(ownApplications.map((item) => [`${companyKey(item.company)}|${item.position.trim().toLocaleLowerCase()}`, item])).values()];
+    const search = (value: string) => candidates
+      .map((item) => ({ item, score: autocompleteScore(item.position, value) }))
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => {
+        const companyBoost = form.company.trim() && companyKey(a.item.company) === companyKey(form.company) ? 1 : 0;
+        const otherCompanyBoost = form.company.trim() && companyKey(b.item.company) === companyKey(form.company) ? 1 : 0;
+        return otherCompanyBoost - companyBoost || b.score - a.score || (b.item.updatedAt ?? "").localeCompare(a.item.updatedAt ?? "");
+      })
+      .slice(0, 6)
+      .map(({ item }) => item);
+    return { search };
+  }, [ownApplications, form.company]);
 
   const companyNatureOptions = useMemo(
     () => [...new Set([
@@ -1327,10 +1361,25 @@ export function RecruitmentTracker({
     setIsFormOpen(false);
     setEditingId(null);
     setBatchPositions([{ position: "", base: "" }]);
+    setCompanyAutocompleteOpen(false);
+    setPositionAutocompleteIndex(null);
   }
 
   function updateFormField(field: keyof FormState, value: string | string[]) {
     setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function applyCompanySuggestion(source: Application) {
+    const classification = companyClassification(source.industryTags ?? []);
+    setForm((current) => ({
+      ...current,
+      company: source.company,
+      companyNature: classification.companyNature,
+      companySubtype: classification.companySubtype,
+      industryTags: industryOnly(source.industryTags ?? []),
+      companyScale: source.companyScale ?? "",
+    }));
+    setCompanyAutocompleteOpen(false);
   }
 
   async function submitForm(event: React.FormEvent) {
@@ -1568,8 +1617,6 @@ export function RecruitmentTracker({
   }, [companyApplications, companyInterviews]);
 
   // ────────────────────────────────── render
-  const selectedCompanyValue = companyOptions.includes(form.company.trim()) ? form.company.trim() : "__new__";
-
   return (
     <div className="app-shell">
       <datalist id="rejection-reason-options">
@@ -2170,27 +2217,63 @@ export function RecruitmentTracker({
                     <span>1</span>
                     <div><strong>公司与岗位</strong><small>同一家公司可以一次添加多个岗位</small></div>
                   </div>
-                  <label>
+                  <label className="autocomplete-field">
                     <span>公司 *</span>
-                    {!editingId && companyOptions.length > 0 && (
-                      <select
-                        value={selectedCompanyValue}
-                        onChange={(e) => updateFormField("company", e.target.value === "__new__" ? "" : e.target.value)}
-                      >
-                        <option value="__new__">新建公司 / 自定义</option>
-                        {companyOptions.map((company) => <option key={company} value={company}>{company}</option>)}
-                      </select>
+                    <input
+                      value={form.company}
+                      onChange={(e) => updateFormField("company", e.target.value)}
+                      onFocus={() => setCompanyAutocompleteOpen(true)}
+                      onBlur={() => setCompanyAutocompleteOpen(false)}
+                      placeholder="输入公司名称，支持拼音联想"
+                      autoComplete="off"
+                      required
+                    />
+                    {companyAutocompleteOpen && form.company.trim() && companySuggestions.length > 0 && (
+                      <div className="autocomplete-menu" role="listbox" aria-label="公司联想">
+                        {companySuggestions.map((item) => (
+                          <button
+                            type="button"
+                            key={item.id}
+                            className="autocomplete-option"
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => applyCompanySuggestion(item)}
+                          >
+                            <strong>{item.company}</strong>
+                            <small>{industryOnly(item.industryTags ?? []).slice(0, 2).join(" · ") || "已有投递记录"}</small>
+                          </button>
+                        ))}
+                      </div>
                     )}
-                    {(!editingId && selectedCompanyValue === "__new__") || editingId ? (
-                      <input value={form.company} onChange={(e) => updateFormField("company", e.target.value)} placeholder="输入公司名称" required />
-                    ) : (
-                      <span className="field-hint">已选择：{form.company}</span>
-                    )}
+                    <span className="field-hint">支持中文、拼音全拼和首字母，例如：宇 / yu / ys</span>
                   </label>
                   {editingId ? (
-                    <label>
+                    <label className="autocomplete-field">
                       <span>岗位 *</span>
-                      <input value={form.position} onChange={(e) => updateFormField("position", e.target.value)} required />
+                      <input
+                        value={form.position}
+                        onChange={(e) => updateFormField("position", e.target.value)}
+                        onFocus={() => setPositionAutocompleteIndex("edit")}
+                        onBlur={() => setPositionAutocompleteIndex(null)}
+                        placeholder="输入岗位名称，支持拼音联想"
+                        autoComplete="off"
+                        required
+                      />
+                      {positionAutocompleteIndex === "edit" && form.position.trim() && positionSuggestions.search(form.position).length > 0 && (
+                        <div className="autocomplete-menu" role="listbox" aria-label="岗位联想">
+                          {positionSuggestions.search(form.position).map((item) => (
+                            <button
+                              type="button"
+                              key={item.id}
+                              className="autocomplete-option"
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => { updateFormField("position", item.position); setPositionAutocompleteIndex(null); }}
+                            >
+                              <strong>{item.position}</strong>
+                              <small>{item.company}{item.base ? ` · ${item.base}` : ""}</small>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </label>
                   ) : (
                     <label className="full-width batch-position-field">
@@ -2199,12 +2282,36 @@ export function RecruitmentTracker({
                       <div className="batch-position-list">
                         {batchPositions.map((entry, index) => (
                           <div className="batch-position-row" key={`position-${index}`}>
-                            <input
-                              value={entry.position}
-                              onChange={(e) => setBatchPositions((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, position: e.target.value } : item))}
-                              placeholder={`岗位 ${index + 1}，例如：算法工程师`}
-                              required={index === 0}
-                            />
+                            <div className="autocomplete-field position-autocomplete">
+                              <input
+                                value={entry.position}
+                                onChange={(e) => setBatchPositions((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, position: e.target.value } : item))}
+                                onFocus={() => setPositionAutocompleteIndex(index)}
+                                onBlur={() => setPositionAutocompleteIndex(null)}
+                                placeholder={`岗位 ${index + 1}，例如：算法工程师`}
+                                autoComplete="off"
+                                required={index === 0}
+                              />
+                              {positionAutocompleteIndex === index && entry.position.trim() && positionSuggestions.search(entry.position).length > 0 && (
+                                <div className="autocomplete-menu" role="listbox" aria-label={`岗位 ${index + 1} 联想`}>
+                                  {positionSuggestions.search(entry.position).map((item) => (
+                                    <button
+                                      type="button"
+                                      key={item.id}
+                                      className="autocomplete-option"
+                                      onMouseDown={(event) => event.preventDefault()}
+                                      onClick={() => {
+                                        setBatchPositions((prev) => prev.map((current, itemIndex) => itemIndex === index ? { ...current, position: item.position } : current));
+                                        setPositionAutocompleteIndex(null);
+                                      }}
+                                    >
+                                      <strong>{item.position}</strong>
+                                      <small>{item.company}{item.base ? ` · ${item.base}` : ""}</small>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                             <div className="choice-field">
                               <select
                                 value={baseOptions.includes(entry.base) ? entry.base : ""}
