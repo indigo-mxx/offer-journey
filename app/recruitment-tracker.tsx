@@ -414,18 +414,9 @@ function DropdownSelect({
     const closeOnOutside = (event: PointerEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     };
-    const closeOnPageScroll = (event: Event) => {
-      const target = event.target;
-      if (target instanceof Element && target.closest(".select-popover")) return;
-      setOpen(false);
-    };
     document.addEventListener("pointerdown", closeOnOutside, true);
-    window.addEventListener("scroll", closeOnPageScroll, true);
-    window.addEventListener("wheel", closeOnPageScroll, true);
     return () => {
       document.removeEventListener("pointerdown", closeOnOutside, true);
-      window.removeEventListener("scroll", closeOnPageScroll, true);
-      window.removeEventListener("wheel", closeOnPageScroll, true);
     };
   }, [open]);
 
@@ -675,19 +666,17 @@ export function RecruitmentTracker({
   const [batchRejectionReason, setBatchRejectionReason] = useState("");
 
   useEffect(() => {
-    const closeAutocompleteOnPageScroll = (event: Event) => {
+    const closeAutocompleteOnOutsidePointer = (event: PointerEvent) => {
       const target = event.target;
-      if (target instanceof Element && target.closest(".autocomplete-menu")) return;
+      if (target instanceof Element && target.closest(".autocomplete-field")) return;
       setCompanyAutocompleteOpen(false);
       setPositionAutocompleteIndex(null);
       setBaseAutocompleteIndex(null);
       setChannelAutocompleteOpen(false);
     };
-    window.addEventListener("scroll", closeAutocompleteOnPageScroll, true);
-    window.addEventListener("wheel", closeAutocompleteOnPageScroll, true);
+    document.addEventListener("pointerdown", closeAutocompleteOnOutsidePointer, true);
     return () => {
-      window.removeEventListener("scroll", closeAutocompleteOnPageScroll, true);
-      window.removeEventListener("wheel", closeAutocompleteOnPageScroll, true);
+      document.removeEventListener("pointerdown", closeAutocompleteOnOutsidePointer, true);
     };
   }, []);
   const [inlineStatusEditor, setInlineStatusEditor] = useState<{
@@ -2759,7 +2748,7 @@ export function RecruitmentTracker({
                   </label>
                   <label className="full-width">
                     <span>可见性</span>
-                    <DropdownSelect value={form.visibility} onChange={(visibility) => updateFormField("visibility", visibility as Visibility)} options={VISIBILITY_OPTIONS.map((option) => ({ value: option.value, label: option.label }))} ariaLabel="选择公开范围" />
+                    <DropdownSelect className="drop-up" value={form.visibility} onChange={(visibility) => updateFormField("visibility", visibility as Visibility)} options={VISIBILITY_OPTIONS.map((option) => ({ value: option.value, label: option.label }))} ariaLabel="选择公开范围" />
                   </label>
                   {form.visibility !== "private" && groups.length > 0 && (
                     <label className="full-width">
