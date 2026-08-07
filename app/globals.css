@@ -735,7 +735,12 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 .autocomplete-field { position: relative; min-width: 0; }
 .autocomplete-field > input { width: 100%; }
 .position-autocomplete { min-width: 0; }
-.autocomplete-menu { position: absolute; top: 59px; right: 0; left: 0; z-index: 10; overflow: hidden; border: 1px solid #c9d9cd; border-radius: 10px; background: rgba(255,255,253,.98); box-shadow: 0 13px 28px rgba(29,55,40,.16); }
+.combobox-input { min-height: 43px; display: flex; align-items: center; overflow: hidden; border: 1px solid var(--line); border-radius: 8px; background: white; }
+.combobox-input input { width: auto !important; min-width: 0; min-height: 41px !important; flex: 1; padding: 10px 12px !important; border: 0 !important; border-radius: 0 !important; outline: 0; background: transparent !important; }
+.combobox-toggle { width: 37px; min-height: 41px; flex: none; border: 0; border-left: 1px solid #e5e8e3; background: #f7faf7; color: var(--brand); font-size: 18px; line-height: 1; }
+.combobox-toggle:hover { background: #eaf4ed; }
+.combobox-input:focus-within { border-color: #7fa68b; box-shadow: 0 0 0 3px rgba(33,95,75,.12); }
+.autocomplete-menu { position: absolute; top: 59px; right: 0; left: 0; z-index: 10; max-height: 280px; overflow-x: hidden; overflow-y: auto; border: 1px solid #c9d9cd; border-radius: 10px; background: rgba(255,255,253,.98); box-shadow: 0 13px 28px rgba(29,55,40,.16); }
 .position-autocomplete .autocomplete-menu, .batch-base-autocomplete .autocomplete-menu { top: 42px; }
 .autocomplete-option { width: 100%; display: grid; gap: 3px; padding: 10px 11px; border: 0; border-bottom: 1px solid #edf0eb; background: transparent; color: var(--ink); text-align: left; }
 .autocomplete-option:last-child { border-bottom: 0; }

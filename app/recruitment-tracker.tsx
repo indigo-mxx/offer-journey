@@ -205,7 +205,9 @@ function autocompleteScore(value: string, query: string) {
 }
 
 function matchingAutocompleteOptions(values: string[], query: string) {
-  return [...new Set(values.map((value) => value.trim()).filter(Boolean))]
+  const options = [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+  if (!query.trim()) return options;
+  return options
     .map((value) => ({ value, score: autocompleteScore(value, query) }))
     .filter(({ score }) => score > 0)
     .sort((a, b) => b.score - a.score || a.value.localeCompare(b.value, "zh-CN"))
@@ -2512,16 +2514,19 @@ export function RecruitmentTracker({
                               )}
                             </div>
                             <div className="autocomplete-field batch-base-autocomplete">
-                              <input
-                                value={entry.base}
-                                onChange={(e) => setBatchPositions((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, base: e.target.value } : item))}
-                                onFocus={() => setBaseAutocompleteIndex(index)}
-                                onBlur={() => setBaseAutocompleteIndex(null)}
-                                placeholder="输入地点，支持联想"
-                                aria-label={`岗位 ${index + 1} 的 Base 地点`}
-                                autoComplete="off"
-                              />
-                              {baseAutocompleteIndex === index && entry.base.trim() && matchingAutocompleteOptions(baseOptions, entry.base).length > 0 && (
+                              <div className="combobox-input">
+                                <input
+                                  value={entry.base}
+                                  onChange={(e) => setBatchPositions((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, base: e.target.value } : item))}
+                                  onFocus={() => setBaseAutocompleteIndex(index)}
+                                  onBlur={() => setBaseAutocompleteIndex(null)}
+                                  placeholder="选择或输入地点"
+                                  aria-label={`岗位 ${index + 1} 的 Base 地点`}
+                                  autoComplete="off"
+                                />
+                                <button type="button" className="combobox-toggle" aria-label={`展开岗位 ${index + 1} 的地点选项`} onMouseDown={(event) => event.preventDefault()} onClick={() => setBaseAutocompleteIndex(index)}>⌄</button>
+                              </div>
+                              {baseAutocompleteIndex === index && matchingAutocompleteOptions(baseOptions, entry.base).length > 0 && (
                                 <div className="autocomplete-menu" role="listbox" aria-label={`岗位 ${index + 1} 的地点联想`}>
                                   {matchingAutocompleteOptions(baseOptions, entry.base).map((option) => (
                                     <button
@@ -2558,15 +2563,18 @@ export function RecruitmentTracker({
                   {editingId && (
                     <label className="autocomplete-field">
                       <span>Base 地点</span>
-                      <input
-                        value={form.base}
-                        onChange={(e) => updateFormField("base", e.target.value)}
-                        onFocus={() => setBaseAutocompleteIndex("edit")}
-                        onBlur={() => setBaseAutocompleteIndex(null)}
-                        placeholder="输入地点，支持联想"
-                        autoComplete="off"
-                      />
-                      {baseAutocompleteIndex === "edit" && form.base.trim() && matchingAutocompleteOptions(baseOptions, form.base).length > 0 && (
+                      <div className="combobox-input">
+                        <input
+                          value={form.base}
+                          onChange={(e) => updateFormField("base", e.target.value)}
+                          onFocus={() => setBaseAutocompleteIndex("edit")}
+                          onBlur={() => setBaseAutocompleteIndex(null)}
+                          placeholder="选择或输入地点"
+                          autoComplete="off"
+                        />
+                        <button type="button" className="combobox-toggle" aria-label="展开地点选项" onMouseDown={(event) => event.preventDefault()} onClick={() => setBaseAutocompleteIndex("edit")}>⌄</button>
+                      </div>
+                      {baseAutocompleteIndex === "edit" && matchingAutocompleteOptions(baseOptions, form.base).length > 0 && (
                         <div className="autocomplete-menu" role="listbox" aria-label="地点联想">
                           {matchingAutocompleteOptions(baseOptions, form.base).map((option) => (
                             <button
@@ -2616,15 +2624,18 @@ export function RecruitmentTracker({
                   )}
                   <label className="autocomplete-field">
                     <span>投递渠道</span>
-                    <input
-                      value={form.channel}
-                      onChange={(e) => updateFormField("channel", e.target.value)}
-                      onFocus={() => setChannelAutocompleteOpen(true)}
-                      onBlur={() => setChannelAutocompleteOpen(false)}
-                      placeholder="输入渠道，支持联想"
-                      autoComplete="off"
-                    />
-                    {channelAutocompleteOpen && form.channel.trim() && matchingAutocompleteOptions(platformOptions, form.channel).length > 0 && (
+                    <div className="combobox-input">
+                      <input
+                        value={form.channel}
+                        onChange={(e) => updateFormField("channel", e.target.value)}
+                        onFocus={() => setChannelAutocompleteOpen(true)}
+                        onBlur={() => setChannelAutocompleteOpen(false)}
+                        placeholder="选择或输入渠道"
+                        autoComplete="off"
+                      />
+                      <button type="button" className="combobox-toggle" aria-label="展开投递渠道选项" onMouseDown={(event) => event.preventDefault()} onClick={() => setChannelAutocompleteOpen(true)}>⌄</button>
+                    </div>
+                    {channelAutocompleteOpen && matchingAutocompleteOptions(platformOptions, form.channel).length > 0 && (
                       <div className="autocomplete-menu" role="listbox" aria-label="投递渠道联想">
                         {matchingAutocompleteOptions(platformOptions, form.channel).map((option) => (
                           <button
