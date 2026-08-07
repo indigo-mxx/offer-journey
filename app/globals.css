@@ -756,6 +756,14 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 .batch-action-bar .primary-button { min-height: 38px; }
 .status-result-cell { display: grid; justify-items: start; gap: 4px; }
 .status-result-cell small { max-width: 170px; color: var(--muted); font-size: 10px; line-height: 1.35; white-space: normal; }
+.inline-status-editor { display: grid; justify-items: start; gap: 6px; min-width: 210px; padding: 9px; border: 1px solid #e3d8c5; border-radius: 10px; background: #fffaf1; }
+.inline-status-editor > select, .inline-status-editor > input { width: 100%; min-height: 34px; padding: 0 8px; border: 1px solid #d7d8cf; border-radius: 7px; background: white; color: var(--ink); font-size: 11px; }
+.inline-status-actions { display: flex; align-items: center; gap: 8px; }
+.inline-save-button, .inline-cancel-button { min-height: 29px; padding: 0 9px; border-radius: 7px; font-size: 10px; font-weight: 700; }
+.inline-save-button { border: 1px solid var(--brand); background: var(--brand); color: white; }
+.inline-cancel-button { border: 1px solid #d6d7d1; background: white; color: var(--muted); }
+.inline-status-editor.compact { min-width: 178px; padding: 7px; }
+.inline-status-editor.compact .status-badge { min-width: auto; padding: 4px 7px; font-size: 10px; }
 .batch-share-hint { display: grid; gap: 4px; min-width: 142px; padding: 6px 0; color: var(--muted); font-size: 10px; }
 .batch-share-hint button { justify-self: start; padding: 0; border: 0; background: transparent; color: var(--brand); font-size: 11px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 .share-setup-prompt { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 14px; border: 1px solid #d8e5db; border-radius: 10px; background: #f4faf5; }

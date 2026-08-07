@@ -401,6 +401,12 @@ export function RecruitmentTracker({
   const [batchGroupId, setBatchGroupId] = useState("");
   const [batchFinalOutcome, setBatchFinalOutcome] = useState("");
   const [batchRejectionReason, setBatchRejectionReason] = useState("");
+  const [inlineStatusEditor, setInlineStatusEditor] = useState<{
+    applicationId: string;
+    status: "流程结束" | "已拒绝";
+    finalOutcome: string;
+    rejectionReason: string;
+  } | null>(null);
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [isInterviewOpen, setIsInterviewOpen] = useState(false);
   const [editingInterviewId, setEditingInterviewId] = useState<string | null>(null);
@@ -958,11 +964,79 @@ export function RecruitmentTracker({
 
   const chooseStatus = useCallback((item: Application, status: ApplicationStatus) => {
     if (status === "流程结束" || status === "已拒绝") {
-      openEdit(item, status);
+      setInlineStatusEditor({
+        applicationId: item.id,
+        status,
+        finalOutcome: item.finalOutcome ?? "",
+        rejectionReason: item.rejectionReason ?? "",
+      });
       return;
     }
     void updateStatus(item.id, status);
   }, [updateStatus]);
+
+  const saveInlineStatus = useCallback(async () => {
+    if (!inlineStatusEditor) return;
+    if (inlineStatusEditor.status === "流程结束" && !inlineStatusEditor.finalOutcome) {
+      setNotice("请选择流程最终走到的状态");
+      return;
+    }
+    if (inlineStatusEditor.status === "已拒绝" && !inlineStatusEditor.rejectionReason.trim()) {
+      setNotice("请填写拒绝原因");
+      return;
+    }
+    const saved = await updateApplication(inlineStatusEditor.applicationId, {
+      status: inlineStatusEditor.status,
+      finalOutcome: inlineStatusEditor.status === "流程结束" ? inlineStatusEditor.finalOutcome : "",
+      rejectionReason: inlineStatusEditor.status === "已拒绝" ? inlineStatusEditor.rejectionReason.trim() : "",
+    });
+    if (saved) setInlineStatusEditor(null);
+  }, [inlineStatusEditor, updateApplication]);
+
+  const renderStatusControl = (item: Application, compact = false) => {
+    const editor = inlineStatusEditor?.applicationId === item.id ? inlineStatusEditor : null;
+    if (view !== "mine") return <span className={`status-badge ${statusTone(item.status)}`}>{item.status}</span>;
+    if (editor) {
+      return (
+        <div className={`inline-status-editor ${compact ? "compact" : ""}`}>
+          <span className={`status-badge ${statusTone(editor.status)}`}>{editor.status}</span>
+          {editor.status === "流程结束" ? (
+            <select
+              value={editor.finalOutcome}
+              onChange={(event) => setInlineStatusEditor((current) => current ? { ...current, finalOutcome: event.target.value } : current)}
+              aria-label="选择流程最终状态"
+            >
+              <option value="">选择最终状态</option>
+              {FINAL_OUTCOME_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
+          ) : (
+            <input
+              list="rejection-reason-options"
+              value={editor.rejectionReason}
+              onChange={(event) => setInlineStatusEditor((current) => current ? { ...current, rejectionReason: event.target.value } : current)}
+              placeholder="填写拒绝原因"
+              aria-label="填写拒绝原因"
+            />
+          )}
+          <div className="inline-status-actions">
+            <button type="button" className="inline-save-button" onClick={() => void saveInlineStatus()} disabled={busy}>保存</button>
+            <button type="button" className="inline-cancel-button" onClick={() => setInlineStatusEditor(null)} disabled={busy}>取消</button>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <select
+        className={`status-select ${statusTone(item.status)}`}
+        value={item.status}
+        onChange={(event) => chooseStatus(item, event.target.value as ApplicationStatus)}
+        disabled={busy}
+        aria-label={`修改 ${item.company} ${item.position} 的进度`}
+      >
+        {STATUSES.map((status) => <option key={status}>{status}</option>)}
+      </select>
+    );
+  };
 
   const toggleApplicationSelection = useCallback((id: string) => {
     setSelectedApplicationIds((current) => current.includes(id)
@@ -1935,17 +2009,7 @@ export function RecruitmentTracker({
                                 <span>{formatDate(item.appliedAt)}</span>
                               </div>
                               <div className="kanban-card-foot">
-                                {view === "mine" ? (
-                                  <select
-                                    className={`status-select ${statusTone(item.status)}`}
-                                    value={item.status}
-                                    onChange={(event) => chooseStatus(item, event.target.value as ApplicationStatus)}
-                                    disabled={busy}
-                                    aria-label={`修改 ${item.company} ${item.position} 的进度`}
-                                  >
-                                    {STATUSES.map((status) => <option key={status}>{status}</option>)}
-                                  </select>
-                                ) : <span className={`status-badge ${statusTone(item.status)}`}>{item.status}</span>}
+                                {renderStatusControl(item, true)}
                                 {view === "mine" && <button type="button" className="action-btn" onClick={() => openEdit(item)}>编辑</button>}
                               </div>
                             </article>
@@ -2008,16 +2072,7 @@ export function RecruitmentTracker({
                           <td className="cell-muted" data-label="地点">{item.base || "—"}</td>
                           <td data-label="批次"><span className="batch-tag">{item.batch}</span></td>
                           <td className="cell-muted" data-label="投递日期">{formatDate(item.appliedAt)}</td>
-                          <td data-label="面试进度"><div className="status-result-cell">{view === "mine" ? (
-                            <select
-                              className={`status-select ${statusTone(item.status)}`}
-                              value={item.status}
-                              onChange={(e) => chooseStatus(item, e.target.value as ApplicationStatus)}
-                              disabled={busy}
-                            >
-                              {STATUSES.map((s) => <option key={s}>{s}</option>)}
-                            </select>
-                          ) : <span className={`status-badge ${statusTone(item.status)}`}>{item.status}</span>}
+                          <td data-label="面试进度"><div className="status-result-cell">{renderStatusControl(item)}
                             {item.finalOutcome && <small>最终：{item.finalOutcome}</small>}
                             {item.rejectionReason && <small>原因：{item.rejectionReason}</small>}
                           </div></td>
@@ -2721,16 +2776,7 @@ export function RecruitmentTracker({
                       <td className="cell-muted" data-label="地点">{item.base || "—"}</td>
                       <td data-label="批次"><span className="batch-tag">{item.batch}</span></td>
                       <td className="cell-muted" data-label="投递日期">{formatDate(item.appliedAt)}</td>
-                      <td data-label="面试进度"><div className="status-result-cell">{view === "mine" ? (
-                        <select
-                          className={`status-select ${statusTone(item.status)}`}
-                          value={item.status}
-                          onChange={(e) => chooseStatus(item, e.target.value as ApplicationStatus)}
-                          disabled={busy}
-                        >
-                          {STATUSES.map((s) => <option key={s}>{s}</option>)}
-                        </select>
-                      ) : <span className={`status-badge ${statusTone(item.status)}`}>{item.status}</span>}
+                      <td data-label="面试进度"><div className="status-result-cell">{renderStatusControl(item)}
                         {item.finalOutcome && <small>最终：{item.finalOutcome}</small>}
                         {item.rejectionReason && <small>原因：{item.rejectionReason}</small>}
                         {companyInterviews.filter((interview) => interview.applicationId === item.id).length > 0 && (
