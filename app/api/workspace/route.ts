@@ -190,16 +190,21 @@ export async function POST(request: Request) {
   const action = textValue(body.action, 40);
 
   try {
-    if (action === "saveApplication" || action === "importApplications") {
-      const input = action === "importApplications" && Array.isArray(body.applications)
-        ? body.applications.slice(0, 200)
+    if (action === "saveApplication" || action === "importApplications" || action === "importWorkspace") {
+      const workspaceImport = action === "importWorkspace";
+      const input = (action === "importApplications" || workspaceImport) && Array.isArray(body.applications)
+        ? body.applications.slice(0, workspaceImport ? 500 : 200)
         : [body.application ?? {}];
+      if (workspaceImport && (!Array.isArray(body.applications) || body.applications.length > 500)) {
+        return json({ error: "单次最多导入 500 个岗位" }, 400);
+      }
       const userGroups = await groupsForUser(supabase, user.id);
+      const allowedGroupIds = new Set(userGroups.map((group) => group.id));
       const payload = input.map((item) => {
         const value = (item ?? {}) as Record<string, unknown>;
         const level = visibility(value.visibility);
         const explicitGroupId = textValue(value.groupId, 80);
-        const groupId = level === "private" ? null : (explicitGroupId || userGroups[0]?.id || null);
+        const groupId = level === "private" ? null : (allowedGroupIds.has(explicitGroupId) ? explicitGroupId : (userGroups[0]?.id || null));
         return {
           ...(textValue(value.id, 80) ? { id: textValue(value.id, 80) } : {}),
           owner_id: user.id,
@@ -220,8 +225,45 @@ export async function POST(request: Request) {
         };
       });
       if (payload.some((item) => !item.company || !item.position)) return json({ error: "公司和岗位不能为空" }, 400);
-      const { error } = await supabase.from("applications").upsert(payload, { onConflict: "id" });
-      if (error) return json({ error: error.message }, 400);
+      if (workspaceImport && textValue(body.mode, 20) === "replace") {
+        const { error: interviewDeleteError } = await supabase.from("interviews").delete().eq("owner_id", user.id);
+        if (interviewDeleteError) return json({ error: interviewDeleteError.message }, 400);
+        const { error: applicationDeleteError } = await supabase.from("applications").delete().eq("owner_id", user.id);
+        if (applicationDeleteError) return json({ error: applicationDeleteError.message }, 400);
+      }
+      if (payload.length) {
+        const { error } = await supabase.from("applications").upsert(payload, { onConflict: "id" });
+        if (error) return json({ error: error.message }, 400);
+      }
+      if (workspaceImport) {
+        if (!Array.isArray(body.interviews) || body.interviews.length > 1000) {
+          return json({ error: "面试记录格式不正确或数量过多" }, 400);
+        }
+        const allowedApplicationIds = new Set(payload.map((item) => item.id).filter((id): id is string => Boolean(id)));
+        const interviewPayload = body.interviews.map((item) => {
+          const value = (item ?? {}) as Record<string, unknown>;
+          return {
+            ...(textValue(value.id, 80) ? { id: textValue(value.id, 80) } : {}),
+            application_id: textValue(value.applicationId, 80),
+            owner_id: user.id,
+            scheduled_at: textValue(value.scheduledAt, 60),
+            ended_at: textValue(value.endedAt, 60) || null,
+            round: textValue(value.round, 40) || "一面",
+            format: textValue(value.format, 40) || "视频面试",
+            interviewer: textValue(value.interviewer, 120),
+            result: textValue(value.result, 40) || "待定",
+            summary: textValue(value.summary, 4000),
+            next_steps: textValue(value.nextSteps, 2000),
+          };
+        });
+        if (interviewPayload.some((item) => !item.application_id || !item.scheduled_at || !allowedApplicationIds.has(item.application_id))) {
+          return json({ error: "面试记录没有匹配到本次导入的岗位" }, 400);
+        }
+        if (interviewPayload.length) {
+          const { error } = await supabase.from("interviews").upsert(interviewPayload, { onConflict: "id" });
+          if (error) return json({ error: error.message }, 400);
+        }
+      }
     } else if (action === "updateStatus") {
       const status = textValue(body.status, 40);
       const { error } = await supabase.from("applications").update({ status, note: noteWithResolution(body.note, status, body.finalOutcome, body.rejectionReason) }).eq("id", textValue(body.id, 80)).eq("owner_id", user.id);

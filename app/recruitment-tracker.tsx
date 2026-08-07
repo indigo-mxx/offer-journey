@@ -63,6 +63,13 @@ interface InterviewForm {
   nextSteps: string;
 }
 
+interface ImportPreview {
+  fileName: string;
+  applications: Application[];
+  interviews: Interview[];
+  ignoredInterviews: number;
+}
+
 function ModalPortal({ children }: { children: ReactNode }) {
   return createPortal(children, document.body);
 }
@@ -287,6 +294,21 @@ function normalizeLocal(items: Application[]) {
 
 function normalizeInterviews(items: Interview[]) {
   return items.map((item) => ({ ...item, endedAt: item.endedAt ?? "" }));
+}
+
+function applicationImportKey(item: Pick<Application, "company" | "position" | "appliedAt">) {
+  return [companyKey(item.company), item.position.trim().toLocaleLowerCase(), item.appliedAt || ""].join("|");
+}
+
+function importedApplication(item: Application, groupIds: Set<string>, fallbackGroupId: string) {
+  const canShare = item.visibility !== "private" && Boolean(fallbackGroupId || (item.groupId && groupIds.has(item.groupId)));
+  const groupId = canShare ? (item.groupId && groupIds.has(item.groupId) ? item.groupId : fallbackGroupId) : null;
+  return {
+    ...item,
+    visibility: canShare ? item.visibility : "private" as Visibility,
+    groupId,
+    isOwner: true,
+  };
 }
 
 type SortKey = "company" | "position" | "appliedAt" | "status";
@@ -690,6 +712,8 @@ export function RecruitmentTracker({
   const [editingInterviewId, setEditingInterviewId] = useState<string | null>(null);
   const [interviewForm, setInterviewForm] = useState(EMPTY_INTERVIEW);
   const [notice, setNotice] = useState("");
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const [importMode, setImportMode] = useState<"merge" | "replace">("merge");
   const [groupName, setGroupName] = useState("秋招搭子小组");
   const [inviteCode, setInviteCode] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
@@ -930,6 +954,19 @@ export function RecruitmentTracker({
     () => applications.filter((item) => item.isOwner === false),
     [applications],
   );
+
+  const importDuplicateCount = useMemo(() => {
+    if (!importPreview) return 0;
+    const existingIds = new Set(ownApplications.map((item) => item.id));
+    const existingKeys = new Set(ownApplications.map(applicationImportKey));
+    const seenKeys = new Set<string>();
+    return importPreview.applications.reduce((count, item) => {
+      const key = applicationImportKey(item);
+      const duplicate = existingIds.has(item.id) || existingKeys.has(key) || seenKeys.has(key);
+      seenKeys.add(key);
+      return count + Number(duplicate);
+    }, 0);
+  }, [importPreview, ownApplications]);
 
   const industryOptions = useMemo(
     () => [...new Set([...INDUSTRY_OPTIONS, ...applications.flatMap((item) => industryOnly(item.industryTags ?? []))])].filter(Boolean),
@@ -1514,7 +1551,15 @@ export function RecruitmentTracker({
 
   const exportData = useCallback(() => {
     try {
-      const blob = new Blob([JSON.stringify({ applications: ownApplications, interviews }, null, 2)], {
+      const ownIds = new Set(ownApplications.map((item) => item.id));
+      const backup = {
+        app: "秋招同行录",
+        schemaVersion: 2,
+        exportedAt: new Date().toISOString(),
+        applications: ownApplications,
+        interviews: interviews.filter((item) => ownIds.has(item.applicationId)),
+      };
+      const blob = new Blob([JSON.stringify(backup, null, 2)], {
         type: "application/json",
       });
       const url = URL.createObjectURL(blob);
@@ -1533,26 +1578,107 @@ export function RecruitmentTracker({
       const file = event.target.files?.[0];
       if (!file) return;
       try {
-        const text = await file.text();
-        const data = JSON.parse(text) as { applications?: unknown; interviews?: unknown };
-        if (safeApplications(data.applications)) {
-          const normalized = normalizeLocal(data.applications);
-          setApplications(normalized);
-          setLocalBackup(normalized);
-          if (data.interviews && safeInterviews(data.interviews)) {
-            setInterviews(normalizeInterviews(data.interviews));
-          }
-          setNotice("导入成功");
-        } else {
-          setNotice("格式错误，请检查备份文件");
+        if (!file.name.toLocaleLowerCase().endsWith(".json")) {
+          setNotice("请选择从秋招同行录导出的 JSON 备份文件");
+          return;
         }
+        if (file.size > 5 * 1024 * 1024) {
+          setNotice("备份文件不能超过 5MB");
+          return;
+        }
+        const text = await file.text();
+        const parsed = JSON.parse(text) as unknown;
+        const data = Array.isArray(parsed)
+          ? { applications: parsed }
+          : parsed && typeof parsed === "object"
+            ? parsed as { applications?: unknown; interviews?: unknown }
+            : {};
+        if (!safeApplications(data.applications) || data.applications.length > 500) {
+          setNotice("格式错误，请检查备份文件");
+          return;
+        }
+        const normalizedApplications = normalizeLocal(data.applications);
+        const applicationIds = new Set(normalizedApplications.map((item) => item.id));
+        const normalizedInterviews = safeInterviews(data.interviews)
+          ? normalizeInterviews(data.interviews).filter((item) => applicationIds.has(item.applicationId))
+          : [];
+        const ignoredInterviews = safeInterviews(data.interviews) ? data.interviews.length - normalizedInterviews.length : 0;
+        setImportPreview({
+          fileName: file.name,
+          applications: normalizedApplications,
+          interviews: normalizedInterviews,
+          ignoredInterviews,
+        });
+        setImportMode("merge");
       } catch {
-        setNotice("导入失败");
+        setNotice("无法读取备份文件，请确认它是有效的 JSON 文件");
+      } finally {
+        if (importRef.current) importRef.current.value = "";
       }
-      if (importRef.current) importRef.current.value = "";
     },
     [],
   );
+
+  const applyImport = useCallback(async () => {
+    if (!importPreview) return;
+    const availableGroupIds = new Set(groups.map((group) => group.id));
+    const now = new Date().toISOString();
+    const existingByKey = new Map(ownApplications.map((item) => [applicationImportKey(item), item]));
+    const existingIds = new Set(ownApplications.map((item) => item.id));
+    const idMap = new Map<string, string>();
+    const accepted: Application[] = [];
+    const seenIncomingKeys = new Set<string>();
+
+    for (const source of importPreview.applications) {
+      const key = applicationImportKey(source);
+      if (importMode === "merge" && (existingIds.has(source.id) || existingByKey.has(key) || seenIncomingKeys.has(key))) continue;
+      const item = importedApplication(source, availableGroupIds, defaultGroupId);
+      const id = importMode === "merge" ? crypto.randomUUID() : item.id;
+      idMap.set(source.id, id);
+      seenIncomingKeys.add(key);
+      accepted.push({ ...item, id, createdAt: item.createdAt || now, updatedAt: now });
+    }
+
+    const existingInterviewKeys = new Set(interviews.map((item) => `${item.applicationId}|${item.scheduledAt}|${item.round}`));
+    const acceptedInterviews = importPreview.interviews
+      .filter((item) => idMap.has(item.applicationId))
+      .filter((item) => importMode === "replace" || !existingInterviewKeys.has(`${idMap.get(item.applicationId)}|${item.scheduledAt}|${item.round}`))
+      .map((item) => ({
+        ...item,
+        id: importMode === "merge" ? crypto.randomUUID() : item.id,
+        applicationId: idMap.get(item.applicationId)!,
+        createdAt: item.createdAt || now,
+        updatedAt: now,
+      }));
+
+    if (importMode === "merge" && !accepted.length && !acceptedInterviews.length) {
+      setImportPreview(null);
+      setNotice("没有可导入的新记录，重复的公司、岗位与投递日期已自动跳过");
+      return;
+    }
+    if (user) {
+      const saved = await runCloudMutation("正在导入并同步云端", {
+        action: "importWorkspace",
+        mode: importMode,
+        applications: accepted,
+        interviews: acceptedInterviews,
+      });
+      if (!saved) return;
+    }
+    if (importMode === "replace") {
+      setApplications((current) => [...current.filter((item) => item.isOwner === false), ...accepted]);
+      setInterviews(acceptedInterviews);
+      saveLocal(accepted);
+      saveInterviewsLocal(acceptedInterviews);
+    } else {
+      setApplications((current) => [...current, ...accepted]);
+      setInterviews((current) => [...current, ...acceptedInterviews]);
+      saveLocal([...ownApplications, ...accepted]);
+      saveInterviewsLocal([...interviews, ...acceptedInterviews]);
+    }
+    setImportPreview(null);
+    setNotice(`导入完成：新增 ${accepted.length} 个岗位${acceptedInterviews.length ? `、${acceptedInterviews.length} 条面试记录` : ""}`);
+  }, [defaultGroupId, groups, importMode, importPreview, interviews, ownApplications, runCloudMutation, saveInterviewsLocal, saveLocal, user]);
 
   const clearFilters = useCallback(() => {
     setQuery("");
@@ -2053,8 +2179,8 @@ export function RecruitmentTracker({
                         {allFilteredSelected ? "取消当前筛选" : `全选当前筛选${filteredIds.length ? `（${filteredIds.length}）` : ""}`}
                       </button>
                       <button className="secondary-button" onClick={exportData}>导出</button>
-                      <input ref={importRef} type="file" accept=".json" onChange={importData} className="hidden" />
-                      <button className="secondary-button" onClick={() => importRef.current?.click()}>导入</button>
+                      <input ref={importRef} type="file" accept=".json,application/json" onChange={importData} className="hidden" />
+                      <button className="secondary-button" onClick={() => importRef.current?.click()} disabled={busy}>导入备份</button>
                     </>
                   )}
                 </div>
@@ -2437,6 +2563,49 @@ export function RecruitmentTracker({
               </section>
             )}
           </>
+        )}
+
+        {importPreview && (
+          <ModalPortal>
+            <div className="modal-overlay modal-overlay-elevated">
+              <div className="modal import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title">
+                <div className="modal-head">
+                  <div>
+                    <p className="modal-kicker">IMPORT BACKUP</p>
+                    <h2 id="import-title">确认导入备份</h2>
+                    <p className="modal-subtitle">已读取 {importPreview.fileName}。选择处理方式后才会写入你的投递记录。</p>
+                  </div>
+                  <button type="button" className="close-button" onClick={() => setImportPreview(null)} disabled={busy} aria-label="关闭">×</button>
+                </div>
+                <div className="import-summary-grid">
+                  <div><strong>{importPreview.applications.length}</strong><span>岗位记录</span></div>
+                  <div><strong>{importPreview.interviews.length}</strong><span>面试记录</span></div>
+                  <div><strong>{importDuplicateCount}</strong><span>可能重复</span></div>
+                </div>
+                <div className="import-mode-list">
+                  <label className={importMode === "merge" ? "active" : ""}>
+                    <input type="radio" name="import-mode" value="merge" checked={importMode === "merge"} onChange={() => setImportMode("merge")} />
+                    <span><strong>合并导入（推荐）</strong><small>保留现有记录，自动跳过相同的公司、岗位和投递日期。</small></span>
+                  </label>
+                  <label className={importMode === "replace" ? "active warning" : ""}>
+                    <input type="radio" name="import-mode" value="replace" checked={importMode === "replace"} onChange={() => setImportMode("replace")} />
+                    <span><strong>替换我的全部记录</strong><small>用备份内容覆盖当前账号下的投递与面试记录；好友共享记录不受影响。</small></span>
+                  </label>
+                </div>
+                <div className="import-notes">
+                  <span>共享小组不会随备份迁移；找不到原小组的记录会安全地转为“仅自己可见”。</span>
+                  {importPreview.ignoredInterviews > 0 && <span>{importPreview.ignoredInterviews} 条未关联岗位的面试记录不会导入。</span>}
+                  {importMode === "merge" && importDuplicateCount > 0 && <span>{importDuplicateCount} 条可能重复的岗位将被跳过。</span>}
+                </div>
+                <div className="modal-actions import-actions">
+                  <button type="button" className="secondary-button" onClick={() => setImportPreview(null)} disabled={busy}>取消</button>
+                  <button type="button" className="primary-button" onClick={() => void applyImport()} disabled={busy}>
+                    {busy ? "导入中…" : importMode === "replace" ? "确认替换并导入" : "开始合并导入"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </ModalPortal>
         )}
 
         {/* ────────────────────────────────── form modal */}
