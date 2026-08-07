@@ -204,6 +204,15 @@ function autocompleteScore(value: string, query: string) {
   return matchedIndexes[0] === 0 ? 70 : 50;
 }
 
+function matchingAutocompleteOptions(values: string[], query: string) {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))]
+    .map((value) => ({ value, score: autocompleteScore(value, query) }))
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score || a.value.localeCompare(b.value, "zh-CN"))
+    .slice(0, 6)
+    .map(({ value }) => value);
+}
+
 function companyClassification(tags: string[] = []) {
   const storedNature = tags.find((tag) => tag.startsWith(COMPANY_NATURE_PREFIX))?.slice(COMPANY_NATURE_PREFIX.length) ?? "";
   const legacyNature = tags.map((tag) => LEGACY_COMPANY_NATURE_TAGS.get(tag)).find(Boolean) ?? "";
@@ -407,6 +416,8 @@ export function RecruitmentTracker({
   const [batchPositions, setBatchPositions] = useState<BatchPositionEntry[]>([{ position: "", base: "" }]);
   const [companyAutocompleteOpen, setCompanyAutocompleteOpen] = useState(false);
   const [positionAutocompleteIndex, setPositionAutocompleteIndex] = useState<number | "edit" | null>(null);
+  const [baseAutocompleteIndex, setBaseAutocompleteIndex] = useState<number | "edit" | null>(null);
+  const [channelAutocompleteOpen, setChannelAutocompleteOpen] = useState(false);
   const [selectedApplicationIds, setSelectedApplicationIds] = useState<string[]>([]);
   const [batchStatus, setBatchStatus] = useState<ApplicationStatus | "">("");
   const [batchCompanyNature, setBatchCompanyNature] = useState("");
@@ -1363,6 +1374,8 @@ export function RecruitmentTracker({
     setBatchPositions([{ position: "", base: "" }]);
     setCompanyAutocompleteOpen(false);
     setPositionAutocompleteIndex(null);
+    setBaseAutocompleteIndex(null);
+    setChannelAutocompleteOpen(false);
   }
 
   function updateFormField(field: keyof FormState, value: string | string[]) {
@@ -2244,7 +2257,7 @@ export function RecruitmentTracker({
                         ))}
                       </div>
                     )}
-                    <span className="field-hint">支持中文、拼音全拼和首字母，例如：宇 / yu / ys</span>
+                    <span className="field-hint">支持任意中文包含、拼音全拼和首字母，例如：宇 / 树 / yu / ys</span>
                   </label>
                   {editingId ? (
                     <label className="autocomplete-field">
@@ -2312,16 +2325,34 @@ export function RecruitmentTracker({
                                 </div>
                               )}
                             </div>
-                            <div className="choice-field">
-                              <select
-                                value={baseOptions.includes(entry.base) ? entry.base : ""}
+                            <div className="autocomplete-field batch-base-autocomplete">
+                              <input
+                                value={entry.base}
                                 onChange={(e) => setBatchPositions((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, base: e.target.value } : item))}
+                                onFocus={() => setBaseAutocompleteIndex(index)}
+                                onBlur={() => setBaseAutocompleteIndex(null)}
+                                placeholder="输入地点，支持联想"
                                 aria-label={`岗位 ${index + 1} 的 Base 地点`}
-                              >
-                                <option value="">自定义 / 多地点</option>
-                                {baseOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-                              </select>
-                              {!baseOptions.includes(entry.base) && <input value={entry.base} onChange={(e) => setBatchPositions((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, base: e.target.value } : item))} placeholder="输入城市或多个地点" />}
+                                autoComplete="off"
+                              />
+                              {baseAutocompleteIndex === index && entry.base.trim() && matchingAutocompleteOptions(baseOptions, entry.base).length > 0 && (
+                                <div className="autocomplete-menu" role="listbox" aria-label={`岗位 ${index + 1} 的地点联想`}>
+                                  {matchingAutocompleteOptions(baseOptions, entry.base).map((option) => (
+                                    <button
+                                      type="button"
+                                      key={option}
+                                      className="autocomplete-option"
+                                      onMouseDown={(event) => event.preventDefault()}
+                                      onClick={() => {
+                                        setBatchPositions((prev) => prev.map((current, itemIndex) => itemIndex === index ? { ...current, base: option } : current));
+                                        setBaseAutocompleteIndex(null);
+                                      }}
+                                    >
+                                      <strong>{option}</strong>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                             {batchPositions.length > 1 && (
                               <button type="button" className="action-btn danger" onClick={() => setBatchPositions((prev) => prev.filter((_, itemIndex) => itemIndex !== index))} title="移除此岗位">✕</button>
@@ -2339,15 +2370,31 @@ export function RecruitmentTracker({
                     <div><strong>投递信息</strong><small>记录批次、日期与当前进展</small></div>
                   </div>
                   {editingId && (
-                    <label>
+                    <label className="autocomplete-field">
                       <span>Base 地点</span>
-                      <div className="choice-field">
-                        <select value={baseOptions.includes(form.base) ? form.base : ""} onChange={(e) => updateFormField("base", e.target.value)}>
-                          <option value="">自定义 / 多地点</option>
-                          {baseOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-                        </select>
-                        {!baseOptions.includes(form.base) && <input value={form.base} onChange={(e) => updateFormField("base", e.target.value)} placeholder="输入城市或多个地点" />}
-                      </div>
+                      <input
+                        value={form.base}
+                        onChange={(e) => updateFormField("base", e.target.value)}
+                        onFocus={() => setBaseAutocompleteIndex("edit")}
+                        onBlur={() => setBaseAutocompleteIndex(null)}
+                        placeholder="输入地点，支持联想"
+                        autoComplete="off"
+                      />
+                      {baseAutocompleteIndex === "edit" && form.base.trim() && matchingAutocompleteOptions(baseOptions, form.base).length > 0 && (
+                        <div className="autocomplete-menu" role="listbox" aria-label="地点联想">
+                          {matchingAutocompleteOptions(baseOptions, form.base).map((option) => (
+                            <button
+                              type="button"
+                              key={option}
+                              className="autocomplete-option"
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => { updateFormField("base", option); setBaseAutocompleteIndex(null); }}
+                            >
+                              <strong>{option}</strong>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </label>
                   )}
                   <label>
@@ -2381,15 +2428,31 @@ export function RecruitmentTracker({
                       <input list="rejection-reason-options" value={form.rejectionReason} onChange={(e) => updateFormField("rejectionReason", e.target.value)} placeholder="例如：薪资不满足、已接受其他 Offer" required />
                     </label>
                   )}
-                  <label>
+                  <label className="autocomplete-field">
                     <span>投递渠道</span>
-                    <div className="choice-field">
-                      <select value={platformOptions.includes(form.channel) ? form.channel : ""} onChange={(e) => updateFormField("channel", e.target.value)}>
-                        <option value="">自定义输入</option>
-                        {platformOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-                      </select>
-                      {!platformOptions.includes(form.channel) && <input value={form.channel} onChange={(e) => updateFormField("channel", e.target.value)} placeholder="输入投递渠道" />}
-                    </div>
+                    <input
+                      value={form.channel}
+                      onChange={(e) => updateFormField("channel", e.target.value)}
+                      onFocus={() => setChannelAutocompleteOpen(true)}
+                      onBlur={() => setChannelAutocompleteOpen(false)}
+                      placeholder="输入渠道，支持联想"
+                      autoComplete="off"
+                    />
+                    {channelAutocompleteOpen && form.channel.trim() && matchingAutocompleteOptions(platformOptions, form.channel).length > 0 && (
+                      <div className="autocomplete-menu" role="listbox" aria-label="投递渠道联想">
+                        {matchingAutocompleteOptions(platformOptions, form.channel).map((option) => (
+                          <button
+                            type="button"
+                            key={option}
+                            className="autocomplete-option"
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => { updateFormField("channel", option); setChannelAutocompleteOpen(false); }}
+                          >
+                            <strong>{option}</strong>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </label>
                   <label>
                     <span>链接</span>

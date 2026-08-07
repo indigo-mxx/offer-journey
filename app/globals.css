@@ -736,7 +736,7 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 .autocomplete-field > input { width: 100%; }
 .position-autocomplete { min-width: 0; }
 .autocomplete-menu { position: absolute; top: 59px; right: 0; left: 0; z-index: 10; overflow: hidden; border: 1px solid #c9d9cd; border-radius: 10px; background: rgba(255,255,253,.98); box-shadow: 0 13px 28px rgba(29,55,40,.16); }
-.position-autocomplete .autocomplete-menu { top: 42px; }
+.position-autocomplete .autocomplete-menu, .batch-base-autocomplete .autocomplete-menu { top: 42px; }
 .autocomplete-option { width: 100%; display: grid; gap: 3px; padding: 10px 11px; border: 0; border-bottom: 1px solid #edf0eb; background: transparent; color: var(--ink); text-align: left; }
 .autocomplete-option:last-child { border-bottom: 0; }
 .autocomplete-option:hover, .autocomplete-option:focus-visible { background: #eef7f0; }
