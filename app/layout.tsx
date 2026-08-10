@@ -20,7 +20,7 @@ export async function generateMetadata(): Promise<Metadata> {
     openGraph: {
       title: "MXX · 秋招同行录",
       description: "把每一次投递，变成清晰的下一步。",
-      images: [{ url: new URL("/og.png", metadataBase).toString() }],
+      images: [{ url: new URL("/og-premium.png", metadataBase).toString() }],
       type: "website",
       locale: "zh_CN",
     },
@@ -28,7 +28,7 @@ export async function generateMetadata(): Promise<Metadata> {
       card: "summary_large_image",
       title: "MXX · 秋招同行录",
       description: "把每一次投递，变成清晰的下一步。",
-      images: [new URL("/og.png", metadataBase).toString()],
+      images: [new URL("/og-premium.png", metadataBase).toString()],
     },
   };
 }

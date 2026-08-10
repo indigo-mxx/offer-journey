@@ -2064,18 +2064,38 @@ export function RecruitmentTracker({
       </header>
 
       <section className="hero">
-        <div>
-          <p className="eyebrow">RECRUITMENT TRACKER</p>
-          <h1>投递清单</h1>
+        <div className="hero-main">
+          <p className="eyebrow"><span /> MXX CAREER STUDIO</p>
+          <h1>让每一次投递，<br /><em>都有清晰的下一步。</em></h1>
           <p className="hero-copy">
-            记录投递、跟踪进度、管理面试。可以和朋友共享，互相督促。
+            从公司与岗位，到面试时间线和最终 Offer，把秋招里容易散落的信息整理成一张清晰、可靠的行动地图。
           </p>
+          <div className="hero-actions">
+            <button className="primary-button hero-primary-action" onClick={() => { setView("mine"); openCreate(); }}>
+              <span>＋</span> 记录新公司
+            </button>
+            <button className="hero-text-action" onClick={() => setView("dashboard")}>查看数据看板 <span>↗</span></button>
+          </div>
+          <div className="hero-signals" aria-label="产品能力">
+            <span><i />公司与多岗位</span>
+            <span><i />面试时间线</span>
+            <span><i />好友隐私共享</span>
+          </div>
         </div>
-        <div className="hero-note">
-          <span className="hero-note-icon">⇡</span>
-          <div>
-            <strong>同一家公司可一次填写多个岗位</strong>
-            <p>新增投递时先选择已有公司或新建公司，再点击「再加一个岗位」，公共信息会自动复用。</p>
+        <div className="hero-note" aria-label="使用提示">
+          <div className="hero-note-topline">
+            <span className="hero-note-label">SMART WORKFLOW</span>
+            <span className="hero-note-status"><i /> {user ? "云端同步已连接" : "本地模式可直接使用"}</span>
+          </div>
+          <div className="hero-note-content">
+            <span className="hero-note-icon">⌁</span>
+            <div>
+              <strong>一家公司，统一管理多个岗位</strong>
+              <p>公司资料只需填写一次，岗位、面试和进度各自独立，回顾时更加清楚。</p>
+            </div>
+          </div>
+          <div className="hero-note-flow" aria-hidden="true">
+            <span>公司</span><i>→</i><span>岗位</span><i>→</i><span>面试</span><i>→</i><span>Offer</span>
           </div>
         </div>
       </section>
@@ -2099,30 +2119,30 @@ export function RecruitmentTracker({
         </article>
       </section>
 
-      <section className="workspace">
+      <section className={`workspace workspace-${view}`}>
         <nav className="view-tabs" aria-label="工作台视图">
           <button className={view === "mine" ? "active" : ""} onClick={() => setView("mine")}>
-            我的投递 <span>{ownApplications.length}</span>
+            <i className="view-tab-icon" aria-hidden="true">⌂</i> 我的投递 <span>{ownApplications.length}</span>
           </button>
           <button
             className={view === "dashboard" ? "active" : ""}
             onClick={() => { setView("dashboard"); setSelectedApplicationIds([]); }}
           >
-            数据看板
+            <i className="view-tab-icon" aria-hidden="true">◫</i> 数据看板
           </button>
           <button
             className={view === "friends" ? "active" : ""}
             onClick={() => { setView("friends"); setSelectedApplicationIds([]); }}
             disabled={!user}
           >
-            好友进度 <span>{friendApplications.length}</span>
+            <i className="view-tab-icon" aria-hidden="true">◎</i> 好友进度 <span>{friendApplications.length}</span>
           </button>
           <button
             className={view === "sharing" ? "active" : ""}
             onClick={() => { setView("sharing"); setSelectedApplicationIds([]); }}
             disabled={!user}
           >
-            共享管理
+            <i className="view-tab-icon" aria-hidden="true">↗</i> 共享管理
           </button>
         </nav>
 
