@@ -2261,6 +2261,37 @@ export function RecruitmentTracker({
               </div>}
             </div>
 
+            {filtered.length > 0 && (
+              <section className="list-insights list-insights-top" aria-label="当前投递统计">
+                <div className="list-insights-copy">
+                  <span>当前清单统计</span>
+                  <h3>投递进展一览</h3>
+                  <p>统计会随上方的筛选条件和查看范围实时变化。</p>
+                </div>
+                <div className="insight-rings">
+                  {listInsights.map((insight) => (
+                    <article
+                      className="insight-card"
+                      key={insight.label}
+                      style={{ "--insight-color": insight.color } as CSSProperties}
+                    >
+                      <div
+                        className="insight-ring"
+                        style={{ "--insight-progress": `${insight.progress}%` } as CSSProperties}
+                      >
+                        <strong>{insight.value}</strong>
+                        <small>{insight.unit}</small>
+                      </div>
+                      <div>
+                        <strong>{insight.label}</strong>
+                        <small>{insight.detail}</small>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {view === "mine" && selectedApplicationIds.length > 0 && (
               <div className="batch-action-bar" role="region" aria-label="批量修改投递">
                 <div className="batch-selection-copy">
@@ -2356,9 +2387,12 @@ export function RecruitmentTracker({
                               </td>
                             )}
                             <td data-label="公司" className="company-merge-name">
-                              <button className="company-link" onClick={() => openCompany(group.company)}>
-                                {group.company}
-                              </button>
+                              <div className="company-name-lockup">
+                                <span className="company-monogram" aria-hidden="true">{group.company.trim().slice(0, 1).toUpperCase()}</span>
+                                <button className="company-link" onClick={() => openCompany(group.company)}>
+                                  {group.company}
+                                </button>
+                              </div>
                               {(group.companyNature || group.companySubtype) && (
                                 <div className="company-merge-meta">
                                   {group.companyNature && <span className="company-nature-tag">{group.companyNature}</span>}
@@ -2541,6 +2575,9 @@ export function RecruitmentTracker({
                 <div className="action-reminder-list">
                   {actionReminders.map((reminder) => (
                     <article className={`action-reminder ${reminder.kind}`} key={reminder.id}>
+                      <i className="reminder-icon" aria-hidden="true">
+                        {reminder.kind === "upcoming" ? "◷" : reminder.kind === "result" ? "✓" : "↻"}
+                      </i>
                       <span>{reminder.label}</span>
                       <strong>{reminder.title}</strong>
                       <small>{reminder.detail}</small>
@@ -2556,32 +2593,6 @@ export function RecruitmentTracker({
               </section>
             )}
 
-            {filtered.length > 0 && (
-              <section className="list-insights" aria-label="当前投递统计">
-                <div className="list-insights-copy">
-                  <span>当前清单统计</span>
-                  <h3>投递进展一览</h3>
-                  <p>统计会随上方的筛选条件和查看范围同步变化。</p>
-                </div>
-                <div className="insight-rings">
-                  {listInsights.map((insight) => (
-                    <article className="insight-card" key={insight.label}>
-                      <div
-                        className="insight-ring"
-                        style={{ "--insight-progress": `${insight.progress}%`, "--insight-color": insight.color } as CSSProperties}
-                      >
-                        <strong>{insight.value}</strong>
-                        <small>{insight.unit}</small>
-                      </div>
-                      <div>
-                        <strong>{insight.label}</strong>
-                        <small>{insight.detail}</small>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </section>
-            )}
           </>
         )}
 
