@@ -2189,7 +2189,7 @@ export function RecruitmentTracker({
                     <span className="readonly-note">好友进度仅供查看</span>
                   )}
                   <div className="display-switch" aria-label="清单显示方式">
-                    <button type="button" className={listMode === "company" ? "active" : ""} aria-pressed={listMode === "company"} onClick={() => setListMode("company")}>公司合并</button>
+                    <button type="button" className={listMode === "company" ? "active" : ""} aria-pressed={listMode === "company"} onClick={() => setListMode("company")}>公司卡片</button>
                     <button type="button" className={listMode === "position" ? "active" : ""} aria-pressed={listMode === "position"} onClick={() => setListMode("position")}>岗位明细</button>
                     <button type="button" className={listMode === "kanban" ? "active" : ""} aria-pressed={listMode === "kanban"} onClick={() => setListMode("kanban")}>进度看板</button>
                   </div>
@@ -2358,88 +2358,85 @@ export function RecruitmentTracker({
                       : view === "mine" && <button className="primary-button" onClick={() => openCreate()}>添加第一条投递</button>}
                   </div>
                 ) : (
-                  <div className="table-wrap">
-                    <table className="data-table company-merge-table">
-                      <thead>
-                        <tr>
-                          {view === "mine" && <th className="selection-column"><input ref={selectAllRef} type="checkbox" aria-label="全选当前筛选结果" checked={allFilteredSelected} onChange={toggleFilteredSelection} /></th>}
-                          <th><button className="sort-button" onClick={() => toggleSort("company")}>公司 {sortIndicator("company")}</button></th>
-                          <th>岗位</th>
-                          <th>行业 / 规模</th>
-                          <th>Base 地点</th>
-                          <th><button className="sort-button" onClick={() => toggleSort("appliedAt")}>最近投递 {sortIndicator("appliedAt")}</button></th>
-                          <th><button className="sort-button" onClick={() => toggleSort("status")}>进度概览 {sortIndicator("status")}</button></th>
-                          <th>公开状态</th>
-                          <th>操作</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {companyGrouped.map((group) => (
-                          <tr key={group.key} className="company-merge-row">
-                            {view === "mine" && (
-                              <td className="selection-column" data-label="选择">
-                                <input
-                                  type="checkbox"
-                                  aria-label={`选择 ${group.company} 的全部岗位`}
-                                  checked={group.applications.every((item) => selectedApplicationIds.includes(item.id))}
-                                  onChange={() => toggleCompanySelection(group.applications.map((item) => item.id))}
-                                />
-                              </td>
-                            )}
-                            <td data-label="公司" className="company-merge-name">
-                              <div className="company-name-lockup">
-                                <span className="company-monogram" aria-hidden="true">{group.company.trim().slice(0, 1).toUpperCase()}</span>
-                                <button className="company-link" onClick={() => openCompany(group.company)}>
-                                  {group.company}
-                                </button>
-                              </div>
-                              {(group.companyNature || group.companySubtype) && (
-                                <div className="company-merge-meta">
-                                  {group.companyNature && <span className="company-nature-tag">{group.companyNature}</span>}
-                                  {group.companySubtype && <span className="company-subtype-tag">{group.companySubtype}</span>}
-                                </div>
-                              )}
-                            </td>
-                            <td data-label="岗位">
-                              <button className="position-count" onClick={() => openCompany(group.company)}>
-                                {group.applications.length} 个岗位
+                  <div className="company-gallery">
+                    <div className="company-gallery-head">
+                      <div>
+                        <span>COMPANY PORTFOLIO</span>
+                        <strong>公司档案</strong>
+                      </div>
+                      <small>点击卡片查看该公司的全部岗位与面试时间线</small>
+                    </div>
+                    <div className="company-card-grid">
+                      {companyGrouped.map((group) => {
+                        const cardTone = group.statuses.includes("Offer")
+                          ? "offer"
+                          : group.statuses.some((status) => ["一面", "二面", "终面", "HR面"].includes(status))
+                            ? "interview"
+                            : group.statuses.every((status) => ["已拒绝", "流程结束"].includes(status))
+                              ? "closed"
+                              : "active";
+                        return (
+                          <article className={`company-overview-card ${cardTone}`} key={group.key}>
+                            <span className="company-card-accent" aria-hidden="true" />
+                            <header className="company-card-head">
+                              <button className="company-card-identity" type="button" onClick={() => openCompany(group.company)}>
+                                <span className="company-card-monogram" aria-hidden="true">{group.company.trim().slice(0, 1).toUpperCase()}</span>
+                                <span>
+                                  <strong>{group.company}</strong>
+                                  <small>{[group.companyNature, group.companySubtype].filter(Boolean).join(" · ") || "公司资料待补充"}</small>
+                                </span>
                               </button>
-                              <span className="company-row-hint">点击查看岗位明细</span>
-                            </td>
-                            <td data-label="行业 / 规模">
-                              <div className="company-merge-meta">
-                                {group.industryTags.slice(0, 3).map((tag) => <span key={tag}>{tag}</span>)}
-                                {group.companyScale && <span>{group.companyScale}</span>}
-                              </div>
-                            </td>
-                            <td data-label="Base 地点" className="cell-muted">
-                              {group.bases.length ? group.bases.join("、") : "—"}
-                            </td>
-                            <td data-label="最近投递" className="cell-muted">{formatDate(group.latestAppliedAt)}</td>
-                            <td data-label="进度概览">
+                              {view === "mine" && (
+                                <label className="company-card-selector" title="选择该公司的全部岗位">
+                                  <input
+                                    type="checkbox"
+                                    aria-label={`选择 ${group.company} 的全部岗位`}
+                                    checked={group.applications.every((item) => selectedApplicationIds.includes(item.id))}
+                                    onChange={() => toggleCompanySelection(group.applications.map((item) => item.id))}
+                                  />
+                                  <span>全选</span>
+                                </label>
+                              )}
+                            </header>
+
+                            <div className="company-card-tags">
+                              {group.industryTags.slice(0, 3).map((tag) => <span key={tag}>{tag}</span>)}
+                              {group.companyScale && <span>{group.companyScale}</span>}
+                              {group.industryTags.length === 0 && !group.companyScale && <span className="muted">尚未添加行业标签</span>}
+                            </div>
+
+                            <div className="company-card-metrics">
+                              <button type="button" onClick={() => openCompany(group.company)}>
+                                <strong>{group.applications.length}</strong><span>投递岗位</span>
+                              </button>
+                              <div><strong>{group.bases.length || "—"}</strong><span>{group.bases.length ? "Base 地点" : "地点待定"}</span></div>
+                              <div><strong>{formatDate(group.latestAppliedAt)}</strong><span>最近投递</span></div>
+                            </div>
+
+                            <div className="company-card-progress">
+                              <div className="company-card-section-title"><span>进度概览</span><small>{group.applications.length} 条记录</small></div>
                               <div className="company-status-summary">
                                 {group.statuses.slice(0, 3).map((status) => <span key={status} className={`status-badge ${statusTone(status)}`}>{status}</span>)}
-                                {group.statuses.length > 3 && <span className="cell-muted">+{group.statuses.length - 3}</span>}
-                                {group.conclusions.slice(0, 2).map((conclusion) => <span key={conclusion} className="company-conclusion">{conclusion}</span>)}
+                                {group.statuses.length > 3 && <span className="status-more">+{group.statuses.length - 3}</span>}
+                                {group.conclusions.slice(0, 1).map((conclusion) => <span key={conclusion} className="company-conclusion">{conclusion}</span>)}
                               </div>
-                            </td>
-                            <td data-label="公开状态">
+                            </div>
+
+                            <footer className="company-card-foot">
                               {group.visibilities.length === 1 ? (
                                 <span className={`privacy-tag ${group.visibilities[0]}`}>{visibilityLabel(group.visibilities[0])}</span>
                               ) : (
                                 <span className="privacy-tag mixed">部分共享 · {group.sharedCount}/{group.applications.length}</span>
                               )}
-                            </td>
-                            <td data-label="操作" className="cell-actions">
-                              <div className="action-buttons company-row-actions">
-                                <button className="secondary-button compact-button" onClick={() => openCompany(group.company)}>查看公司</button>
-                                {view === "mine" && <button className="action-btn" onClick={() => openCompanyEdit(group.company)}>编辑公司</button>}
+                              <div>
+                                {view === "mine" && <button className="company-card-edit" type="button" onClick={() => openCompanyEdit(group.company)}>编辑资料</button>}
+                                <button className="company-card-open" type="button" onClick={() => openCompany(group.company)}>查看详情 <span>→</span></button>
                               </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                            </footer>
+                          </article>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>

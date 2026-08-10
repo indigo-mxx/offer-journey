@@ -1429,6 +1429,72 @@ body::before {
 .company-merge-name .company-link { color: #174e3a; font-size: 17px; text-decoration: none; transition: color 160ms ease, transform 160ms ease; }
 .company-merge-name .company-link:hover { color: #0c7555; transform: translateX(2px); }
 .company-merge-meta span { border: 1px solid rgba(14,96,73,.08); background: #e9f3ed; }
+.company-gallery { padding: 21px 22px 24px; background: linear-gradient(180deg, rgba(248,250,247,.82), rgba(241,245,241,.6)); }
+.company-gallery-head { display: flex; align-items: end; justify-content: space-between; gap: 18px; padding: 2px 2px 16px; }
+.company-gallery-head span, .company-gallery-head strong { display: block; }
+.company-gallery-head span { color: #5a806c; font-size: 9px; font-weight: 800; letter-spacing: .17em; }
+.company-gallery-head strong { margin-top: 5px; color: #183126; font-family: "STSong","SimSun",serif; font-size: 22px; }
+.company-gallery-head small { color: #7d8881; font-size: 10px; }
+.company-card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 13px; }
+.company-overview-card {
+  --card-accent: #4d9774;
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  padding: 17px;
+  border: 1px solid rgba(32,74,53,.12);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 100% 0, color-mix(in srgb, var(--card-accent) 9%, transparent), transparent 10rem),
+    rgba(255,255,253,.91);
+  box-shadow: 0 11px 28px rgba(29,66,47,.055), inset 0 1px rgba(255,255,255,.84);
+  animation: company-card-arrive 420ms cubic-bezier(.2,.75,.2,1) both;
+  transition: transform 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+}
+.company-overview-card:nth-child(3n + 2) { animation-delay: 55ms; }
+.company-overview-card:nth-child(3n) { animation-delay: 110ms; }
+.company-overview-card.offer { --card-accent: #2e9a62; }
+.company-overview-card.interview { --card-accent: #557fa7; }
+.company-overview-card.closed { --card-accent: #a58178; }
+.company-overview-card:hover { z-index: 2; border-color: color-mix(in srgb, var(--card-accent) 35%, transparent); transform: translateY(-6px); box-shadow: 0 24px 48px rgba(27,64,45,.13), inset 0 1px rgba(255,255,255,.9); }
+.company-card-accent { position: absolute; top: 0; right: 32px; left: 32px; height: 3px; border-radius: 0 0 5px 5px; background: linear-gradient(90deg, transparent, var(--card-accent), transparent); opacity: .8; transform: scaleX(.55); transition: opacity 220ms ease, transform 220ms ease; }
+.company-overview-card:hover .company-card-accent { opacity: 1; transform: scaleX(1); }
+.company-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.company-card-identity { min-width: 0; display: flex; align-items: center; gap: 11px; padding: 0; border: 0; background: transparent; text-align: left; }
+.company-card-identity > span:last-child { min-width: 0; }
+.company-card-identity strong, .company-card-identity small { display: block; }
+.company-card-identity strong { overflow: hidden; color: #173326; font-family: "STSong","SimSun",serif; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; transition: color 170ms ease; }
+.company-card-identity:hover strong { color: var(--brand); }
+.company-card-identity small { overflow: hidden; margin-top: 4px; color: #7b8780; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.company-card-monogram { width: 41px; height: 41px; display: grid; flex: none; place-items: center; border: 1px solid color-mix(in srgb, var(--card-accent) 22%, transparent); border-radius: 13px 13px 13px 5px; background: color-mix(in srgb, var(--card-accent) 12%, #f9fcf9); color: var(--card-accent); font-family: "STSong","SimSun",serif; font-size: 18px; font-weight: 800; box-shadow: 0 7px 17px color-mix(in srgb, var(--card-accent) 12%, transparent); transition: transform 200ms ease, background 200ms ease, color 200ms ease; }
+.company-overview-card:hover .company-card-monogram { background: var(--card-accent); color: white; transform: rotate(-3deg) scale(1.04); }
+.company-card-selector { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 5px 7px; border: 1px solid rgba(34,73,54,.1); border-radius: 8px; background: rgba(248,251,248,.78); color: #889189; font-size: 9px; cursor: pointer; }
+.company-card-selector input { width: 14px; height: 14px; margin: 0; accent-color: var(--brand); }
+.company-card-tags { min-height: 27px; display: flex; flex-wrap: wrap; gap: 5px; margin-top: 14px; }
+.company-card-tags span { padding: 4px 7px; border: 1px solid rgba(14,96,73,.08); border-radius: 999px; background: #edf5f0; color: #4b745f; font-size: 9px; }
+.company-card-tags span.muted { border-style: dashed; background: transparent; color: #929b95; }
+.company-card-metrics { display: grid; grid-template-columns: .75fr .75fr 1.2fr; gap: 7px; margin-top: 14px; }
+.company-card-metrics > div, .company-card-metrics > button { min-width: 0; min-height: 65px; display: flex; flex-direction: column; justify-content: center; padding: 9px 10px; border: 1px solid rgba(34,73,54,.09); border-radius: 11px; background: rgba(247,250,247,.72); text-align: left; transition: border-color 160ms ease, background 160ms ease, transform 160ms ease; }
+.company-card-metrics > button { color: inherit; }
+.company-card-metrics > button:hover { border-color: rgba(14,96,73,.22); background: #f0f7f2; transform: translateY(-1px); }
+.company-card-metrics strong, .company-card-metrics span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.company-card-metrics strong { color: #214d3a; font-family: Georgia, "STSong", serif; font-size: 16px; }
+.company-card-metrics span { margin-top: 4px; color: #8a958e; font-size: 8px; letter-spacing: .03em; }
+.company-card-progress { min-height: 68px; margin-top: 14px; padding-top: 13px; border-top: 1px dashed rgba(35,75,55,.13); }
+.company-card-section-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
+.company-card-section-title span { color: #6f7d74; font-size: 9px; font-weight: 750; letter-spacing: .08em; }
+.company-card-section-title small { color: #a0a7a2; font-size: 8px; }
+.company-card-progress .company-status-summary { min-height: 24px; }
+.status-more { display: inline-flex; min-width: 23px; min-height: 20px; align-items: center; justify-content: center; border-radius: 999px; background: #edf1ed; color: #6d7971; font-size: 9px; }
+.company-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; padding-top: 13px; border-top: 1px solid rgba(35,75,55,.09); }
+.company-card-foot > div { display: flex; align-items: center; gap: 6px; }
+.company-card-edit, .company-card-open { min-height: 30px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; font-size: 9px; font-weight: 750; transition: background 160ms ease, color 160ms ease, transform 160ms ease; }
+.company-card-edit { color: #758179; }
+.company-card-edit:hover { background: #eff4f0; color: #315f4b; }
+.company-card-open { color: var(--brand); }
+.company-card-open:hover { background: var(--brand-soft); transform: translateX(2px); }
+.company-card-open span { display: inline-block; margin-left: 3px; transition: transform 160ms ease; }
+.company-card-open:hover span { transform: translateX(2px); }
 .position-count { border-color: rgba(14,96,73,.18); background: linear-gradient(180deg, #e9f4ed, #deece3); box-shadow: 0 4px 10px rgba(37,93,61,.05); transition: transform 170ms ease, box-shadow 170ms ease, background 170ms ease; }
 .position-count:hover { background: #d7eadd; transform: translateY(-2px); box-shadow: 0 8px 15px rgba(37,93,61,.11); }
 .status-badge, .privacy-tag, .batch-tag { border: 1px solid rgba(31,72,52,.08); box-shadow: inset 0 1px rgba(255,255,255,.35); }
@@ -1556,6 +1622,7 @@ body::before {
 @keyframes card-float { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-7px) rotate(.15deg); } }
 @keyframes signal-pulse { 0%, 100% { opacity: .6; transform: scale(.88); } 50% { opacity: 1; transform: scale(1.08); } }
 @keyframes stat-arrive { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes company-card-arrive { from { opacity: 0; transform: translateY(12px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes workspace-arrive { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes content-arrive { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes insight-strip-arrive { from { opacity: 0; transform: translateY(-10px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -1574,6 +1641,7 @@ body::before {
   .hero { min-height: 0; grid-template-columns: 1fr; gap: 32px; padding-block: 56px 42px; }
   .hero-note { width: min(620px, 100%); animation-name: hero-card-arrive; }
   .hero::before { right: 3%; }
+  .company-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stats-grid { grid-template-columns: repeat(2,1fr); }
   .save-state { display: none; }
   .sharing-layout { grid-template-columns: 1fr; }
@@ -1636,6 +1704,14 @@ body::before {
   .sort-control { width: 100%; }
   .sort-control .select-field { flex: 1; }
   .company-view { padding: 0; }
+  .company-gallery { padding: 17px 13px 19px; }
+  .company-gallery-head { align-items: flex-start; flex-direction: column; gap: 5px; padding-inline: 2px; }
+  .company-card-grid { grid-template-columns: 1fr; gap: 10px; }
+  .company-overview-card { padding: 15px; border-radius: 16px; }
+  .company-overview-card:hover { transform: none; }
+  .company-card-metrics { grid-template-columns: .72fr .72fr 1.16fr; }
+  .company-card-foot { align-items: flex-start; flex-direction: column; }
+  .company-card-foot > div { width: 100%; justify-content: flex-end; }
   .kanban-board-wrap { padding: 13px; scroll-snap-type: x proximity; }
   .kanban-board { min-width: max-content; grid-template-columns: repeat(5, 260px); }
   .kanban-column { scroll-snap-align: start; }
