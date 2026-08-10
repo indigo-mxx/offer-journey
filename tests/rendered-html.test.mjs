@@ -20,6 +20,9 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(tracker, /toggleSort/);
   assert.match(tracker, /company-card-grid/);
   assert.match(tracker, /company-overview-card/);
+  assert.match(tracker, /company-merge-table/);
+  assert.match(tracker, /view-mode-panel/);
+  assert.match(tracker, /qiuzhao-list-mode/);
   assert.match(route, /getUserFromAccessToken/);
   assert.match(route, /owner_id/);
   assert.match(route, /group_members/);

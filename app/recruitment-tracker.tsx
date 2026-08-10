@@ -70,6 +70,22 @@ interface ImportPreview {
   ignoredInterviews: number;
 }
 
+type ListMode = "companyList" | "companyCards" | "position" | "kanban";
+
+const LIST_MODE_STORAGE_KEY = "qiuzhao-list-mode";
+const LIST_MODE_OPTIONS: Array<{
+  value: ListMode;
+  icon: string;
+  label: string;
+  description: string;
+  badge?: string;
+}> = [
+  { value: "companyList", icon: "▤", label: "公司清单", description: "一家公司一行，快速总览", badge: "默认" },
+  { value: "companyCards", icon: "▦", label: "公司卡片", description: "更丰富的档案式浏览", badge: "沉浸" },
+  { value: "position", icon: "≡", label: "岗位明细", description: "逐条查看每个投递岗位" },
+  { value: "kanban", icon: "◫", label: "进度看板", description: "按求职阶段推进流程" },
+];
+
 function ModalPortal({ children }: { children: ReactNode }) {
   return createPortal(children, document.body);
 }
@@ -655,7 +671,7 @@ export function RecruitmentTracker({
   const [showProcessingHint, setShowProcessingHint] = useState(false);
   const [view, setView] = useState<"mine" | "friends" | "sharing" | "dashboard">("mine");
   const [dashboardRange, setDashboardRange] = useState<DashboardRange>("all");
-  const [listMode, setListMode] = useState<"company" | "position" | "kanban">("company");
+  const [listMode, setListMode] = useState<ListMode>("companyList");
   const [sortKey, setSortKey] = useState<SortKey>("appliedAt");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [query, setQuery] = useState("");
@@ -773,6 +789,15 @@ export function RecruitmentTracker({
     }
   }, [cloudAction]);
 
+  const changeListMode = useCallback((mode: ListMode) => {
+    setListMode(mode);
+    try {
+      localStorage.setItem(LIST_MODE_STORAGE_KEY, mode);
+    } catch {
+      // The preference is optional; the selected view still works for this visit.
+    }
+  }, []);
+
   const loadCloud = useCallback(async () => {
     let token = accessToken;
     if (!token) {
@@ -889,6 +914,17 @@ export function RecruitmentTracker({
   );
 
   // ────────────────────────────────── lifecycle
+  useEffect(() => {
+    try {
+      const savedMode = localStorage.getItem(LIST_MODE_STORAGE_KEY);
+      if (LIST_MODE_OPTIONS.some((option) => option.value === savedMode)) {
+        setListMode(savedMode as ListMode);
+      }
+    } catch {
+      // Keep the compact company list when browser storage is unavailable.
+    }
+  }, []);
+
   useEffect(() => {
     loadLocal();
     if (user) {
@@ -2188,11 +2224,6 @@ export function RecruitmentTracker({
                   ) : (
                     <span className="readonly-note">好友进度仅供查看</span>
                   )}
-                  <div className="display-switch" aria-label="清单显示方式">
-                    <button type="button" className={listMode === "company" ? "active" : ""} aria-pressed={listMode === "company"} onClick={() => setListMode("company")}>公司卡片</button>
-                    <button type="button" className={listMode === "position" ? "active" : ""} aria-pressed={listMode === "position"} onClick={() => setListMode("position")}>岗位明细</button>
-                    <button type="button" className={listMode === "kanban" ? "active" : ""} aria-pressed={listMode === "kanban"} onClick={() => setListMode("kanban")}>进度看板</button>
-                  </div>
                   {view === "mine" && (
                     <>
                       <button className="secondary-button batch-select-button" onClick={toggleFilteredSelection} disabled={filteredIds.length === 0}>
@@ -2203,6 +2234,32 @@ export function RecruitmentTracker({
                       <button className="secondary-button" onClick={() => importRef.current?.click()} disabled={busy}>导入备份</button>
                     </>
                   )}
+                </div>
+              </div>
+              <div className="view-mode-panel">
+                <div className="view-mode-heading">
+                  <span>DISPLAY MODE</span>
+                  <strong>选择显示方式</strong>
+                  <small>点击切换，本机会自动记住你的选择</small>
+                </div>
+                <div className="view-mode-options" role="group" aria-label="清单显示方式">
+                  {LIST_MODE_OPTIONS.map((option) => (
+                    <button
+                      type="button"
+                      key={option.value}
+                      className={`view-mode-button ${listMode === option.value ? "active" : ""}`}
+                      aria-pressed={listMode === option.value}
+                      onClick={() => changeListMode(option.value)}
+                    >
+                      <i className="view-mode-icon" aria-hidden="true">{option.icon}</i>
+                      <span className="view-mode-copy">
+                        <strong>{option.label}</strong>
+                        <small>{option.description}</small>
+                      </span>
+                      {option.badge && <b>{option.badge}</b>}
+                      <span className="view-mode-check" aria-hidden="true">✓</span>
+                    </button>
+                  ))}
                 </div>
               </div>
               <div className="quick-filter-row">
@@ -2346,7 +2403,99 @@ export function RecruitmentTracker({
               </div>
             )}
 
-            {listMode === "company" ? (
+            {listMode === "companyList" ? (
+              <div className="company-view company-list-view">
+                {companyGrouped.length === 0 ? (
+                  <div className="empty-state">
+                    <span>{activeFilterCount > 0 ? "⌕" : "＋"}</span>
+                    <h3>{activeFilterCount > 0 ? "没有符合条件的记录" : "还没有投递记录"}</h3>
+                    <p>{activeFilterCount > 0 ? "换个筛选条件，已有数据不会受影响。" : "从第一家公司和岗位开始整理你的秋招进度。"}</p>
+                    {activeFilterCount > 0
+                      ? <button className="secondary-button" onClick={clearFilters}>清除全部筛选</button>
+                      : view === "mine" && <button className="primary-button" onClick={() => openCreate()}>添加第一条投递</button>}
+                  </div>
+                ) : (
+                  <div className="table-wrap">
+                    <table className="data-table company-merge-table">
+                      <thead>
+                        <tr>
+                          {view === "mine" && <th className="selection-column"><input ref={selectAllRef} type="checkbox" aria-label="全选当前筛选结果" checked={allFilteredSelected} onChange={toggleFilteredSelection} /></th>}
+                          <th><button className="sort-button" onClick={() => toggleSort("company")}>公司 {sortIndicator("company")}</button></th>
+                          <th>岗位</th>
+                          <th>行业 / 规模</th>
+                          <th>Base 地点</th>
+                          <th><button className="sort-button" onClick={() => toggleSort("appliedAt")}>最近投递 {sortIndicator("appliedAt")}</button></th>
+                          <th><button className="sort-button" onClick={() => toggleSort("status")}>进度概览 {sortIndicator("status")}</button></th>
+                          <th>公开状态</th>
+                          <th>操作</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {companyGrouped.map((group) => (
+                          <tr key={group.key} className="company-merge-row">
+                            {view === "mine" && (
+                              <td className="selection-column" data-label="选择">
+                                <input
+                                  type="checkbox"
+                                  aria-label={`选择 ${group.company} 的全部岗位`}
+                                  checked={group.applications.every((item) => selectedApplicationIds.includes(item.id))}
+                                  onChange={() => toggleCompanySelection(group.applications.map((item) => item.id))}
+                                />
+                              </td>
+                            )}
+                            <td data-label="公司" className="company-merge-name">
+                              <div className="company-name-lockup">
+                                <span className="company-monogram" aria-hidden="true">{group.company.trim().slice(0, 1).toUpperCase()}</span>
+                                <button className="company-link" onClick={() => openCompany(group.company)}>{group.company}</button>
+                              </div>
+                              {(group.companyNature || group.companySubtype) && (
+                                <div className="company-merge-meta">
+                                  {group.companyNature && <span className="company-nature-tag">{group.companyNature}</span>}
+                                  {group.companySubtype && <span className="company-subtype-tag">{group.companySubtype}</span>}
+                                </div>
+                              )}
+                            </td>
+                            <td data-label="岗位">
+                              <button className="position-count" onClick={() => openCompany(group.company)}>{group.applications.length} 个岗位</button>
+                              <span className="company-row-hint">点击查看岗位明细</span>
+                            </td>
+                            <td data-label="行业 / 规模">
+                              <div className="company-merge-meta">
+                                {group.industryTags.slice(0, 3).map((tag) => <span key={tag}>{tag}</span>)}
+                                {group.industryTags.length > 3 && <span>+{group.industryTags.length - 3}</span>}
+                                {group.companyScale && <span>{group.companyScale}</span>}
+                              </div>
+                            </td>
+                            <td data-label="Base 地点" className="cell-muted">{group.bases.length ? group.bases.join("、") : "—"}</td>
+                            <td data-label="最近投递" className="cell-muted">{formatDate(group.latestAppliedAt)}</td>
+                            <td data-label="进度概览">
+                              <div className="company-status-summary">
+                                {group.statuses.slice(0, 3).map((status) => <span key={status} className={`status-badge ${statusTone(status)}`}>{status}</span>)}
+                                {group.statuses.length > 3 && <span className="cell-muted">+{group.statuses.length - 3}</span>}
+                                {group.conclusions.slice(0, 2).map((conclusion) => <span key={conclusion} className="company-conclusion">{conclusion}</span>)}
+                              </div>
+                            </td>
+                            <td data-label="公开状态">
+                              {group.visibilities.length === 1 ? (
+                                <span className={`privacy-tag ${group.visibilities[0]}`}>{visibilityLabel(group.visibilities[0])}</span>
+                              ) : (
+                                <span className="privacy-tag mixed">部分共享 · {group.sharedCount}/{group.applications.length}</span>
+                              )}
+                            </td>
+                            <td data-label="操作" className="cell-actions">
+                              <div className="action-buttons company-row-actions">
+                                <button className="secondary-button compact-button" onClick={() => openCompany(group.company)}>查看公司</button>
+                                {view === "mine" && <button className="action-btn" onClick={() => openCompanyEdit(group.company)}>编辑公司</button>}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ) : listMode === "companyCards" ? (
               <div className="company-view">
                 {companyGrouped.length === 0 ? (
                   <div className="empty-state">
@@ -2386,21 +2535,27 @@ export function RecruitmentTracker({
                                   <small>{[group.companyNature, group.companySubtype].filter(Boolean).join(" · ") || "公司资料待补充"}</small>
                                 </span>
                               </button>
-                              {view === "mine" && (
-                                <label className="company-card-selector" title="选择该公司的全部岗位">
-                                  <input
-                                    type="checkbox"
-                                    aria-label={`选择 ${group.company} 的全部岗位`}
-                                    checked={group.applications.every((item) => selectedApplicationIds.includes(item.id))}
-                                    onChange={() => toggleCompanySelection(group.applications.map((item) => item.id))}
-                                  />
-                                  <span>全选</span>
-                                </label>
-                              )}
+                              <div className="company-card-tools">
+                                <span className="company-card-stage">
+                                  {cardTone === "offer" ? "已获 Offer" : cardTone === "interview" ? "面试推进中" : cardTone === "closed" ? "流程已结束" : "持续跟进"}
+                                </span>
+                                {view === "mine" && (
+                                  <label className="company-card-selector" title="选择该公司的全部岗位">
+                                    <input
+                                      type="checkbox"
+                                      aria-label={`选择 ${group.company} 的全部岗位`}
+                                      checked={group.applications.every((item) => selectedApplicationIds.includes(item.id))}
+                                      onChange={() => toggleCompanySelection(group.applications.map((item) => item.id))}
+                                    />
+                                    <span>全选</span>
+                                  </label>
+                                )}
+                              </div>
                             </header>
 
                             <div className="company-card-tags">
                               {group.industryTags.slice(0, 3).map((tag) => <span key={tag}>{tag}</span>)}
+                              {group.industryTags.length > 3 && <span>+{group.industryTags.length - 3}</span>}
                               {group.companyScale && <span>{group.companyScale}</span>}
                               {group.industryTags.length === 0 && !group.companyScale && <span className="muted">尚未添加行业标签</span>}
                             </div>
