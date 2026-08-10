@@ -21,7 +21,7 @@
 - 正式部署：Vercel。
 - 登录、数据库、RLS 和共享权限：Supabase。
 - 未登录时的数据：浏览器 `localStorage`；登录后通过 `/api/workspace` 与 Supabase 同步。
-- GitHub 仓库：`https://github.com/indigo-mxx/qiuzhao-tongxinglu`
+- GitHub 仓库：`https://github.com/indigo-mxx/offer-journey`
 - 默认主分支：`main`
 - Supabase 项目 ID：`xhavwciesioqujdmkvob`
 - 腾讯云 CloudBase 只做过尝试，不是当前正式数据库或部署方案。不要未经确认迁移到 CloudBase 或其他数据库。
