@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { match } from "pinyin-pro";
+import { match, pinyin } from "pinyin-pro";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import type { Application, Interview, GroupInfo, ApplicationStatus, Visibility } from "@/db/schema";
 import type { ChatGPTUser } from "./chatgpt-auth";
@@ -216,12 +216,40 @@ function companyKey(value: string) {
   return value.trim().toLocaleLowerCase();
 }
 
+function compactSearchText(value: string) {
+  return value.toLocaleLowerCase().replace(/[\s\-_/./]+/g, "");
+}
+
+function pinyinSearchForms(value: string) {
+  const syllables = pinyin(value, { toneType: "none", type: "array", nonZh: "consecutive" })
+    .flatMap((part) => part.toLocaleLowerCase().match(/[a-z0-9]+/g) ?? []);
+  return {
+    full: syllables.join(""),
+    initials: syllables.map((syllable) => syllable[0]).join(""),
+  };
+}
+
+function matchesTextSearch(value: string, query: string) {
+  const keyword = compactSearchText(query.trim());
+  if (!keyword) return true;
+  const normalized = compactSearchText(value);
+  if (normalized.includes(keyword)) return true;
+  const pinyinForms = pinyinSearchForms(value);
+  if (pinyinForms.full.includes(keyword) || pinyinForms.initials.includes(keyword)) return true;
+  return Boolean(match(value, keyword, { precision: "every", lastPrecision: "every", insensitive: true }));
+}
+
 function autocompleteScore(value: string, query: string) {
-  const keyword = query.trim().toLocaleLowerCase();
+  const keyword = compactSearchText(query.trim());
   if (!keyword) return 0;
-  const normalized = value.toLocaleLowerCase();
+  const normalized = compactSearchText(value);
   if (normalized.startsWith(keyword)) return 100;
   if (normalized.includes(keyword)) return 80;
+  const pinyinForms = pinyinSearchForms(value);
+  if (pinyinForms.full.startsWith(keyword)) return 75;
+  if (pinyinForms.initials.startsWith(keyword)) return 72;
+  if (pinyinForms.full.includes(keyword)) return 68;
+  if (pinyinForms.initials.includes(keyword)) return 64;
   const matchedIndexes = match(value, keyword, { precision: "start", lastPrecision: "start", insensitive: true });
   if (!matchedIndexes) return 0;
   return matchedIndexes[0] === 0 ? 70 : 50;
@@ -1068,16 +1096,16 @@ export function RecruitmentTracker({
   const filtered = useMemo(() => {
     const source = view === "friends" ? friendApplications : ownApplications;
     let items = source;
-    if (query) {
-      const q = query.trim().toLocaleLowerCase();
+    if (query.trim()) {
+      const q = query.trim();
       items = items.filter(
         (item) =>
-          item.company.toLocaleLowerCase().includes(q) ||
-          item.position.toLocaleLowerCase().includes(q) ||
-          (item.base ?? "").toLocaleLowerCase().includes(q) ||
-          (item.note ?? "").toLocaleLowerCase().includes(q) ||
-          (item.channel ?? "").toLocaleLowerCase().includes(q) ||
-          (item.industryTags ?? []).join(" ").toLocaleLowerCase().includes(q),
+          matchesTextSearch(item.company, q) ||
+          matchesTextSearch(item.position, q) ||
+          matchesTextSearch(item.base ?? "", q) ||
+          matchesTextSearch(item.note ?? "", q) ||
+          matchesTextSearch(item.channel ?? "", q) ||
+          matchesTextSearch((item.industryTags ?? []).join(" "), q),
       );
     }
     if (statusFilter !== "全部状态") items = items.filter((item) => matchesStatusFilter(item.status, statusFilter));
@@ -1085,8 +1113,8 @@ export function RecruitmentTracker({
     if (companyNatureFilter !== "全部单位性质") items = items.filter((item) => companyClassification(item.industryTags ?? []).companyNature === companyNatureFilter);
     if (industryFilter !== "全部行业方向") items = items.filter((item) => industryOnly(item.industryTags ?? []).includes(industryFilter));
     if (scaleFilter !== "全部规模") items = items.filter((item) => item.companyScale === scaleFilter);
-    if (positionFilter) items = items.filter((item) => item.position.toLocaleLowerCase().includes(positionFilter.toLocaleLowerCase()));
-    if (locationFilter) items = items.filter((item) => (item.base ?? "").toLocaleLowerCase().includes(locationFilter.toLocaleLowerCase()));
+    if (positionFilter) items = items.filter((item) => matchesTextSearch(item.position, positionFilter));
+    if (locationFilter) items = items.filter((item) => matchesTextSearch(item.base ?? "", locationFilter));
     return items.slice().sort((a, b) => {
       const result = compareApplications(a, b, sortKey);
       return sortDirection === "asc" ? result : -result;
@@ -2212,7 +2240,7 @@ export function RecruitmentTracker({
                   <input
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="搜索公司、岗位、地点、标签、渠道…"
+                    placeholder="搜索公司、岗位、地点… 支持拼音 / 首字母"
                     className="search-input"
                   />
                 </div>
