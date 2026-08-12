@@ -471,20 +471,47 @@ function DropdownSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [popoverStyle, setPopoverStyle] = useState<CSSProperties>({});
   const rootRef = useRef<HTMLDivElement>(null);
   const selected = options.find((option) => option.value === value);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const filteredOptions = options.filter((option) => `${option.label} ${option.hint ?? ""}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
 
   useEffect(() => {
     if (!open) return;
     const closeOnOutside = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (!rootRef.current?.contains(target) && !popoverRef.current?.contains(target)) setOpen(false);
     };
     document.addEventListener("pointerdown", closeOnOutside, true);
     return () => {
       document.removeEventListener("pointerdown", closeOnOutside, true);
     };
   }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    const updatePopoverPosition = () => {
+      const rect = rootRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const viewportPadding = 12;
+      const width = Math.min(Math.max(rect.width, 190), window.innerWidth - viewportPadding * 2);
+      const left = Math.min(Math.max(rect.right - width, viewportPadding), window.innerWidth - width - viewportPadding);
+      const estimatedHeight = 300;
+      const openUp = rect.bottom + estimatedHeight > window.innerHeight - viewportPadding && rect.top > estimatedHeight;
+      setPopoverStyle(openUp
+        ? { width, left, top: "auto", bottom: window.innerHeight - rect.top + 6 }
+        : { width, left, top: rect.bottom + 6, bottom: "auto" });
+    };
+    const frame = window.requestAnimationFrame(updatePopoverPosition);
+    window.addEventListener("resize", updatePopoverPosition);
+    window.addEventListener("scroll", updatePopoverPosition, true);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", updatePopoverPosition);
+      window.removeEventListener("scroll", updatePopoverPosition, true);
+    };
+  }, [open]);
+
 
   return (
     <div className={`select-field ${className}${open ? " is-open" : ""}`} ref={rootRef}>
@@ -499,8 +526,8 @@ function DropdownSelect({
       >
         <span className={selected ? "" : "placeholder"}>{selected?.label ?? placeholder}</span><i aria-hidden="true">⌄</i>
       </button>
-      {open && (
-        <div className="select-popover" role="listbox" aria-label={ariaLabel}>
+      {open && createPortal(
+        <div className="select-popover portal-popover" ref={popoverRef} style={popoverStyle} role="listbox" aria-label={ariaLabel}>
           <label className="select-search"><span>⌕</span><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="输入关键词筛选" /></label>
           <div className="select-options">
             {filteredOptions.length ? filteredOptions.map((option) => (
@@ -516,7 +543,8 @@ function DropdownSelect({
               </button>
             )) : <p className="select-empty">没有匹配的选项</p>}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

@@ -28,7 +28,10 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(tracker, /matchesTextSearch\(item\.company, q\)/);
   assert.match(tracker, /支持拼音 \/ 首字母/);
   assert.match(tracker, /select-field \$\{className\}\$\{open \? " is-open" : ""\}/);
+  assert.match(tracker, /select-popover portal-popover/);
+  assert.match(tracker, /createPortal\(/);
   assert.match(styles, /company-detail-table tbody tr:has\(\.select-field\.is-open\)/);
+  assert.match(styles, /\.select-popover\.portal-popover/);
   assert.match(route, /getUserFromAccessToken/);
   assert.match(route, /owner_id/);
   assert.match(route, /group_members/);

@@ -773,6 +773,7 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 .select-trigger:hover { border-color: #a8c2af; background: #fbfdfb; }
 .select-trigger:disabled { cursor: not-allowed; opacity: .55; }
 .select-popover { position: absolute; top: calc(100% + 6px); right: 0; left: 0; z-index: 40; overflow: hidden; border: 1px solid #bfd3c5; border-radius: 11px; background: rgba(255,253,250,.99); box-shadow: 0 16px 32px rgba(29,55,40,.17); }
+.select-popover.portal-popover { position: fixed; top: auto; right: auto; bottom: auto; left: auto; z-index: 100; min-width: 190px; max-width: calc(100vw - 24px); }
 .select-field.drop-up .select-popover { top: auto; bottom: calc(100% + 6px); box-shadow: 0 -14px 28px rgba(29,55,40,.14); }
 .select-search { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 7px; padding: 9px 10px; border-bottom: 1px solid #e9eee9; color: #78927e; }
 .select-search input { min-width: 0; min-height: 28px !important; padding: 0 !important; border: 0 !important; outline: 0; background: transparent !important; color: var(--ink); font-size: 12px; }
