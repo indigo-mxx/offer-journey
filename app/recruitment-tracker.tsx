@@ -487,7 +487,7 @@ function DropdownSelect({
   }, [open]);
 
   return (
-    <div className={`select-field ${className}`} ref={rootRef}>
+    <div className={`select-field ${className}${open ? " is-open" : ""}`} ref={rootRef}>
       <button
         type="button"
         className="select-trigger"

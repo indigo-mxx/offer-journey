@@ -704,6 +704,8 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 .company-detail-table-wrap { max-height: min(62vh, 620px); overflow: auto; }
 .company-detail-table { min-width: 880px; }
 .company-detail-table th, .company-detail-table td { padding-block: 15px; }
+.company-detail-table tbody tr { position: relative; z-index: 0; }
+.company-detail-table tbody tr:has(.select-field.is-open) { z-index: 5; }
 .company-detail-table th:nth-child(2) { min-width: 260px; }
 .company-detail-position { min-width: 260px; color: var(--ink); font-size: 13px; font-weight: 700; white-space: normal; line-height: 1.45; }
 .selection-column { width: 46px !important; min-width: 46px !important; text-align: center !important; }
@@ -770,7 +772,7 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 .select-trigger i { width: 24px; height: 28px; display: grid; flex: none; place-items: center; border-left: 1px solid #e7ebe6; color: var(--brand); font-size: 17px; font-style: normal; }
 .select-trigger:hover { border-color: #a8c2af; background: #fbfdfb; }
 .select-trigger:disabled { cursor: not-allowed; opacity: .55; }
-.select-popover { position: absolute; top: calc(100% + 6px); right: 0; left: 0; z-index: 20; overflow: hidden; border: 1px solid #bfd3c5; border-radius: 11px; background: rgba(255,253,250,.99); box-shadow: 0 16px 32px rgba(29,55,40,.17); }
+.select-popover { position: absolute; top: calc(100% + 6px); right: 0; left: 0; z-index: 40; overflow: hidden; border: 1px solid #bfd3c5; border-radius: 11px; background: rgba(255,253,250,.99); box-shadow: 0 16px 32px rgba(29,55,40,.17); }
 .select-field.drop-up .select-popover { top: auto; bottom: calc(100% + 6px); box-shadow: 0 -14px 28px rgba(29,55,40,.14); }
 .select-search { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 7px; padding: 9px 10px; border-bottom: 1px solid #e9eee9; color: #78927e; }
 .select-search input { min-width: 0; min-height: 28px !important; padding: 0 !important; border: 0 !important; outline: 0; background: transparent !important; color: var(--ink); font-size: 12px; }
