@@ -1624,9 +1624,11 @@ export function RecruitmentTracker({
       }
       setInterviews((prev) => [...prev, item]);
       setNotice("面试安排已保存");
+      const draftSaved = await createExperienceDraft(item);
+      setNotice(draftSaved ? "\u9762\u8bd5\u5b89\u6392\u5df2\u4fdd\u5b58\uff0c\u5df2\u81ea\u52a8\u751f\u6210\u9762\u7ecf\u8349\u7a3f" : "\u9762\u8bd5\u5b89\u6392\u5df2\u4fdd\u5b58\uff0c\u9762\u7ecf\u8349\u7a3f\u672a\u540c\u6b65\uff0c\u8bf7\u5148\u6267\u884c\u9762\u7ecf\u5e93\u6570\u636e\u5e93\u521d\u59cb\u5316");
       return true;
     },
-    [user, runCloudMutation],
+    [user, runCloudMutation, ownApplications],
   );
 
   const updateInterview = useCallback(
@@ -1667,6 +1669,24 @@ export function RecruitmentTracker({
     setExperiences((current) => [item, ...current]);
     return true;
   }, [user, runCloudMutation]);
+
+  async function createExperienceDraft(interview: Interview) {
+    const application = ownApplications.find((item) => item.id === interview.applicationId);
+    const now = new Date().toISOString();
+    return addExperience({
+      id: crypto.randomUUID(),
+      applicationId: interview.applicationId,
+      title: [application?.company ?? "\u672c\u6b21", interview.round || "\u9762\u8bd5", "\u9762\u7ecf\u8349\u7a3f"].filter(Boolean).join(" / "),
+      company: application?.company ?? "",
+      position: application?.position ?? "",
+      round: interview.round ?? "",
+      tags: ["\u9762\u8bd5\u8bb0\u5f55", "\u5f85\u590d\u76d8"],
+      content: interview.summary?.trim() || "\u5df2\u521b\u5efa\u9762\u8bd5\u8bb0\u5f55\uff0c\u8bf7\u5728\u8fd9\u91cc\u8865\u5145\u9898\u76ee\u3001\u56de\u7b54\u601d\u8def\u548c\u590d\u76d8\u8981\u70b9\u3002",
+      takeaway: interview.nextSteps?.trim() || "",
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
 
   const updateExperience = useCallback(async (id: string, changes: Partial<InterviewExperience>) => {
     const current = experiences.find((item) => item.id === id);

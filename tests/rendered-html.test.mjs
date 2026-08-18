@@ -40,6 +40,7 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(tracker, /experience-library/);
   assert.match(tracker, /openExperienceFromInterview/);
   assert.match(tracker, /saveExperience/);
+  assert.match(tracker, /createExperienceDraft/);
   assert.match(route, /interview_experiences/);
   assert.match(tracker, /openStatFilter/);
   assert.match(styles, /stat-card\.is-selected/);
