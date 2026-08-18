@@ -2412,13 +2412,13 @@ export function RecruitmentTracker({
             className={view === "dashboard" ? "active" : ""}
             onClick={() => { setView("dashboard"); setSelectedApplicationIds([]); }}
           >
+            <i className="view-tab-icon" aria-hidden="true">{"\u25eb"}</i> {"\u6570\u636e\u770b\u677f"}
+          </button>
           <button
             className={view === "experiences" ? "active" : ""}
             onClick={() => { setView("experiences"); setSelectedApplicationIds([]); }}
           >
             <i className="view-tab-icon" aria-hidden="true">{"\u2726"}</i> {"\u9762\u7ecf\u5e93"} <span>{experiences.length}</span>
-          </button>
-            <i className="view-tab-icon" aria-hidden="true">◫</i> 数据看板
           </button>
           <button
             className={view === "friends" ? "active" : ""}
