@@ -116,10 +116,11 @@ export async function GET(request: Request) {
   if (!current) return json({ error: "请先登录" }, 401);
   const { supabase, user } = current;
 
-  const [[{ data: rows, error: applicationError }, { data: interviewRows, error: interviewError }], groups] = await Promise.all([
+  const [[{ data: rows, error: applicationError }, { data: interviewRows, error: interviewError }, { data: experienceRows, error: experienceError }], groups] = await Promise.all([
     Promise.all([
       supabase.from("applications").select("*").order("updated_at", { ascending: false }),
       supabase.from("interviews").select("*").order("scheduled_at", { ascending: true }),
+      supabase.from("interview_experiences").select("*").order("updated_at", { ascending: false }),
     ]),
     groupsForUser(supabase, user.id),
   ]);
@@ -127,6 +128,7 @@ export async function GET(request: Request) {
     return json({ error: applicationError?.message ?? interviewError?.message ?? "云端同步失败" }, 400);
   }
 
+  if (experienceError && experienceError.code !== "42P01") return json({ error: experienceError.message }, 400);
   const ownerIds = [...new Set((rows ?? []).map((row) => row.owner_id))];
   const { data: profiles } = ownerIds.length
     ? await supabase.from("profiles").select("id, email, display_name").in("id", ownerIds)
@@ -174,7 +176,21 @@ export async function GET(request: Request) {
     updatedAt: row.updated_at,
   }));
 
-  return json({ user, applications, interviews, groups });
+  const experiences = (experienceRows ?? []).map((row) => ({
+    id: row.id,
+    applicationId: row.application_id ?? "",
+    title: row.title ?? "",
+    company: row.company ?? "",
+    position: row.position ?? "",
+    round: row.round ?? "",
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    content: row.content ?? "",
+    takeaway: row.takeaway ?? "",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }));
+
+  return json({ user, applications, interviews, experiences, groups });
 }
 
 export async function POST(request: Request) {
@@ -326,6 +342,26 @@ export async function POST(request: Request) {
     } else if (action === "deleteInterview") {
       const { error } = await supabase.from("interviews").delete().eq("id", textValue(body.id, 80)).eq("owner_id", user.id);
       if (error) return json({ error: error.message }, 400);
+    } else if (action === "saveExperience" || action === "updateExperience") {
+      const value = (body.experience ?? {}) as Record<string, unknown>;
+      const experience = {
+        ...(textValue(value.id, 80) ? { id: textValue(value.id, 80) } : {}),
+        owner_id: user.id,
+        application_id: textValue(value.applicationId, 80) || null,
+        title: textValue(value.title, 180),
+        company: textValue(value.company, 120),
+        position: textValue(value.position, 160),
+        round: textValue(value.round, 40),
+        tags: tagValues(value.tags),
+        content: textValue(value.content, 12000),
+        takeaway: textValue(value.takeaway, 4000),
+      };
+      if (!experience.title || !experience.content) return json({ error: "\u8bf7\u586b\u5199\u9762\u7ecf\u6807\u9898\u548c\u9762\u8bd5\u5185\u5bb9" }, 400);
+      const { error } = await supabase.from("interview_experiences").upsert(experience, { onConflict: "id" });
+      if (error) return json({ error: error.code === "42P01" ? "\u9762\u7ecf\u5e93\u5c1a\u672a\u521d\u59cb\u5316\uff0c\u8bf7\u5148\u5728 Supabase SQL Editor \u6267\u884c 004_interview_experiences.sql" : error.message }, 400);
+    } else if (action === "deleteExperience") {
+      const { error } = await supabase.from("interview_experiences").delete().eq("id", textValue(body.id, 80)).eq("owner_id", user.id);
+      if (error) return json({ error: error.code === "42P01" ? "\u9762\u7ecf\u5e93\u5c1a\u672a\u521d\u59cb化，请先在 Supabase SQL Editor 执行 004_interview_experiences.sql" : error.message }, 400);
     } else {
       return json({ error: "未知操作" }, 400);
     }

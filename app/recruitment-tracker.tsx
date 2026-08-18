@@ -5,7 +5,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { match, pinyin } from "pinyin-pro";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
-import type { Application, Interview, GroupInfo, ApplicationStatus, Visibility } from "@/db/schema";
+import type { Application, Interview, InterviewExperience, GroupInfo, ApplicationStatus, Visibility } from "@/db/schema";
 import type { ChatGPTUser } from "./chatgpt-auth";
 
 // ──────────────────────────────────────────────── types
@@ -61,6 +61,17 @@ interface InterviewForm {
   interviewer: string;
   summary: string;
   nextSteps: string;
+}
+
+interface ExperienceForm {
+  applicationId: string;
+  title: string;
+  company: string;
+  position: string;
+  round: string;
+  tags: string;
+  content: string;
+  takeaway: string;
 }
 
 interface ImportPreview {
@@ -194,6 +205,17 @@ const EMPTY_INTERVIEW: InterviewForm = {
   nextSteps: "",
 };
 
+const EMPTY_EXPERIENCE: ExperienceForm = {
+  applicationId: "",
+  title: "",
+  company: "",
+  position: "",
+  round: "",
+  tags: "",
+  content: "",
+  takeaway: "",
+};
+
 const INTERVIEW_ROUNDS = ["技术一面", "技术二面", "技术三面", "交叉面", "主管面", "HR面", "群面", "VP面", "其他"];
 const INTERVIEW_FORMATS = ["视频面试", "电话面试", "线下", "笔试", "其他"];
 const INTERVIEW_RESULTS = ["待定", "通过", "未通过", "未参加"];
@@ -325,6 +347,10 @@ function safeApplications(value: unknown): value is Application[] {
 function safeInterviews(value: unknown): value is Interview[] {
   return Array.isArray(value) && value.every((item) => item && typeof item === "object" && typeof item.id === "string" && typeof item.applicationId === "string" && typeof item.scheduledAt === "string");
 }
+function safeExperiences(value: unknown): value is InterviewExperience[] {
+  return Array.isArray(value) && value.every((item) => item && typeof item === "object" && typeof item.id === "string" && typeof item.title === "string" && typeof item.content === "string");
+}
+
 
 function normalizeLocal(items: Application[]) {
   return items.map((item) => ({
@@ -340,6 +366,9 @@ function normalizeInterviews(items: Interview[]) {
   return items.map((item) => ({ ...item, endedAt: item.endedAt ?? "" }));
 }
 
+function normalizeExperiences(items: InterviewExperience[]) {
+  return items.map((item) => ({ ...item, tags: Array.isArray(item.tags) ? item.tags.filter(Boolean) : [] }));
+}
 function applicationImportKey(item: Pick<Application, "company" | "position" | "appliedAt">) {
   return [companyKey(item.company), item.position.trim().toLocaleLowerCase(), item.appliedAt || ""].join("|");
 }
@@ -725,7 +754,7 @@ export function RecruitmentTracker({
   const [ready, setReady] = useState(false);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [showProcessingHint, setShowProcessingHint] = useState(false);
-  const [view, setView] = useState<"mine" | "friends" | "sharing" | "dashboard">("mine");
+  const [view, setView] = useState<"mine" | "friends" | "sharing" | "dashboard" | "experiences">("mine");
   const [dashboardRange, setDashboardRange] = useState<DashboardRange>("all");
   const [listMode, setListMode] = useState<ListMode>("companyList");
   const [sortKey, setSortKey] = useState<SortKey>("appliedAt");
@@ -733,6 +762,7 @@ export function RecruitmentTracker({
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("全部状态");
   const [batchFilter, setBatchFilter] = useState("全部批次");
+  const [statFilter, setStatFilter] = useState<"all" | "active" | "interview" | "offer">("all");
   const [companyNatureFilter, setCompanyNatureFilter] = useState("全部单位性质");
   const [industryFilter, setIndustryFilter] = useState("全部行业方向");
   const [scaleFilter, setScaleFilter] = useState("全部规模");
@@ -784,6 +814,11 @@ export function RecruitmentTracker({
   const [editingInterviewId, setEditingInterviewId] = useState<string | null>(null);
   const [interviewForm, setInterviewForm] = useState(EMPTY_INTERVIEW);
   const [notice, setNotice] = useState("");
+  const [experiences, setExperiences] = useState<InterviewExperience[]>([]);
+  const [experienceQuery, setExperienceQuery] = useState("");
+  const [isExperienceOpen, setIsExperienceOpen] = useState(false);
+  const [editingExperienceId, setEditingExperienceId] = useState<string | null>(null);
+  const [experienceForm, setExperienceForm] = useState(EMPTY_EXPERIENCE);
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [importMode, setImportMode] = useState<"merge" | "replace">("merge");
   const [groupName, setGroupName] = useState("秋招搭子小组");
@@ -873,9 +908,11 @@ export function RecruitmentTracker({
       applications: unknown;
       interviews: unknown;
       groups: unknown;
+      experiences: unknown;
     };
     if (!safeApplications(result.applications)) throw new Error("投递数据解析失败");
     if (!safeInterviews(result.interviews)) throw new Error("面试数据解析失败");
+    if (!safeExperiences(result.experiences ?? [])) throw new Error("Experience data parsing failed");
     const groupsData = (Array.isArray(result.groups) ? result.groups : []) as GroupInfo[];
     const normalizedApplications = result.applications.map((item) => ({
         ...item,
@@ -885,12 +922,14 @@ export function RecruitmentTracker({
         isOwner: item.isOwner ?? true,
       }));
     const normalizedInterviews = normalizeInterviews(result.interviews);
+    const normalizedExperiences = normalizeExperiences(result.experiences ?? []);
     setApplications(normalizedApplications);
     setInterviews(normalizedInterviews);
+    setExperiences(normalizedExperiences);
     setGroups(groupsData);
     if (workspaceCacheKey) {
       try {
-        localStorage.setItem(workspaceCacheKey, JSON.stringify({ applications: normalizedApplications, interviews: normalizedInterviews, groups: groupsData }));
+        localStorage.setItem(workspaceCacheKey, JSON.stringify({ applications: normalizedApplications, interviews: normalizedInterviews, experiences: normalizedExperiences, groups: groupsData }));
       } catch {
         // Storage is an optional fast-start cache.
       }
@@ -911,7 +950,7 @@ export function RecruitmentTracker({
       if (workspaceCacheKey) {
         const cached = localStorage.getItem(workspaceCacheKey);
         if (cached) {
-          const parsed = JSON.parse(cached) as { applications?: unknown; interviews?: unknown; groups?: unknown };
+          const parsed = JSON.parse(cached) as { applications?: unknown; interviews?: unknown; experiences?: unknown; groups?: unknown };
           if (safeApplications(parsed.applications)) {
             const cachedApplications = parsed.applications.map((item) => ({
               ...item,
@@ -924,12 +963,14 @@ export function RecruitmentTracker({
             setLocalBackup(cachedApplications);
           }
           if (safeInterviews(parsed.interviews)) setInterviews(normalizeInterviews(parsed.interviews));
+          if (safeExperiences(parsed.experiences)) setExperiences(normalizeExperiences(parsed.experiences));
           if (Array.isArray(parsed.groups)) setGroups(parsed.groups as GroupInfo[]);
           return;
         }
       }
       const raw = localStorage.getItem("applications");
       const interviewsRaw = localStorage.getItem("interviews");
+      const experiencesRaw = localStorage.getItem("interview-experiences");
       if (raw) {
         const parsed = JSON.parse(raw) as unknown;
         if (safeApplications(parsed)) {
@@ -940,6 +981,10 @@ export function RecruitmentTracker({
       if (interviewsRaw) {
         const parsed = JSON.parse(interviewsRaw) as unknown;
         if (safeInterviews(parsed)) setInterviews(normalizeInterviews(parsed));
+      }
+      if (experiencesRaw) {
+        const parsed = JSON.parse(experiencesRaw) as unknown;
+        if (safeExperiences(parsed)) setExperiences(normalizeExperiences(parsed));
       }
     } catch {
       // ignore
@@ -962,6 +1007,17 @@ export function RecruitmentTracker({
     (items: Interview[]) => {
       try {
         localStorage.setItem("interviews", JSON.stringify(items));
+      } catch {
+        // ignore
+      }
+    },
+    [],
+  );
+
+  const saveExperiencesLocal = useCallback(
+    (items: InterviewExperience[]) => {
+      try {
+        localStorage.setItem("interview-experiences", JSON.stringify(items));
       } catch {
         // ignore
       }
@@ -1003,6 +1059,12 @@ export function RecruitmentTracker({
     saveInterviewsLocal(interviews);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interviews]);
+  useEffect(() => {
+    if (user) return;
+    saveExperiencesLocal(experiences);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [experiences]);
+
 
   useEffect(() => {
     if (ready) return;
@@ -1046,6 +1108,13 @@ export function RecruitmentTracker({
     () => applications.filter((item) => item.isOwner === false),
     [applications],
   );
+
+  const filteredExperiences = useMemo(() => {
+    const keyword = experienceQuery.trim();
+    return [...experiences]
+      .filter((item) => !keyword || matchesTextSearch(`${item.title} ${item.company} ${item.position} ${item.round} ${item.tags.join(" ")} ${item.content} ${item.takeaway}`, keyword))
+      .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
+  }, [experiences, experienceQuery]);
 
   const importDuplicateCount = useMemo(() => {
     if (!importPreview) return 0;
@@ -1124,6 +1193,9 @@ export function RecruitmentTracker({
   const filtered = useMemo(() => {
     const source = view === "friends" ? friendApplications : ownApplications;
     let items = source;
+    if (statFilter === "active") items = items.filter((item) => !["\u5df2\u62d2\u7edd", "\u6d41\u7a0b\u7ed3\u675f", "Offer"].includes(item.status));
+    if (statFilter === "interview") items = items.filter((item) => INTERVIEW_STATUSES.includes(item.status));
+    if (statFilter === "offer") items = items.filter((item) => item.status === "Offer");
     if (query.trim()) {
       const q = query.trim();
       items = items.filter(
@@ -1147,18 +1219,19 @@ export function RecruitmentTracker({
       const result = compareApplications(a, b, sortKey);
       return sortDirection === "asc" ? result : -result;
     });
-  }, [query, statusFilter, batchFilter, companyNatureFilter, industryFilter, scaleFilter, positionFilter, locationFilter, view, ownApplications, friendApplications, sortKey, sortDirection]);
+  }, [query, statusFilter, statFilter, batchFilter, companyNatureFilter, industryFilter, scaleFilter, positionFilter, locationFilter, view, ownApplications, friendApplications, sortKey, sortDirection]);
 
   const activeFilterCount = useMemo(() => [
     query.trim(),
     statusFilter !== "全部状态",
     batchFilter !== "全部批次",
+    statFilter !== "all",
     companyNatureFilter !== "全部单位性质",
     industryFilter !== "全部行业方向",
     scaleFilter !== "全部规模",
     positionFilter.trim(),
     locationFilter.trim(),
-  ].filter(Boolean).length, [query, statusFilter, batchFilter, companyNatureFilter, industryFilter, scaleFilter, positionFilter, locationFilter]);
+  ].filter(Boolean).length, [query, statusFilter, statFilter, batchFilter, companyNatureFilter, industryFilter, scaleFilter, positionFilter, locationFilter]);
 
   const quickStatusCounts = useMemo(() => {
     const source = view === "friends" ? friendApplications : ownApplications;
@@ -1586,6 +1659,50 @@ export function RecruitmentTracker({
     [user, runCloudMutation],
   );
 
+  const addExperience = useCallback(async (item: InterviewExperience) => {
+    if (user) {
+      const saved = await runCloudMutation("Saving experience", { action: "saveExperience", experience: item });
+      if (!saved) return false;
+    }
+    setExperiences((current) => [item, ...current]);
+    return true;
+  }, [user, runCloudMutation]);
+
+  const updateExperience = useCallback(async (id: string, changes: Partial<InterviewExperience>) => {
+    const current = experiences.find((item) => item.id === id);
+    if (!current) return false;
+    const next = { ...current, ...changes, updatedAt: new Date().toISOString() };
+    if (user) {
+      const saved = await runCloudMutation("Saving experience", { action: "updateExperience", experience: next });
+      if (!saved) return false;
+    }
+    setExperiences((items) => items.map((item) => item.id === id ? next : item));
+    return true;
+  }, [experiences, user, runCloudMutation]);
+
+  const removeExperience = useCallback(async (item: InterviewExperience) => {
+    if (!confirm("Delete this interview experience?")) return false;
+    if (user) {
+      const removed = await runCloudMutation("Deleting experience", { action: "deleteExperience", id: item.id });
+      if (!removed) return false;
+    }
+    setExperiences((items) => items.filter((entry) => entry.id !== item.id));
+    return true;
+  }, [user, runCloudMutation]);
+
+  const openExperienceCreate = useCallback((applicationId = "") => {
+    const application = ownApplications.find((item) => item.id === applicationId);
+    setExperienceForm({ ...EMPTY_EXPERIENCE, applicationId, company: application?.company ?? "", position: application?.position ?? "" });
+    setEditingExperienceId(null);
+    setIsExperienceOpen(true);
+  }, [ownApplications]);
+
+  const openExperienceEdit = useCallback((item: InterviewExperience) => {
+    setExperienceForm({ applicationId: item.applicationId ?? "", title: item.title, company: item.company, position: item.position, round: item.round, tags: item.tags.join(" / "), content: item.content, takeaway: item.takeaway });
+    setEditingExperienceId(item.id);
+    setIsExperienceOpen(true);
+  }, []);
+
   const groupAction = useCallback(
     async (action: string) => {
       try {
@@ -1775,6 +1892,7 @@ export function RecruitmentTracker({
   const clearFilters = useCallback(() => {
     setQuery("");
     setStatusFilter("全部状态");
+    setStatFilter("all");
     setBatchFilter("全部批次");
     setCompanyNatureFilter("全部单位性质");
     setIndustryFilter("全部行业方向");
@@ -1784,6 +1902,13 @@ export function RecruitmentTracker({
     setFiltersExpanded(false);
   }, []);
 
+  const openStatFilter = useCallback((filter: "all" | "active" | "interview" | "offer") => {
+    clearFilters();
+    setView("mine");
+    setSelectedApplicationIds([]);
+    setStatFilter(filter);
+    setStatusFilter(filter === "interview" ? "\u9762\u8bd5\u8fdb\u884c\u4e2d" : filter === "offer" ? "Offer" : "\u5168\u90e8\u72b6\u6001");
+  }, [clearFilters]);
   // ────────────────────────────────── form
   function openCreate(source?: Application) {
     setBatchPositions([{ position: "", base: source?.base ?? "" }]);
@@ -2008,7 +2133,54 @@ export function RecruitmentTracker({
     if (saved) closeInterviewForm();
   }
 
+  function closeExperienceForm() {
+    setIsExperienceOpen(false);
+    setEditingExperienceId(null);
+    setExperienceForm(EMPTY_EXPERIENCE);
+  }
+
+  async function submitExperienceForm(event: React.FormEvent) {
+    event.preventDefault();
+    if (!experienceForm.title.trim() || !experienceForm.content.trim()) {
+      setNotice("\u8bf7\u586b\u5199\u9762\u7ecf\u6807\u9898\u548c\u9762\u8bd5\u5185\u5bb9");
+      return;
+    }
+    const now = new Date().toISOString();
+    const tags = experienceForm.tags.split(/[\/,\u3001\uff0c]/).map((tag) => tag.trim()).filter(Boolean);
+    const changes = { ...experienceForm, title: experienceForm.title.trim(), company: experienceForm.company.trim(), position: experienceForm.position.trim(), round: experienceForm.round.trim(), content: experienceForm.content.trim(), takeaway: experienceForm.takeaway.trim(), tags };
+    const saved = editingExperienceId
+      ? await updateExperience(editingExperienceId, changes)
+      : await addExperience({ id: crypto.randomUUID(), ...changes, createdAt: now, updatedAt: now });
+    if (saved) closeExperienceForm();
+  }
+
+  function selectExperienceApplication(applicationId: string) {
+    const application = ownApplications.find((item) => item.id === applicationId);
+    setExperienceForm((current) => ({
+      ...current,
+      applicationId,
+      company: application?.company ?? current.company,
+      position: application?.position ?? current.position,
+    }));
+  }
   // ────────────────────────────────── company modal
+
+  function openExperienceFromInterview(interview: Interview) {
+    const application = ownApplications.find((item) => item.id === interview.applicationId);
+    setExperienceForm({
+      ...EMPTY_EXPERIENCE,
+      applicationId: interview.applicationId,
+      company: application?.company ?? "",
+      position: application?.position ?? "",
+      round: interview.round,
+      title: `${application?.company ?? "\u672c\u6b21"}${interview.round ? ` \u00b7 ${interview.round}` : ""}\u9762\u7ecf`,
+      content: interview.summary,
+      takeaway: interview.nextSteps,
+    });
+    setEditingExperienceId(null);
+    setIsInterviewOpen(false);
+    setIsExperienceOpen(true);
+  }
   function openCompany(company: string) {
     setSelectedCompany(company);
   }
@@ -2193,22 +2365,22 @@ export function RecruitmentTracker({
       </section>
 
       <section className="stats-grid">
-        <article className="stat-card">
+        <button type="button" className={["stat-card", statFilter === "all" ? "is-selected" : ""].filter(Boolean).join(" ")} onClick={() => openStatFilter("all")} aria-pressed={statFilter === "all"} aria-label="\u67e5\u770b\u5168\u90e8\u6295\u9012">
           <span className="stat-icon ink">⌗</span>
           <div><small>总投递</small><strong>{stats.total}</strong><span>累计投递</span></div>
-        </article>
-        <article className="stat-card">
+        </button>
+        <button type="button" className={["stat-card", statFilter === "active" ? "is-selected" : ""].filter(Boolean).join(" ")} onClick={() => openStatFilter("active")} aria-pressed={statFilter === "active"} aria-label="\u67e5\u770b\u8fdb\u884c\u4e2d\u6295\u9012">
           <span className="stat-icon blue">↗</span>
           <div><small>进行中</small><strong>{stats.active}</strong><span>个活跃流程</span></div>
-        </article>
-        <article className="stat-card">
+        </button>
+        <button type="button" className={["stat-card", statFilter === "interview" ? "is-selected" : ""].filter(Boolean).join(" ")} onClick={() => openStatFilter("interview")} aria-pressed={statFilter === "interview"} aria-label="\u67e5\u770b\u9762\u8bd5\u9636\u6bb5\u6295\u9012">
           <span className="stat-icon amber">◌</span>
           <div><small>面试阶段</small><strong>{stats.interview}</strong><span>个待跟进</span></div>
-        </article>
-        <article className="stat-card highlight">
+        </button>
+        <button type="button" className={["stat-card", "highlight", statFilter === "offer" ? "is-selected" : ""].filter(Boolean).join(" ")} onClick={() => openStatFilter("offer")} aria-pressed={statFilter === "offer"} aria-label="\u67e5\u770b Offer \u6295\u9012">
           <span className="stat-icon green">✓</span>
           <div><small>Offer</small><strong>{stats.offers}</strong><span>继续加油</span></div>
-        </article>
+        </button>
       </section>
 
       <section className={`workspace workspace-${view}`}>
@@ -2220,6 +2392,12 @@ export function RecruitmentTracker({
             className={view === "dashboard" ? "active" : ""}
             onClick={() => { setView("dashboard"); setSelectedApplicationIds([]); }}
           >
+          <button
+            className={view === "experiences" ? "active" : ""}
+            onClick={() => { setView("experiences"); setSelectedApplicationIds([]); }}
+          >
+            <i className="view-tab-icon" aria-hidden="true">{"\u2726"}</i> {"\u9762\u7ecf\u5e93"} <span>{experiences.length}</span>
+          </button>
             <i className="view-tab-icon" aria-hidden="true">◫</i> 数据看板
           </button>
           <button
@@ -2238,7 +2416,60 @@ export function RecruitmentTracker({
           </button>
         </nav>
 
-        {view === "dashboard" ? (
+        {view === "experiences" ? (
+          <section className="experience-library" aria-label="\u9762\u7ecf\u5e93">
+            <div className="experience-library-head">
+              <div>
+                <p className="section-kicker">INTERVIEW PLAYBOOK</p>
+                <h2>{"\u9762\u7ecf\u5e93"}</h2>
+                <p>{"\u628a\u6bcf\u6b21\u9762\u8bd5\u7684\u9ad8\u9891\u95ee\u9898\u3001\u56de\u7b54\u601d\u8def\u548c\u590d\u76d8\u8981\u70b9\u6c89\u6dc0\u4e0b\u6765\uff0c\u4e0b\u4e00\u6b21\u66f4\u4ece\u5bb9\u3002"}</p>
+              </div>
+              <button type="button" className="primary-button experience-create-button" onClick={() => openExperienceCreate()}>
+                <span aria-hidden="true">+</span> {"\u8bb0\u5f55\u9762\u7ecf"}
+              </button>
+            </div>
+            <div className="experience-library-tools">
+              <label className="experience-search">
+                <span aria-hidden="true">?</span>
+                <input value={experienceQuery} onChange={(event) => setExperienceQuery(event.target.value)} placeholder="\u641c\u7d22\u516c\u53f8\u3001\u5c97\u4f4d\u3001\u9898\u76ee\u3001\u6807\u7b7e\u6216\u590d\u76d8\u5185\u5bb9\uff08\u652f\u6301\u62fc\u97f3\uff09" />
+              </label>
+              <div className="experience-counts">
+                <span><b>{experiences.length}</b> {"\u7bc7\u6c89\u6dc0"}</span>
+                <span><b>{new Set(experiences.map((item) => item.company).filter(Boolean)).size}</b> {"\u5bb6\u516c\u53f8"}</span>
+              </div>
+            </div>
+            {filteredExperiences.length === 0 ? (
+              <div className="experience-empty">
+                <div className="experience-empty-mark">?</div>
+                <h3>{experiences.length ? "\u6ca1\u6709\u627e\u5230\u5339\u914d\u7684\u9762\u7ecf" : "\u4ece\u7b2c\u4e00\u7bc7\u9762\u7ecf\u5f00\u59cb"}</h3>
+                <p>{experiences.length ? "\u6362\u4e2a\u5173\u952e\u8bcd\u8bd5\u8bd5\uff0c\u4e5f\u53ef\u641c\u7d22\u62fc\u97f3\u3002" : "\u8bb0\u5f55\u9898\u76ee\u3001\u56de\u7b54\u601d\u8def\u4e0e\u590d\u76d8\u8981\u70b9\uff0c\u9010\u6b65\u5f62\u6210\u81ea\u5df1\u7684\u9762\u8bd5\u8d44\u6599\u5e93\u3002"}</p>
+                {!experiences.length && <button type="button" className="secondary-button" onClick={() => openExperienceCreate()}>{"\u5199\u4e00\u7bc7\u9762\u7ecf"}</button>}
+              </div>
+            ) : (
+              <div className="experience-grid">
+                {filteredExperiences.map((experience) => (
+                  <article className="experience-card" key={experience.id}>
+                    <header>
+                      <div>
+                        <span className="experience-round">{experience.round || "\u901a\u7528\u590d\u76d8"}</span>
+                        <h3>{experience.title}</h3>
+                      </div>
+                      <time>{formatDateTime(experience.updatedAt)}</time>
+                    </header>
+                    {(experience.company || experience.position) && <p className="experience-company">{[experience.company, experience.position].filter(Boolean).join(" ? ")}</p>}
+                    {experience.tags.length > 0 && <div className="experience-tags">{experience.tags.map((tag) => <span key={`${experience.id}-${tag}`}>#{tag}</span>)}</div>}
+                    <p className="experience-content">{experience.content}</p>
+                    {experience.takeaway && <div className="experience-takeaway"><strong>{"\u590d\u76d8\u8981\u70b9"}</strong><span>{experience.takeaway}</span></div>}
+                    <footer>
+                      <button type="button" className="text-button" onClick={() => openExperienceEdit(experience)}>??</button>
+                      <button type="button" className="text-button danger-text" onClick={() => void removeExperience(experience)}>??</button>
+                    </footer>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        ) : view === "dashboard" ? (
           <DashboardPanel
             applications={dashboardApplications}
             range={dashboardRange}
@@ -3267,6 +3498,19 @@ export function RecruitmentTracker({
                     </button>
                   )}
                   <button type="button" className="secondary-button" onClick={closeInterviewForm}>取消</button>
+                  {editingInterviewId && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={busy}
+                      onClick={() => {
+                        const item = interviews.find((interview) => interview.id === editingInterviewId);
+                        if (item) openExperienceFromInterview(item);
+                      }}
+                    >
+                      {"\u6c89\u6dc0\u4e3a\u9762\u7ecf"}
+                    </button>
+                  )}
                   <button type="submit" className="primary-button" disabled={busy}>
                     {busy ? "保存中…" : editingInterviewId ? "保存修改" : "添加面试"}
                   </button>
@@ -3278,6 +3522,71 @@ export function RecruitmentTracker({
         )}
 
         {/* ────────────────────────────────── company edit modal */}
+        {isExperienceOpen && (
+          <ModalPortal>
+            <div className="modal-overlay modal-overlay-elevated">
+              <div className="modal experience-form-modal" onClick={(event) => event.stopPropagation()}>
+                <div className="modal-head">
+                  <div>
+                    <p className="modal-kicker">INTERVIEW PLAYBOOK</p>
+                    <h2>{editingExperienceId ? "\u7f16\u8f91\u9762\u7ecf" : "\u8bb0\u5f55\u9762\u7ecf"}</h2>
+                    <p className="modal-subtitle">{"\u8bb0\u5f55\u9898\u76ee\u3001\u56de\u7b54\u601d\u8def\u4e0e\u590d\u76d8\u8981\u70b9\uff1b\u4e5f\u53ef\u4ee5\u4e0d\u5173\u8054\u5177\u4f53\u5c97\u4f4d\u3002"}</p>
+                  </div>
+                  <button type="button" className="close-button" onClick={closeExperienceForm} aria-label="\u5173\u95ed">{"\u00d7"}</button>
+                </div>
+                <form onSubmit={submitExperienceForm}>
+                  <div className="form-grid experience-form-grid">
+                    <label className="full-width">
+                      <span>{"\u5173\u8054\u5c97\u4f4d\uff08\u53ef\u9009\uff09"}</span>
+                      <DropdownSelect value={experienceForm.applicationId} onChange={selectExperienceApplication} options={ownApplications.map((app) => ({ value: app.id, label: `${app.company} \u00b7 ${app.position}` }))} placeholder="\u4e0d\u5173\u8054\uff0c\u8bb0\u5f55\u901a\u7528\u9762\u7ecf" ariaLabel="\u9009\u62e9\u5173\u8054\u5c97\u4f4d" />
+                    </label>
+                    <label className="full-width">
+                      <span>{"\u6807\u9898 *"}</span>
+                      <input value={experienceForm.title} onChange={(event) => setExperienceForm((current) => ({ ...current, title: event.target.value }))} placeholder="\u4f8b\u5982\uff1a\u4e00\u9762\u9ad8\u9891\u7b97\u6cd5\u9898\u4e0e\u9879\u76ee\u6df1\u6316" required autoFocus />
+                    </label>
+                    <label>
+                      <span>{"\u516c\u53f8"}</span>
+                      <input value={experienceForm.company} onChange={(event) => setExperienceForm((current) => ({ ...current, company: event.target.value }))} placeholder="\u4f8b\u5982\uff1a\u5b57\u8282\u8df3\u52a8" />
+                    </label>
+                    <label>
+                      <span>{"\u5c97\u4f4d"}</span>
+                      <input value={experienceForm.position} onChange={(event) => setExperienceForm((current) => ({ ...current, position: event.target.value }))} placeholder="\u4f8b\u5982\uff1a\u7b97\u6cd5\u5de5\u7a0b\u5e08" />
+                    </label>
+                    <label>
+                      <span>{"\u8f6e\u6b21"}</span>
+                      <DropdownSelect value={experienceForm.round} onChange={(round) => setExperienceForm((current) => ({ ...current, round }))} options={[...INTERVIEW_ROUNDS, "\u7b14\u8bd5", "\u7efc\u5408\u590d\u76d8"].map((option) => ({ value: option, label: option }))} placeholder="\u9009\u62e9\u6216\u7559\u7a7a" ariaLabel="\u9009\u62e9\u9762\u8bd5\u8f6e\u6b21" />
+                    </label>
+                    <label>
+                      <span>{"\u6807\u7b7e"}</span>
+                      <input value={experienceForm.tags} onChange={(event) => setExperienceForm((current) => ({ ...current, tags: event.target.value }))} placeholder="\u7b97\u6cd5 / \u9879\u76ee / HR\u9762 / \u9ad8\u9891" />
+                    </label>
+                    <label className="full-width">
+                      <span>{"\u9762\u8bd5\u5185\u5bb9 *"}</span>
+                      <textarea value={experienceForm.content} onChange={(event) => setExperienceForm((current) => ({ ...current, content: event.target.value }))} rows={8} placeholder="\u5199\u4e0b\u9898\u76ee\u3001\u8ffd\u95ee\u3001\u4f60\u7684\u56de\u7b54\u601d\u8def\u3001\u6ca1\u7b54\u597d\u7684\u5730\u65b9\u2026\u2026" required />
+                    </label>
+                    <label className="full-width">
+                      <span>{"\u590d\u76d8\u8981\u70b9"}</span>
+                      <textarea value={experienceForm.takeaway} onChange={(event) => setExperienceForm((current) => ({ ...current, takeaway: event.target.value }))} rows={3} placeholder="\u4e0b\u4e00\u6b21\u60f3\u4f18\u5316\u7684\u8868\u8fbe\u3001\u9700\u8981\u8865\u7684\u77e5\u8bc6\u70b9\u6216\u540e\u7eed\u884c\u52a8" />
+                    </label>
+                  </div>
+                  <div className="form-actions">
+                    {editingExperienceId && (
+                      <button type="button" className="danger-button form-delete-button" disabled={busy} onClick={async () => {
+                        const item = experiences.find((experience) => experience.id === editingExperienceId);
+                        if (item && await removeExperience(item)) closeExperienceForm();
+                      }}>
+                        {"\u5220\u9664\u9762\u7ecf"}
+                      </button>
+                    )}
+                    <button type="button" className="secondary-button" onClick={closeExperienceForm}>{"\u53d6\u6d88"}</button>
+                    <button type="submit" className="primary-button" disabled={busy}>{busy ? "\u4fdd\u5b58\u4e2d\u2026" : editingExperienceId ? "\u4fdd\u5b58\u4fee\u6539" : "\u4fdd\u5b58\u9762\u7ecf"}</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </ModalPortal>
+        )}
+
         {editingCompanyName && (
           <ModalPortal>
             <div className="modal-overlay modal-overlay-elevated">

@@ -37,6 +37,12 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(route, /group_members/);
   assert.match(route, /saveApplication/);
   assert.match(route, /deleteApplication/);
+  assert.match(tracker, /experience-library/);
+  assert.match(tracker, /openExperienceFromInterview/);
+  assert.match(tracker, /saveExperience/);
+  assert.match(route, /interview_experiences/);
+  assert.match(tracker, /openStatFilter/);
+  assert.match(styles, /stat-card\.is-selected/);
   assert.match(schema, /applications/);
   assert.match(hosting, /"d1": "DB"/);
 });

@@ -62,6 +62,20 @@ export type Interview = {
   updatedAt: string;
 };
 
+export type InterviewExperience = {
+  id: string;
+  applicationId?: string;
+  title: string;
+  company: string;
+  position: string;
+  round: string;
+  tags: string[];
+  content: string;
+  takeaway: string;
+  createdAt?: string;
+  updatedAt: string;
+};
+
 export type GroupInfo = {
   id: string;
   name: string;
