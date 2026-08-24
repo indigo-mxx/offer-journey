@@ -2385,19 +2385,19 @@ export function RecruitmentTracker({
       </section>
 
       <section className="stats-grid">
-        <button type="button" className={["stat-card", statFilter === "all" ? "is-selected" : ""].filter(Boolean).join(" ")} onClick={() => openStatFilter("all")} aria-pressed={statFilter === "all"} aria-label="\u67e5\u770b\u5168\u90e8\u6295\u9012">
+        <button type="button" className={["stat-card", statFilter === "all" ? "is-selected" : ""].filter(Boolean).join(" ")} onClick={() => openStatFilter("all")} aria-pressed={statFilter === "all"} aria-label={"\u67e5\u770b\u5168\u90e8\u6295\u9012"}>
           <span className="stat-icon ink">⌗</span>
           <div><small>总投递</small><strong>{stats.total}</strong><span>累计投递</span></div>
         </button>
-        <button type="button" className={["stat-card", statFilter === "active" ? "is-selected" : ""].filter(Boolean).join(" ")} onClick={() => openStatFilter("active")} aria-pressed={statFilter === "active"} aria-label="\u67e5\u770b\u8fdb\u884c\u4e2d\u6295\u9012">
+        <button type="button" className={["stat-card", statFilter === "active" ? "is-selected" : ""].filter(Boolean).join(" ")} onClick={() => openStatFilter("active")} aria-pressed={statFilter === "active"} aria-label={"\u67e5\u770b\u8fdb\u884c\u4e2d\u6295\u9012"}>
           <span className="stat-icon blue">↗</span>
           <div><small>进行中</small><strong>{stats.active}</strong><span>个活跃流程</span></div>
         </button>
-        <button type="button" className={["stat-card", statFilter === "interview" ? "is-selected" : ""].filter(Boolean).join(" ")} onClick={() => openStatFilter("interview")} aria-pressed={statFilter === "interview"} aria-label="\u67e5\u770b\u9762\u8bd5\u9636\u6bb5\u6295\u9012">
+        <button type="button" className={["stat-card", statFilter === "interview" ? "is-selected" : ""].filter(Boolean).join(" ")} onClick={() => openStatFilter("interview")} aria-pressed={statFilter === "interview"} aria-label={"\u67e5\u770b\u9762\u8bd5\u9636\u6bb5\u6295\u9012"}>
           <span className="stat-icon amber">◌</span>
           <div><small>面试阶段</small><strong>{stats.interview}</strong><span>个待跟进</span></div>
         </button>
-        <button type="button" className={["stat-card", "highlight", statFilter === "offer" ? "is-selected" : ""].filter(Boolean).join(" ")} onClick={() => openStatFilter("offer")} aria-pressed={statFilter === "offer"} aria-label="\u67e5\u770b Offer \u6295\u9012">
+        <button type="button" className={["stat-card", "highlight", statFilter === "offer" ? "is-selected" : ""].filter(Boolean).join(" ")} onClick={() => openStatFilter("offer")} aria-pressed={statFilter === "offer"} aria-label={"\u67e5\u770b Offer \u6295\u9012"}>
           <span className="stat-icon green">✓</span>
           <div><small>Offer</small><strong>{stats.offers}</strong><span>继续加油</span></div>
         </button>
@@ -2437,7 +2437,7 @@ export function RecruitmentTracker({
         </nav>
 
         {view === "experiences" ? (
-          <section className="experience-library" aria-label="\u9762\u7ecf\u5e93">
+          <section className="experience-library" aria-label={"\u9762\u7ecf\u5e93"}>
             <div className="experience-library-head">
               <div>
                 <p className="section-kicker">INTERVIEW PLAYBOOK</p>
@@ -2450,8 +2450,8 @@ export function RecruitmentTracker({
             </div>
             <div className="experience-library-tools">
               <label className="experience-search">
-                <span aria-hidden="true">?</span>
-                <input value={experienceQuery} onChange={(event) => setExperienceQuery(event.target.value)} placeholder="\u641c\u7d22\u516c\u53f8\u3001\u5c97\u4f4d\u3001\u9898\u76ee\u3001\u6807\u7b7e\u6216\u590d\u76d8\u5185\u5bb9\uff08\u652f\u6301\u62fc\u97f3\uff09" />
+                <span aria-hidden="true">{"\u2315"}</span>
+                <input value={experienceQuery} onChange={(event) => setExperienceQuery(event.target.value)} placeholder={"\u641c\u7d22\u516c\u53f8\u3001\u5c97\u4f4d\u3001\u9898\u76ee\u3001\u6807\u7b7e\u6216\u590d\u76d8\u5185\u5bb9\uff08\u652f\u6301\u62fc\u97f3\uff09"} />
               </label>
               <div className="experience-counts">
                 <span><b>{experiences.length}</b> {"\u7bc7\u6c89\u6dc0"}</span>
@@ -2460,7 +2460,7 @@ export function RecruitmentTracker({
             </div>
             {filteredExperiences.length === 0 ? (
               <div className="experience-empty">
-                <div className="experience-empty-mark">?</div>
+                <div className="experience-empty-mark">{"\u2726"}</div>
                 <h3>{experiences.length ? "\u6ca1\u6709\u627e\u5230\u5339\u914d\u7684\u9762\u7ecf" : "\u4ece\u7b2c\u4e00\u7bc7\u9762\u7ecf\u5f00\u59cb"}</h3>
                 <p>{experiences.length ? "\u6362\u4e2a\u5173\u952e\u8bcd\u8bd5\u8bd5\uff0c\u4e5f\u53ef\u641c\u7d22\u62fc\u97f3\u3002" : "\u8bb0\u5f55\u9898\u76ee\u3001\u56de\u7b54\u601d\u8def\u4e0e\u590d\u76d8\u8981\u70b9\uff0c\u9010\u6b65\u5f62\u6210\u81ea\u5df1\u7684\u9762\u8bd5\u8d44\u6599\u5e93\u3002"}</p>
                 {!experiences.length && <button type="button" className="secondary-button" onClick={() => openExperienceCreate()}>{"\u5199\u4e00\u7bc7\u9762\u7ecf"}</button>}
@@ -2476,13 +2476,13 @@ export function RecruitmentTracker({
                       </div>
                       <time>{formatDateTime(experience.updatedAt)}</time>
                     </header>
-                    {(experience.company || experience.position) && <p className="experience-company">{[experience.company, experience.position].filter(Boolean).join(" ? ")}</p>}
+                    {(experience.company || experience.position) && <p className="experience-company">{[experience.company, experience.position].filter(Boolean).join(" / ")}</p>}
                     {experience.tags.length > 0 && <div className="experience-tags">{experience.tags.map((tag) => <span key={`${experience.id}-${tag}`}>#{tag}</span>)}</div>}
                     <p className="experience-content">{experience.content}</p>
                     {experience.takeaway && <div className="experience-takeaway"><strong>{"\u590d\u76d8\u8981\u70b9"}</strong><span>{experience.takeaway}</span></div>}
                     <footer>
-                      <button type="button" className="text-button" onClick={() => openExperienceEdit(experience)}>??</button>
-                      <button type="button" className="text-button danger-text" onClick={() => void removeExperience(experience)}>??</button>
+                      <button type="button" className="text-button" onClick={() => openExperienceEdit(experience)}>{"\u7f16\u8f91"}</button>
+                      <button type="button" className="text-button danger-text" onClick={() => void removeExperience(experience)}>{"\u5220\u9664"}</button>
                     </footer>
                   </article>
                 ))}
@@ -3552,41 +3552,41 @@ export function RecruitmentTracker({
                     <h2>{editingExperienceId ? "\u7f16\u8f91\u9762\u7ecf" : "\u8bb0\u5f55\u9762\u7ecf"}</h2>
                     <p className="modal-subtitle">{"\u8bb0\u5f55\u9898\u76ee\u3001\u56de\u7b54\u601d\u8def\u4e0e\u590d\u76d8\u8981\u70b9\uff1b\u4e5f\u53ef\u4ee5\u4e0d\u5173\u8054\u5177\u4f53\u5c97\u4f4d\u3002"}</p>
                   </div>
-                  <button type="button" className="close-button" onClick={closeExperienceForm} aria-label="\u5173\u95ed">{"\u00d7"}</button>
+                  <button type="button" className="close-button" onClick={closeExperienceForm} aria-label={"\u5173\u95ed"}>{"\u00d7"}</button>
                 </div>
                 <form onSubmit={submitExperienceForm}>
                   <div className="form-grid experience-form-grid">
                     <label className="full-width">
                       <span>{"\u5173\u8054\u5c97\u4f4d\uff08\u53ef\u9009\uff09"}</span>
-                      <DropdownSelect value={experienceForm.applicationId} onChange={selectExperienceApplication} options={ownApplications.map((app) => ({ value: app.id, label: `${app.company} \u00b7 ${app.position}` }))} placeholder="\u4e0d\u5173\u8054\uff0c\u8bb0\u5f55\u901a\u7528\u9762\u7ecf" ariaLabel="\u9009\u62e9\u5173\u8054\u5c97\u4f4d" />
+                      <DropdownSelect value={experienceForm.applicationId} onChange={selectExperienceApplication} options={ownApplications.map((app) => ({ value: app.id, label: `${app.company} \u00b7 ${app.position}` }))} placeholder={"\u4e0d\u5173\u8054\uff0c\u8bb0\u5f55\u901a\u7528\u9762\u7ecf"} ariaLabel={"\u9009\u62e9\u5173\u8054\u5c97\u4f4d"} />
                     </label>
                     <label className="full-width">
                       <span>{"\u6807\u9898 *"}</span>
-                      <input value={experienceForm.title} onChange={(event) => setExperienceForm((current) => ({ ...current, title: event.target.value }))} placeholder="\u4f8b\u5982\uff1a\u4e00\u9762\u9ad8\u9891\u7b97\u6cd5\u9898\u4e0e\u9879\u76ee\u6df1\u6316" required autoFocus />
+                      <input value={experienceForm.title} onChange={(event) => setExperienceForm((current) => ({ ...current, title: event.target.value }))} placeholder={"\u4f8b\u5982\uff1a\u4e00\u9762\u9ad8\u9891\u7b97\u6cd5\u9898\u4e0e\u9879\u76ee\u6df1\u6316"} required autoFocus />
                     </label>
                     <label>
                       <span>{"\u516c\u53f8"}</span>
-                      <input value={experienceForm.company} onChange={(event) => setExperienceForm((current) => ({ ...current, company: event.target.value }))} placeholder="\u4f8b\u5982\uff1a\u5b57\u8282\u8df3\u52a8" />
+                      <input value={experienceForm.company} onChange={(event) => setExperienceForm((current) => ({ ...current, company: event.target.value }))} placeholder={"\u4f8b\u5982\uff1a\u5b57\u8282\u8df3\u52a8"} />
                     </label>
                     <label>
                       <span>{"\u5c97\u4f4d"}</span>
-                      <input value={experienceForm.position} onChange={(event) => setExperienceForm((current) => ({ ...current, position: event.target.value }))} placeholder="\u4f8b\u5982\uff1a\u7b97\u6cd5\u5de5\u7a0b\u5e08" />
+                      <input value={experienceForm.position} onChange={(event) => setExperienceForm((current) => ({ ...current, position: event.target.value }))} placeholder={"\u4f8b\u5982\uff1a\u7b97\u6cd5\u5de5\u7a0b\u5e08"} />
                     </label>
                     <label>
                       <span>{"\u8f6e\u6b21"}</span>
-                      <DropdownSelect value={experienceForm.round} onChange={(round) => setExperienceForm((current) => ({ ...current, round }))} options={[...INTERVIEW_ROUNDS, "\u7b14\u8bd5", "\u7efc\u5408\u590d\u76d8"].map((option) => ({ value: option, label: option }))} placeholder="\u9009\u62e9\u6216\u7559\u7a7a" ariaLabel="\u9009\u62e9\u9762\u8bd5\u8f6e\u6b21" />
+                      <DropdownSelect value={experienceForm.round} onChange={(round) => setExperienceForm((current) => ({ ...current, round }))} options={[...INTERVIEW_ROUNDS, "\u7b14\u8bd5", "\u7efc\u5408\u590d\u76d8"].map((option) => ({ value: option, label: option }))} placeholder={"\u9009\u62e9\u6216\u7559\u7a7a"} ariaLabel={"\u9009\u62e9\u9762\u8bd5\u8f6e\u6b21"} />
                     </label>
                     <label>
                       <span>{"\u6807\u7b7e"}</span>
-                      <input value={experienceForm.tags} onChange={(event) => setExperienceForm((current) => ({ ...current, tags: event.target.value }))} placeholder="\u7b97\u6cd5 / \u9879\u76ee / HR\u9762 / \u9ad8\u9891" />
+                      <input value={experienceForm.tags} onChange={(event) => setExperienceForm((current) => ({ ...current, tags: event.target.value }))} placeholder={"\u7b97\u6cd5 / \u9879\u76ee / HR\u9762 / \u9ad8\u9891"} />
                     </label>
                     <label className="full-width">
                       <span>{"\u9762\u8bd5\u5185\u5bb9 *"}</span>
-                      <textarea value={experienceForm.content} onChange={(event) => setExperienceForm((current) => ({ ...current, content: event.target.value }))} rows={8} placeholder="\u5199\u4e0b\u9898\u76ee\u3001\u8ffd\u95ee\u3001\u4f60\u7684\u56de\u7b54\u601d\u8def\u3001\u6ca1\u7b54\u597d\u7684\u5730\u65b9\u2026\u2026" required />
+                      <textarea value={experienceForm.content} onChange={(event) => setExperienceForm((current) => ({ ...current, content: event.target.value }))} rows={8} placeholder={"\u5199\u4e0b\u9898\u76ee\u3001\u8ffd\u95ee\u3001\u4f60\u7684\u56de\u7b54\u601d\u8def\u3001\u6ca1\u7b54\u597d\u7684\u5730\u65b9\u2026\u2026"} required />
                     </label>
                     <label className="full-width">
                       <span>{"\u590d\u76d8\u8981\u70b9"}</span>
-                      <textarea value={experienceForm.takeaway} onChange={(event) => setExperienceForm((current) => ({ ...current, takeaway: event.target.value }))} rows={3} placeholder="\u4e0b\u4e00\u6b21\u60f3\u4f18\u5316\u7684\u8868\u8fbe\u3001\u9700\u8981\u8865\u7684\u77e5\u8bc6\u70b9\u6216\u540e\u7eed\u884c\u52a8" />
+                      <textarea value={experienceForm.takeaway} onChange={(event) => setExperienceForm((current) => ({ ...current, takeaway: event.target.value }))} rows={3} placeholder={"\u4e0b\u4e00\u6b21\u60f3\u4f18\u5316\u7684\u8868\u8fbe\u3001\u9700\u8981\u8865\u7684\u77e5\u8bc6\u70b9\u6216\u540e\u7eed\u884c\u52a8"} />
                     </label>
                   </div>
                   <div className="form-actions">
