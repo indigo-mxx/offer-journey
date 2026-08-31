@@ -1802,6 +1802,26 @@ export function RecruitmentTracker({
     setNotice("分享链接已复制");
   }, [activeGroup]);
 
+  const copyPositionLink = useCallback(async (application: Application) => {
+    if (!application.isOwner && application.visibility !== "full") {
+      setNotice("该岗位仅共享进度，链接不可复制");
+      return;
+    }
+
+    const link = externalHttpUrl(application.link);
+    if (!link) {
+      setNotice("该岗位还没有有效链接");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(link);
+      setNotice("岗位链接已复制");
+    } catch {
+      setNotice("复制失败，请手动打开链接后复制");
+    }
+  }, []);
+
   const exportData = useCallback(() => {
     try {
       const ownIds = new Set(ownApplications.map((item) => item.id));
@@ -3032,6 +3052,9 @@ export function RecruitmentTracker({
                           <td data-label="公开状态"><span className={`privacy-tag ${item.visibility}`}>{visibilityLabel(item.visibility)}</span></td>
                           {view === "friends" && <td data-label="岗位链接"><SharedPositionLink application={item} /></td>}
                           <td className="cell-actions" data-label="操作">
+                            {(view === "mine" || item.visibility === "full") && externalHttpUrl(item.link) && (
+                              <button className="action-btn" onClick={() => void copyPositionLink(item)}>复制链接</button>
+                            )}
                             {view === "mine" && (
                               <div className="action-buttons">
                                 <button className="action-btn" onClick={() => openEdit(item)} title="编辑岗位信息">编辑岗位</button>
@@ -3856,6 +3879,9 @@ export function RecruitmentTracker({
                       </div></td>
                       {view === "friends" && <td data-label="岗位链接"><SharedPositionLink application={item} /></td>}
                       <td className="cell-actions" data-label="操作">
+                        {(view === "mine" || item.visibility === "full") && externalHttpUrl(item.link) && (
+                          <button className="action-btn" onClick={() => void copyPositionLink(item)}>复制链接</button>
+                        )}
                         {view === "mine" && <div className="action-buttons">
                           <button className="action-btn" onClick={() => openEdit(item)} title="编辑岗位信息">编辑岗位</button>
                           <button className="action-btn" onClick={() => { const src = item; closeCompany(); openCreate(src); }} title="复制创建同公司新岗位">复制</button>
