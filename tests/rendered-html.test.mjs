@@ -15,6 +15,9 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(page, /SupabaseShell/);
   assert.match(tracker, /SharingPanel/);
   assert.match(tracker, /visibility/);
+  assert.match(tracker, /SharedPositionLink/);
+  assert.match(tracker, /仅完整共享可见/);
+  assert.match(tracker, /noopener noreferrer/);
   assert.match(tracker, /processing-overlay/);
   assert.match(tracker, /showProcessingHint/);
   assert.match(tracker, /processing-card/);

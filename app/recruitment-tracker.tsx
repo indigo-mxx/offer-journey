@@ -330,6 +330,30 @@ function visibilityLabel(visibility: Visibility) {
   return "仅自己";
 }
 
+function externalHttpUrl(value: string) {
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
+function SharedPositionLink({ application }: { application: Application }) {
+  if (!application.isOwner && application.visibility !== "full") {
+    return <span className="cell-muted">仅完整共享可见</span>;
+  }
+
+  const href = externalHttpUrl(application.link);
+  if (!href) return <span className="cell-muted">未填写</span>;
+
+  return (
+    <a className="position-link" href={href} target="_blank" rel="noopener noreferrer" title={href}>
+      打开岗位链接 ↗
+    </a>
+  );
+}
+
 function safeApplications(value: unknown): value is Application[] {
   return (
     Array.isArray(value) &&
@@ -2937,6 +2961,7 @@ export function RecruitmentTracker({
                               </div>
                               <div className="kanban-card-foot">
                                 {renderStatusControl(item, true)}
+                                {view === "friends" && <SharedPositionLink application={item} />}
                                 {view === "mine" && <button type="button" className="action-btn" onClick={() => openEdit(item)}>编辑</button>}
                               </div>
                             </article>
@@ -2960,13 +2985,14 @@ export function RecruitmentTracker({
                       <th><button className="sort-button" onClick={() => toggleSort("appliedAt")}>投递日期 {sortIndicator("appliedAt")}</button></th>
                       <th><button className="sort-button" onClick={() => toggleSort("status")}>面试进度 {sortIndicator("status")}</button></th>
                       <th>公开状态</th>
+                      {view === "friends" && <th>岗位链接</th>}
                       <th>操作</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.length === 0 ? (
                         <tr>
-                          <td colSpan={view === "mine" ? 9 : 8} className="empty-row">
+                          <td colSpan={9} className="empty-row">
                             <div className="empty-state">
                               <span>{activeFilterCount > 0 ? "⌕" : "＋"}</span>
                               <h3>{activeFilterCount > 0 ? "没有符合条件的记录" : "还没有投递记录"}</h3>
@@ -3004,6 +3030,7 @@ export function RecruitmentTracker({
                             {item.rejectionReason && <small>原因：{item.rejectionReason}</small>}
                           </div></td>
                           <td data-label="公开状态"><span className={`privacy-tag ${item.visibility}`}>{visibilityLabel(item.visibility)}</span></td>
+                          {view === "friends" && <td data-label="岗位链接"><SharedPositionLink application={item} /></td>}
                           <td className="cell-actions" data-label="操作">
                             {view === "mine" && (
                               <div className="action-buttons">
@@ -3804,6 +3831,7 @@ export function RecruitmentTracker({
                     <th>批次</th>
                     <th><button className="sort-button" onClick={() => toggleSort("appliedAt")}>投递日期 {sortIndicator("appliedAt")}</button></th>
                     <th><button className="sort-button" onClick={() => toggleSort("status")}>面试进度 {sortIndicator("status")}</button></th>
+                    {view === "friends" && <th>岗位链接</th>}
                     <th>操作</th>
                   </tr>
                 </thead>
@@ -3826,6 +3854,7 @@ export function RecruitmentTracker({
                           <small>{companyInterviews.filter((interview) => interview.applicationId === item.id).length} 场面试记录</small>
                         )}
                       </div></td>
+                      {view === "friends" && <td data-label="岗位链接"><SharedPositionLink application={item} /></td>}
                       <td className="cell-actions" data-label="操作">
                         {view === "mine" && <div className="action-buttons">
                           <button className="action-btn" onClick={() => openEdit(item)} title="编辑岗位信息">编辑岗位</button>
