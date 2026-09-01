@@ -179,6 +179,7 @@ export async function GET(request: Request) {
   const experiences = (experienceRows ?? []).map((row) => ({
     id: row.id,
     applicationId: row.application_id ?? "",
+    interviewId: row.interview_id ?? "",
     title: row.title ?? "",
     company: row.company ?? "",
     position: row.position ?? "",
@@ -348,6 +349,7 @@ export async function POST(request: Request) {
         ...(textValue(value.id, 80) ? { id: textValue(value.id, 80) } : {}),
         owner_id: user.id,
         application_id: textValue(value.applicationId, 80) || null,
+        interview_id: textValue(value.interviewId, 80) || null,
         title: textValue(value.title, 180),
         company: textValue(value.company, 120),
         position: textValue(value.position, 160),
@@ -357,8 +359,19 @@ export async function POST(request: Request) {
         takeaway: textValue(value.takeaway, 4000),
       };
       if (!experience.title || !experience.content) return json({ error: "\u8bf7\u586b\u5199\u9762\u7ecf\u6807\u9898\u548c\u9762\u8bd5\u5185\u5bb9" }, 400);
+      if (experience.interview_id) {
+        const { data: linkedInterview, error: linkedInterviewError } = await supabase
+          .from("interviews")
+          .select("id, application_id")
+          .eq("id", experience.interview_id)
+          .eq("owner_id", user.id)
+          .maybeSingle();
+        if (linkedInterviewError || !linkedInterview) return json({ error: "关联的面试场次不存在或无权访问" }, 400);
+        if (experience.application_id && linkedInterview.application_id !== experience.application_id) return json({ error: "面经关联的岗位与面试场次不一致" }, 400);
+        experience.application_id = linkedInterview.application_id;
+      }
       const { error } = await supabase.from("interview_experiences").upsert(experience, { onConflict: "id" });
-      if (error) return json({ error: error.code === "42P01" ? "\u9762\u7ecf\u5e93\u5c1a\u672a\u521d\u59cb\u5316\uff0c\u8bf7\u5148\u5728 Supabase SQL Editor \u6267\u884c 004_interview_experiences.sql" : error.message }, 400);
+      if (error) return json({ error: error.code === "42P01" ? "\u9762\u7ecf\u5e93\u5c1a\u672a\u521d\u59cb\u5316\uff0c\u8bf7\u5148\u5728 Supabase SQL Editor \u6267\u884c 004_interview_experiences.sql" : error.code === "42703" ? "请先在 Supabase SQL Editor 执行 005_experience_interview_link.sql" : error.message }, 400);
     } else if (action === "deleteExperience") {
       const { error } = await supabase.from("interview_experiences").delete().eq("id", textValue(body.id, 80)).eq("owner_id", user.id);
       if (error) return json({ error: error.code === "42P01" ? "\u9762\u7ecf\u5e93\u5c1a\u672a\u521d\u59cb化，请先在 Supabase SQL Editor 执行 004_interview_experiences.sql" : error.message }, 400);

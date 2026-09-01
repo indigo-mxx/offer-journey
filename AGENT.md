@@ -40,6 +40,8 @@
 - `supabase/migrations/001_initial.sql`：基础表、触发器、RLS 和共享函数。
 - `supabase/migrations/002_company_metadata.sql`：行业标签和公司规模字段。
 - `supabase/migrations/003_interview_end_time.sql`：面试结束时间字段。
+- `supabase/migrations/004_interview_experiences.sql`：面经库与岗位关联。
+- `supabase/migrations/005_experience_interview_link.sql`：面经与具体面试场次关联及旧数据回填。
 - `README.md`：给用户看的安装、登录、数据库和部署说明。
 - `ROADMAP.md`：后续功能规划。
 - `tests/rendered-html.test.mjs`：基础构建后 HTML 检查。
@@ -82,6 +84,8 @@
 1. `001_initial.sql`：全新项目的基础结构；
 2. `002_company_metadata.sql`：行业标签和公司规模；
 3. `003_interview_end_time.sql`：面试结束时间。
+4. `004_interview_experiences.sql`：面经库；
+5. `005_experience_interview_link.sql`：面经关联具体面试场次。
 
 已有 Supabase 项目不能靠重新执行 `001_initial.sql` 修复。只执行尚未执行的 migration，优先使用 `alter table ... add column if not exists`，避免重复执行破坏数据。
 

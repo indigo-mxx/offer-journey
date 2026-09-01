@@ -14,6 +14,7 @@ export type ApplicationStatus =
   | "笔试"
   | "一面"
   | "二面"
+  | "三面"
   | "终面"
   | "HR面"
   | "Offer"
@@ -65,6 +66,7 @@ export type Interview = {
 export type InterviewExperience = {
   id: string;
   applicationId?: string;
+  interviewId?: string;
   title: string;
   company: string;
   position: string;

@@ -22,7 +22,7 @@
 
 ## 数据库升级
 
-已有 Supabase 项目升级时，请在 Supabase Dashboard 的 SQL Editor 中依次执行 `supabase/migrations/002_company_metadata.sql` 和 `supabase/migrations/003_interview_end_time.sql`。新建项目按顺序执行 `001_initial.sql`、`002_company_metadata.sql` 和 `003_interview_end_time.sql`。
+已有 Supabase 项目升级时，请在 Supabase Dashboard 的 SQL Editor 中按文件编号执行尚未执行的迁移。本次面试轮次与面经关联功能需要执行 `supabase/migrations/005_experience_interview_link.sql`；脚本可重复执行，并会尽量把已有的同岗位同轮次面经关联到对应面试。新建项目先执行 `001_initial.sql`，再按编号执行其余迁移。
 
 ## 正式部署
 

@@ -154,6 +154,7 @@ create table if not exists public.interview_experiences (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references auth.users(id) on delete cascade,
   application_id uuid references public.applications(id) on delete set null,
+  interview_id uuid references public.interviews(id) on delete set null,
   title text not null default '',
   company text not null default '',
   position text not null default '',
@@ -165,6 +166,7 @@ create table if not exists public.interview_experiences (
   updated_at timestamptz not null default now()
 );
 create index if not exists interview_experiences_owner_updated_idx on public.interview_experiences(owner_id, updated_at desc);
+create index if not exists interview_experiences_interview_idx on public.interview_experiences(interview_id);
 alter table public.interview_experiences enable row level security;
 drop policy if exists profiles_read on public.profiles;
 create policy profiles_read on public.profiles for select to authenticated

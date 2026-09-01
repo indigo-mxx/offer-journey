@@ -65,6 +65,7 @@ interface InterviewForm {
 
 interface ExperienceForm {
   applicationId: string;
+  interviewId: string;
   title: string;
   company: string;
   position: string;
@@ -102,8 +103,8 @@ function ModalPortal({ children }: { children: ReactNode }) {
 }
 
 // ──────────────────────────────────────────────── constants
-const STATUSES: ApplicationStatus[] = ["准备投递", "简历投递", "已投递", "简历筛选", "笔试", "一面", "二面", "终面", "HR面", "Offer", "已拒绝", "流程结束"];
-const INTERVIEW_STATUSES: ApplicationStatus[] = ["一面", "二面", "终面", "HR面"];
+const STATUSES: ApplicationStatus[] = ["准备投递", "简历投递", "已投递", "简历筛选", "笔试", "一面", "二面", "三面", "终面", "HR面", "Offer", "已拒绝", "流程结束"];
+const INTERVIEW_STATUSES: ApplicationStatus[] = ["一面", "二面", "三面", "终面", "HR面"];
 const CLOSED_STATUSES: ApplicationStatus[] = ["已拒绝", "流程结束"];
 const RESUME_STATUSES: ApplicationStatus[] = ["准备投递", "简历投递", "已投递", "简历筛选"];
 const QUICK_STATUS_FILTERS = ["全部状态", "简历阶段", "笔试", "面试进行中", "Offer", "流程已结束"];
@@ -161,7 +162,7 @@ const COMPANY_NATURE_OPTIONS = [
   { value: "其他", subtypes: ["社会组织", "国际组织", "其他单位"] },
 ];
 
-const FINAL_OUTCOME_OPTIONS = ["简历挂", "笔试挂", "一面挂", "二面挂", "终面挂", "HR 面挂", "薪资不满足", "岗位关闭", "主动终止", "其他"];
+const FINAL_OUTCOME_OPTIONS = ["简历挂", "笔试挂", "一面挂", "二面挂", "三面挂", "终面挂", "HR 面挂", "薪资不满足", "岗位关闭", "主动终止", "其他"];
 const REJECTION_REASON_OPTIONS = ["薪资不满足", "岗位 / 方向不匹配", "已接受其他 Offer", "地点或到岗时间不合适", "个人原因", "其他"];
 
 const EMPTY_FORM: FormState = {
@@ -207,6 +208,7 @@ const EMPTY_INTERVIEW: InterviewForm = {
 
 const EMPTY_EXPERIENCE: ExperienceForm = {
   applicationId: "",
+  interviewId: "",
   title: "",
   company: "",
   position: "",
@@ -232,6 +234,57 @@ function formatDateTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+function formatInterviewDate(value: string) {
+  if (!value) return "时间待定";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const weekday = new Intl.DateTimeFormat("zh-CN", { weekday: "short" }).format(date);
+  const datePart = new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric" }).format(date);
+  const timePart = new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+  return `${datePart} ${weekday} ${timePart}`;
+}
+
+function dateTimeLocalValue(value: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value.slice(0, 16);
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return localDate.toISOString().slice(0, 16);
+}
+
+function storedDateTimeValue(value: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toISOString();
+}
+
+type InterviewStage = "一面" | "二面" | "三面" | "终面" | "HR面" | "其他";
+
+const INTERVIEW_STAGE_COLUMNS: Array<{ key: InterviewStage; hint: string }> = [
+  { key: "一面", hint: "初轮沟通与基础考察" },
+  { key: "二面", hint: "技术深挖与项目追问" },
+  { key: "三面", hint: "高阶技术或交叉评估" },
+  { key: "终面", hint: "主管与最终决策" },
+  { key: "HR面", hint: "意向、薪资与到岗" },
+];
+
+function interviewStage(value: string): InterviewStage {
+  const normalized = value.trim().toLocaleLowerCase().replace(/[\s\-_]/g, "");
+  if (/hr|人力/.test(normalized)) return "HR面";
+  if (/终|vp|高管|主管/.test(normalized)) return "终面";
+  if (/三|3|交叉/.test(normalized)) return "三面";
+  if (/二|2/.test(normalized)) return "二面";
+  if (/一|1|初/.test(normalized)) return "一面";
+  return "其他";
+}
+
+function defaultRoundForStage(stage: InterviewStage) {
+  if (stage === "一面") return "技术一面";
+  if (stage === "二面") return "技术二面";
+  if (stage === "三面") return "技术三面";
+  return stage === "其他" ? "其他" : stage;
 }
 
 function companyKey(value: string) {
@@ -318,7 +371,7 @@ function tagsWithClassification(companyNature: string, companySubtype: string, i
 
 function statusTone(status: ApplicationStatus) {
   if (status === "Offer") return "offer";
-  if (["一面", "二面", "终面", "HR面"].includes(status)) return "interview";
+  if (["一面", "二面", "三面", "终面", "HR面"].includes(status)) return "interview";
   if (status === "笔试") return "test";
   if (["已拒绝", "流程结束"].includes(status)) return "closed";
   return "default";
@@ -339,17 +392,17 @@ function externalHttpUrl(value: string) {
   }
 }
 
-function SharedPositionLink({ application }: { application: Application }) {
+function PositionLinkAction({ application, compact = false }: { application: Application; compact?: boolean }) {
   if (!application.isOwner && application.visibility !== "full") {
-    return <span className="cell-muted">仅完整共享可见</span>;
+    return compact ? null : <span className="cell-muted">仅完整共享可见</span>;
   }
 
   const href = externalHttpUrl(application.link);
-  if (!href) return <span className="cell-muted">未填写</span>;
+  if (!href) return compact ? null : <span className="cell-muted">未填写链接</span>;
 
   return (
-    <a className="position-link" href={href} target="_blank" rel="noopener noreferrer" title={href}>
-      打开岗位链接 ↗
+    <a className={`position-link-action ${compact ? "compact" : ""}`} href={href} target="_blank" rel="noopener noreferrer" title={`打开 ${application.company} ${application.position} 的岗位链接`}>
+      <span aria-hidden="true">↗</span>{compact ? "打开链接" : "打开岗位链接"}
     </a>
   );
 }
@@ -391,7 +444,7 @@ function normalizeInterviews(items: Interview[]) {
 }
 
 function normalizeExperiences(items: InterviewExperience[]) {
-  return items.map((item) => ({ ...item, tags: Array.isArray(item.tags) ? item.tags.filter(Boolean) : [] }));
+  return items.map((item) => ({ ...item, interviewId: item.interviewId ?? "", tags: Array.isArray(item.tags) ? item.tags.filter(Boolean) : [] }));
 }
 function applicationImportKey(item: Pick<Application, "company" | "position" | "appliedAt">) {
   return [companyKey(item.company), item.position.trim().toLocaleLowerCase(), item.appliedAt || ""].join("|");
@@ -936,7 +989,8 @@ export function RecruitmentTracker({
     };
     if (!safeApplications(result.applications)) throw new Error("投递数据解析失败");
     if (!safeInterviews(result.interviews)) throw new Error("面试数据解析失败");
-    if (!safeExperiences(result.experiences ?? [])) throw new Error("Experience data parsing failed");
+    const experienceData = result.experiences ?? [];
+    if (!safeExperiences(experienceData)) throw new Error("Experience data parsing failed");
     const groupsData = (Array.isArray(result.groups) ? result.groups : []) as GroupInfo[];
     const normalizedApplications = result.applications.map((item) => ({
         ...item,
@@ -946,7 +1000,7 @@ export function RecruitmentTracker({
         isOwner: item.isOwner ?? true,
       }));
     const normalizedInterviews = normalizeInterviews(result.interviews);
-    const normalizedExperiences = normalizeExperiences(result.experiences ?? []);
+    const normalizedExperiences = normalizeExperiences(experienceData);
     setApplications(normalizedApplications);
     setInterviews(normalizedInterviews);
     setExperiences(normalizedExperiences);
@@ -1209,7 +1263,7 @@ export function RecruitmentTracker({
   const stats = useMemo(() => {
     const total = ownApplications.length;
     const active = ownApplications.filter((a) => !["已拒绝", "流程结束", "Offer"].includes(a.status)).length;
-    const interview = ownApplications.filter((a) => ["一面", "二面", "终面", "HR面"].includes(a.status)).length;
+    const interview = ownApplications.filter((a) => INTERVIEW_STATUSES.includes(a.status)).length;
     const offers = ownApplications.filter((a) => a.status === "Offer").length;
     return { total, active, interview, offers };
   }, [ownApplications]);
@@ -1256,6 +1310,7 @@ export function RecruitmentTracker({
     positionFilter.trim(),
     locationFilter.trim(),
   ].filter(Boolean).length, [query, statusFilter, statFilter, batchFilter, companyNatureFilter, industryFilter, scaleFilter, positionFilter, locationFilter]);
+  const interviewWorkspaceActive = statFilter === "interview" || statusFilter === "面试进行中";
 
   const quickStatusCounts = useMemo(() => {
     const source = view === "friends" ? friendApplications : ownApplications;
@@ -1323,7 +1378,7 @@ export function RecruitmentTracker({
   const listInsights = useMemo(() => {
     const total = filtered.length;
     const companyCount = new Set(filtered.map((item) => companyKey(item.company))).size;
-    const interviewCount = filtered.filter((item) => ["一面", "二面", "终面", "HR面"].includes(item.status)).length;
+    const interviewCount = filtered.filter((item) => INTERVIEW_STATUSES.includes(item.status)).length;
     const offerCount = filtered.filter((item) => item.status === "Offer").length;
     const sharedCount = filtered.filter((item) => item.visibility !== "private").length;
     const rate = (count: number) => total ? Math.round((count / total) * 100) : 0;
@@ -1567,6 +1622,54 @@ export function RecruitmentTracker({
     />;
   };
 
+  const renderInterviewRounds = (item: Application, compact = false) => {
+    const applicationInterviews = interviews
+      .filter((interview) => interview.applicationId === item.id)
+      .sort((a, b) => (a.scheduledAt ?? "").localeCompare(b.scheduledAt ?? ""));
+    const canEdit = view === "mine";
+
+    return (
+      <div className={`interview-round-strip ${compact ? "compact" : ""}`} aria-label={`${item.company} ${item.position} 的面试轮次`}>
+        {applicationInterviews.map((interview) => {
+          const linkedExperience = experiences.find((experience) =>
+            experience.interviewId === interview.id ||
+            (!experience.interviewId && experience.applicationId === item.id && interviewStage(experience.round) === interviewStage(interview.round)),
+          );
+          const content = (
+            <>
+              <strong>{interview.round || "面试"}{linkedExperience ? <i title="已关联面经">✦</i> : null}</strong>
+              <span>{formatInterviewDate(interview.scheduledAt)}</span>
+            </>
+          );
+          return canEdit ? (
+            <button
+              type="button"
+              className={`interview-date-chip result-${interview.result || "待定"}`}
+              key={interview.id}
+              onClick={() => openInterviewEdit(interview)}
+              title="点击修改面试时间与记录"
+            >
+              {content}
+            </button>
+          ) : (
+            <span className="interview-date-chip readonly" key={interview.id}>{content}</span>
+          );
+        })}
+        {canEdit && (
+          <button
+            type="button"
+            className="interview-date-chip add"
+            onClick={() => openInterviewCreate(item.id, defaultRoundForStage(interviewStage(item.status)))}
+          >
+            <strong>＋ 安排{applicationInterviews.length ? "下一场" : item.status}</strong>
+            <span>{applicationInterviews.length ? "补充后续轮次" : "设置面试日期"}</span>
+          </button>
+        )}
+        {!canEdit && applicationInterviews.length === 0 && <span className="interview-date-empty">暂未共享面试安排</span>}
+      </div>
+    );
+  };
+
   const toggleApplicationSelection = useCallback((id: string) => {
     setSelectedApplicationIds((current) => current.includes(id)
       ? current.filter((itemId) => itemId !== id)
@@ -1648,11 +1751,40 @@ export function RecruitmentTracker({
       }
       setInterviews((prev) => [...prev, item]);
       setNotice("面试安排已保存");
-      const draftSaved = await createExperienceDraft(item);
-      setNotice(draftSaved ? "\u9762\u8bd5\u5b89\u6392\u5df2\u4fdd\u5b58\uff0c\u5df2\u81ea\u52a8\u751f\u6210\u9762\u7ecf\u8349\u7a3f" : "\u9762\u8bd5\u5b89\u6392\u5df2\u4fdd\u5b58\uff0c\u9762\u7ecf\u8349\u7a3f\u672a\u540c\u6b65\uff0c\u8bf7\u5148\u6267\u884c\u9762\u7ecf\u5e93\u6570\u636e\u5e93\u521d\u59cb\u5316");
+      const existingExperience = experiences.find((experience) =>
+        !experience.interviewId && experience.applicationId === item.applicationId && interviewStage(experience.round) === interviewStage(item.round),
+      );
+      if (existingExperience) {
+        const linked = { ...existingExperience, interviewId: item.id, updatedAt: new Date().toISOString() };
+        const linkSaved = !user || await runCloudMutation("正在关联已有面经", { action: "updateExperience", experience: linked });
+        if (linkSaved) {
+          setExperiences((current) => current.map((experience) => experience.id === linked.id ? linked : experience));
+          setNotice("面试安排已保存，并已关联面经库中的同轮次记录");
+        }
+      } else {
+        const application = ownApplications.find((entry) => entry.id === item.applicationId);
+        const now = new Date().toISOString();
+        const draft: InterviewExperience = {
+          id: crypto.randomUUID(),
+          applicationId: item.applicationId,
+          interviewId: item.id,
+          title: [application?.company ?? "本次", item.round || "面试", "面经草稿"].filter(Boolean).join(" / "),
+          company: application?.company ?? "",
+          position: application?.position ?? "",
+          round: item.round ?? "",
+          tags: ["面试记录", "待复盘"],
+          content: item.summary?.trim() || "已创建面试记录，请在这里补充题目、回答思路和复盘要点。",
+          takeaway: item.nextSteps?.trim() || "",
+          createdAt: now,
+          updatedAt: now,
+        };
+        const draftSaved = !user || await runCloudMutation("正在生成面经草稿", { action: "saveExperience", experience: draft });
+        if (draftSaved) setExperiences((current) => [draft, ...current]);
+        setNotice(draftSaved ? "\u9762\u8bd5\u5b89\u6392\u5df2\u4fdd\u5b58\uff0c\u5df2\u81ea\u52a8\u751f\u6210\u9762\u7ecf\u8349\u7a3f" : "面试安排已保存，面经关联未同步，请执行最新数据库迁移");
+      }
       return true;
     },
-    [user, runCloudMutation, ownApplications],
+    [user, runCloudMutation, ownApplications, experiences],
   );
 
   const updateInterview = useCallback(
@@ -1694,24 +1826,6 @@ export function RecruitmentTracker({
     return true;
   }, [user, runCloudMutation]);
 
-  async function createExperienceDraft(interview: Interview) {
-    const application = ownApplications.find((item) => item.id === interview.applicationId);
-    const now = new Date().toISOString();
-    return addExperience({
-      id: crypto.randomUUID(),
-      applicationId: interview.applicationId,
-      title: [application?.company ?? "\u672c\u6b21", interview.round || "\u9762\u8bd5", "\u9762\u7ecf\u8349\u7a3f"].filter(Boolean).join(" / "),
-      company: application?.company ?? "",
-      position: application?.position ?? "",
-      round: interview.round ?? "",
-      tags: ["\u9762\u8bd5\u8bb0\u5f55", "\u5f85\u590d\u76d8"],
-      content: interview.summary?.trim() || "\u5df2\u521b\u5efa\u9762\u8bd5\u8bb0\u5f55\uff0c\u8bf7\u5728\u8fd9\u91cc\u8865\u5145\u9898\u76ee\u3001\u56de\u7b54\u601d\u8def\u548c\u590d\u76d8\u8981\u70b9\u3002",
-      takeaway: interview.nextSteps?.trim() || "",
-      createdAt: now,
-      updatedAt: now,
-    });
-  }
-
   const updateExperience = useCallback(async (id: string, changes: Partial<InterviewExperience>) => {
     const current = experiences.find((item) => item.id === id);
     if (!current) return false;
@@ -1742,7 +1856,7 @@ export function RecruitmentTracker({
   }, [ownApplications]);
 
   const openExperienceEdit = useCallback((item: InterviewExperience) => {
-    setExperienceForm({ applicationId: item.applicationId ?? "", title: item.title, company: item.company, position: item.position, round: item.round, tags: item.tags.join(" / "), content: item.content, takeaway: item.takeaway });
+    setExperienceForm({ applicationId: item.applicationId ?? "", interviewId: item.interviewId ?? "", title: item.title, company: item.company, position: item.position, round: item.round, tags: item.tags.join(" / "), content: item.content, takeaway: item.takeaway });
     setEditingExperienceId(item.id);
     setIsExperienceOpen(true);
   }, []);
@@ -2149,8 +2263,8 @@ export function RecruitmentTracker({
   }
 
   // ────────────────────────────────── interview form
-  function openInterviewCreate(applicationId = "") {
-    setInterviewForm({ ...EMPTY_INTERVIEW, applicationId });
+  function openInterviewCreate(applicationId = "", round = "") {
+    setInterviewForm({ ...EMPTY_INTERVIEW, applicationId, round });
     setEditingInterviewId(null);
     setIsInterviewOpen(true);
   }
@@ -2158,8 +2272,8 @@ export function RecruitmentTracker({
   function openInterviewEdit(item: Interview) {
     setInterviewForm({
       applicationId: item.applicationId,
-      scheduledAt: item.scheduledAt,
-      endedAt: item.endedAt ?? "",
+      scheduledAt: dateTimeLocalValue(item.scheduledAt),
+      endedAt: dateTimeLocalValue(item.endedAt ?? ""),
       round: item.round,
       format: item.format,
       result: item.result,
@@ -2182,13 +2296,22 @@ export function RecruitmentTracker({
       setNotice("请选择关联岗位和面试时间");
       return;
     }
+    if (interviewForm.endedAt && new Date(interviewForm.endedAt).getTime() < new Date(interviewForm.scheduledAt).getTime()) {
+      setNotice("结束时间不能早于面试开始时间");
+      return;
+    }
+    const normalizedInterviewForm = {
+      ...interviewForm,
+      scheduledAt: storedDateTimeValue(interviewForm.scheduledAt),
+      endedAt: storedDateTimeValue(interviewForm.endedAt),
+    };
     let saved = false;
     if (editingInterviewId) {
-      saved = await updateInterview(editingInterviewId, interviewForm);
+      saved = await updateInterview(editingInterviewId, normalizedInterviewForm);
     } else {
       const item: Interview = {
         id: crypto.randomUUID(),
-        ...interviewForm,
+        ...normalizedInterviewForm,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -2211,7 +2334,13 @@ export function RecruitmentTracker({
     }
     const now = new Date().toISOString();
     const tags = experienceForm.tags.split(/[\/,\u3001\uff0c]/).map((tag) => tag.trim()).filter(Boolean);
-    const changes = { ...experienceForm, title: experienceForm.title.trim(), company: experienceForm.company.trim(), position: experienceForm.position.trim(), round: experienceForm.round.trim(), content: experienceForm.content.trim(), takeaway: experienceForm.takeaway.trim(), tags };
+    const matchedInterview = [...interviews]
+      .filter((item) => item.applicationId === experienceForm.applicationId && (!experienceForm.round || interviewStage(item.round) === interviewStage(experienceForm.round)))
+      .sort((a, b) => (b.scheduledAt ?? "").localeCompare(a.scheduledAt ?? ""))[0];
+    const interviewId = interviews.some((item) => item.id === experienceForm.interviewId && item.applicationId === experienceForm.applicationId)
+      ? experienceForm.interviewId
+      : matchedInterview?.id ?? "";
+    const changes = { ...experienceForm, interviewId, title: experienceForm.title.trim(), company: experienceForm.company.trim(), position: experienceForm.position.trim(), round: experienceForm.round.trim(), content: experienceForm.content.trim(), takeaway: experienceForm.takeaway.trim(), tags };
     const saved = editingExperienceId
       ? await updateExperience(editingExperienceId, changes)
       : await addExperience({ id: crypto.randomUUID(), ...changes, createdAt: now, updatedAt: now });
@@ -2223,6 +2352,7 @@ export function RecruitmentTracker({
     setExperienceForm((current) => ({
       ...current,
       applicationId,
+      interviewId: current.interviewId && interviews.some((item) => item.id === current.interviewId && item.applicationId === applicationId) ? current.interviewId : "",
       company: application?.company ?? current.company,
       position: application?.position ?? current.position,
     }));
@@ -2234,6 +2364,7 @@ export function RecruitmentTracker({
     setExperienceForm({
       ...EMPTY_EXPERIENCE,
       applicationId: interview.applicationId,
+      interviewId: interview.id,
       company: application?.company ?? "",
       position: application?.position ?? "",
       round: interview.round,
@@ -2521,6 +2652,17 @@ export function RecruitmentTracker({
                       <time>{formatDateTime(experience.updatedAt)}</time>
                     </header>
                     {(experience.company || experience.position) && <p className="experience-company">{[experience.company, experience.position].filter(Boolean).join(" / ")}</p>}
+                    {(() => {
+                      const linkedInterview = interviews.find((interview) =>
+                        interview.id === experience.interviewId ||
+                        (!experience.interviewId && interview.applicationId === experience.applicationId && interviewStage(interview.round) === interviewStage(experience.round)),
+                      );
+                      return linkedInterview ? (
+                        <button type="button" className="experience-interview-link" onClick={() => openInterviewEdit(linkedInterview)}>
+                          <span>已关联 {linkedInterview.round || "面试"}</span><strong>{formatInterviewDate(linkedInterview.scheduledAt)}</strong><i>查看安排 →</i>
+                        </button>
+                      ) : experience.applicationId ? <span className="experience-auto-link">已关联岗位 · 新增对应轮次面试后将自动连接</span> : null;
+                    })()}
                     {experience.tags.length > 0 && <div className="experience-tags">{experience.tags.map((tag) => <span key={`${experience.id}-${tag}`}>#{tag}</span>)}</div>}
                     <p className="experience-content">{experience.content}</p>
                     {experience.takeaway && <div className="experience-takeaway"><strong>{"\u590d\u76d8\u8981\u70b9"}</strong><span>{experience.takeaway}</span></div>}
@@ -2587,7 +2729,7 @@ export function RecruitmentTracker({
                   )}
                 </div>
               </div>
-              <div className="view-mode-panel">
+              {!interviewWorkspaceActive && <div className="view-mode-panel">
                 <div className="view-mode-heading">
                   <span>DISPLAY MODE</span>
                   <strong>选择显示方式</strong>
@@ -2612,7 +2754,7 @@ export function RecruitmentTracker({
                     </button>
                   ))}
                 </div>
-              </div>
+              </div>}
               <div className="quick-filter-row">
                 <div className="quick-status-list" aria-label="快捷进度筛选">
                   {QUICK_STATUS_FILTERS.map((filter) => (
@@ -2621,7 +2763,10 @@ export function RecruitmentTracker({
                       key={filter}
                       className={statusFilter === filter ? "active" : ""}
                       aria-pressed={statusFilter === filter}
-                      onClick={() => setStatusFilter(filter)}
+                      onClick={() => {
+                        setStatusFilter(filter);
+                        setStatFilter(filter === "面试进行中" ? "interview" : "all");
+                      }}
                     >
                       {filter === "全部状态" ? "全部" : filter}
                       <span>{quickStatusCounts.get(filter) ?? 0}</span>
@@ -2658,7 +2803,7 @@ export function RecruitmentTracker({
                     {sortDirection === "asc" ? "升序 ↑" : "降序 ↓"}
                   </button>
                 </label>
-                <DropdownSelect value={statusFilter} onChange={setStatusFilter} options={["全部状态", "简历阶段", "面试进行中", "流程已结束", ...STATUSES].map((option) => ({ value: option, label: option }))} ariaLabel="筛选状态" />
+                <DropdownSelect value={statusFilter} onChange={(status) => { setStatusFilter(status); setStatFilter(status === "面试进行中" ? "interview" : "all"); }} options={["全部状态", "简历阶段", "面试进行中", "流程已结束", ...STATUSES].map((option) => ({ value: option, label: option }))} ariaLabel="筛选状态" />
                 <DropdownSelect value={batchFilter} onChange={setBatchFilter} options={["全部批次", ...BATCHES].map((option) => ({ value: option, label: option }))} ariaLabel="筛选批次" />
                 <DropdownSelect value={companyNatureFilter} onChange={setCompanyNatureFilter} options={["全部单位性质", ...companyNatureOptions].map((option) => ({ value: option, label: option }))} ariaLabel="筛选单位性质" />
                 <DropdownSelect value={industryFilter} onChange={setIndustryFilter} options={["全部行业方向", ...industryOptions].map((option) => ({ value: option, label: option }))} ariaLabel="筛选行业方向" />
@@ -2669,7 +2814,7 @@ export function RecruitmentTracker({
               </div>}
             </div>
 
-            {filtered.length > 0 && (
+            {filtered.length > 0 && !interviewWorkspaceActive && (
               <section className="list-insights list-insights-top" aria-label="当前投递统计">
                 <div className="list-insights-copy">
                   <span>当前清单统计</span>
@@ -2754,7 +2899,58 @@ export function RecruitmentTracker({
               </div>
             )}
 
-            {listMode === "companyList" ? (
+            {interviewWorkspaceActive ? (
+              <section className="interview-stage-workspace" aria-label="面试阶段作战台">
+                <header className="interview-stage-hero">
+                  <div>
+                    <span className="section-kicker">INTERVIEW CONTROL ROOM</span>
+                    <h2>面试轮次作战台</h2>
+                    <p>岗位按当前轮次分开排列；卡片内保留一面到后续轮次的全部日期，直接点日期即可修改时间与面试记录。</p>
+                  </div>
+                  <div className="interview-stage-summary">
+                    <span><b>{filtered.length}</b> 个面试中岗位</span>
+                    <span><b>{interviews.filter((interview) => filteredIds.includes(interview.applicationId)).length}</b> 场已安排</span>
+                    <span><b>{experiences.filter((experience) => experience.applicationId && filteredIds.includes(experience.applicationId)).length}</b> 篇关联面经</span>
+                  </div>
+                </header>
+                <div className="interview-stage-board-wrap">
+                  <div className="interview-stage-board">
+                    {INTERVIEW_STAGE_COLUMNS.map((stage) => {
+                      const stageApplications = filtered.filter((item) => interviewStage(item.status) === stage.key);
+                      return (
+                        <section className={`interview-stage-column stage-${stage.key}`} key={stage.key}>
+                          <header>
+                            <div><strong>{stage.key}</strong><small>{stage.hint}</small></div>
+                            <span>{stageApplications.length}</span>
+                          </header>
+                          <div className="interview-stage-cards">
+                            {stageApplications.length === 0 ? (
+                              <div className="interview-stage-empty">暂无处于{stage.key}的岗位</div>
+                            ) : stageApplications.map((item) => (
+                              <article className="interview-stage-card" key={item.id}>
+                                <div className="interview-stage-card-head">
+                                  <button type="button" onClick={() => openCompany(item.company)}>{item.company}</button>
+                                  <span>{item.base || "地点待定"}</span>
+                                </div>
+                                <h3>{item.position}</h3>
+                                <div className="interview-stage-current">
+                                  <span>当前进度</span>{renderStatusControl(item, true)}
+                                </div>
+                                {renderInterviewRounds(item)}
+                                <footer>
+                                  <PositionLinkAction application={item} compact />
+                                  {view === "mine" && <button type="button" onClick={() => openEdit(item)}>编辑岗位</button>}
+                                </footer>
+                              </article>
+                            ))}
+                          </div>
+                        </section>
+                      );
+                    })}
+                  </div>
+                </div>
+              </section>
+            ) : listMode === "companyList" ? (
               <div className="company-view company-list-view">
                 {companyGrouped.length === 0 ? (
                   <div className="empty-state">
@@ -2835,6 +3031,12 @@ export function RecruitmentTracker({
                             </td>
                             <td data-label="操作" className="cell-actions">
                               <div className="action-buttons company-row-actions">
+                                {group.applications.filter((item) => externalHttpUrl(item.link) && (item.isOwner !== false || item.visibility === "full")).length === 1 && (
+                                  <PositionLinkAction application={group.applications.find((item) => externalHttpUrl(item.link) && (item.isOwner !== false || item.visibility === "full"))!} compact />
+                                )}
+                                {group.applications.filter((item) => externalHttpUrl(item.link) && (item.isOwner !== false || item.visibility === "full")).length > 1 && (
+                                  <button className="action-btn" type="button" onClick={() => openCompany(group.company)}>{group.applications.filter((item) => externalHttpUrl(item.link)).length} 个岗位链接</button>
+                                )}
                                 <button className="secondary-button compact-button" onClick={() => openCompany(group.company)}>查看公司</button>
                                 {view === "mine" && <button className="action-btn" onClick={() => openCompanyEdit(group.company)}>编辑公司</button>}
                               </div>
@@ -2870,7 +3072,7 @@ export function RecruitmentTracker({
                       {companyGrouped.map((group) => {
                         const cardTone = group.statuses.includes("Offer")
                           ? "offer"
-                          : group.statuses.some((status) => ["一面", "二面", "终面", "HR面"].includes(status))
+                          : group.statuses.some((status) => INTERVIEW_STATUSES.includes(status))
                             ? "interview"
                             : group.statuses.every((status) => ["已拒绝", "流程结束"].includes(status))
                               ? "closed"
@@ -2935,6 +3137,12 @@ export function RecruitmentTracker({
                                 <span className="privacy-tag mixed">部分共享 · {group.sharedCount}/{group.applications.length}</span>
                               )}
                               <div>
+                                {group.applications.filter((item) => externalHttpUrl(item.link) && (item.isOwner !== false || item.visibility === "full")).length === 1 && (
+                                  <PositionLinkAction application={group.applications.find((item) => externalHttpUrl(item.link) && (item.isOwner !== false || item.visibility === "full"))!} compact />
+                                )}
+                                {group.applications.filter((item) => externalHttpUrl(item.link) && (item.isOwner !== false || item.visibility === "full")).length > 1 && (
+                                  <button className="company-card-edit" type="button" onClick={() => openCompany(group.company)}>查看岗位链接</button>
+                                )}
                                 {view === "mine" && <button className="company-card-edit" type="button" onClick={() => openCompanyEdit(group.company)}>编辑资料</button>}
                                 <button className="company-card-open" type="button" onClick={() => openCompany(group.company)}>查看详情 <span>→</span></button>
                               </div>
@@ -2979,9 +3187,10 @@ export function RecruitmentTracker({
                                 <span>{item.base || "地点待定"}</span>
                                 <span>{formatDate(item.appliedAt)}</span>
                               </div>
+                              {(INTERVIEW_STATUSES.includes(item.status) || interviews.some((interview) => interview.applicationId === item.id)) && renderInterviewRounds(item, true)}
                               <div className="kanban-card-foot">
                                 {renderStatusControl(item, true)}
-                                {view === "friends" && <SharedPositionLink application={item} />}
+                                <PositionLinkAction application={item} compact />
                                 {view === "mine" && <button type="button" className="action-btn" onClick={() => openEdit(item)}>编辑</button>}
                               </div>
                             </article>
@@ -3048,13 +3257,12 @@ export function RecruitmentTracker({
                           <td data-label="面试进度"><div className="status-result-cell">{renderStatusControl(item)}
                             {item.finalOutcome && <small>最终：{item.finalOutcome}</small>}
                             {item.rejectionReason && <small>原因：{item.rejectionReason}</small>}
+                            {(INTERVIEW_STATUSES.includes(item.status) || interviews.some((interview) => interview.applicationId === item.id)) && renderInterviewRounds(item, true)}
                           </div></td>
                           <td data-label="公开状态"><span className={`privacy-tag ${item.visibility}`}>{visibilityLabel(item.visibility)}</span></td>
-                          {view === "friends" && <td data-label="岗位链接"><SharedPositionLink application={item} /></td>}
+                          {view === "friends" && <td data-label="岗位链接"><PositionLinkAction application={item} /></td>}
                           <td className="cell-actions" data-label="操作">
-                            {(view === "mine" || item.visibility === "full") && externalHttpUrl(item.link) && (
-                              <button className="action-btn" onClick={() => void copyPositionLink(item)}>复制链接</button>
-                            )}
+                            {view === "mine" && externalHttpUrl(item.link) && <><PositionLinkAction application={item} compact /><button className="action-btn" onClick={() => void copyPositionLink(item)} title="复制岗位链接">复制</button></>}
                             {view === "mine" && (
                               <div className="action-buttons">
                                 <button className="action-btn" onClick={() => openEdit(item)} title="编辑岗位信息">编辑岗位</button>
@@ -3575,10 +3783,20 @@ export function RecruitmentTracker({
                       disabled={busy}
                       onClick={() => {
                         const item = interviews.find((interview) => interview.id === editingInterviewId);
-                        if (item) openExperienceFromInterview(item);
+                        if (!item) return;
+                        const linkedExperience = experiences.find((experience) =>
+                          experience.interviewId === item.id ||
+                          (!experience.interviewId && experience.applicationId === item.applicationId && interviewStage(experience.round) === interviewStage(item.round)),
+                        );
+                        if (linkedExperience) {
+                          setIsInterviewOpen(false);
+                          openExperienceEdit(linkedExperience);
+                        } else {
+                          openExperienceFromInterview(item);
+                        }
                       }}
                     >
-                      {"\u6c89\u6dc0\u4e3a\u9762\u7ecf"}
+                      {experiences.some((experience) => experience.interviewId === editingInterviewId) ? "编辑关联面经" : "沉淀为面经"}
                     </button>
                   )}
                   <button type="submit" className="primary-button" disabled={busy}>
@@ -3610,6 +3828,25 @@ export function RecruitmentTracker({
                       <span>{"\u5173\u8054\u5c97\u4f4d\uff08\u53ef\u9009\uff09"}</span>
                       <DropdownSelect value={experienceForm.applicationId} onChange={selectExperienceApplication} options={ownApplications.map((app) => ({ value: app.id, label: `${app.company} \u00b7 ${app.position}` }))} placeholder={"\u4e0d\u5173\u8054\uff0c\u8bb0\u5f55\u901a\u7528\u9762\u7ecf"} ariaLabel={"\u9009\u62e9\u5173\u8054\u5c97\u4f4d"} />
                     </label>
+                    {experienceForm.applicationId && interviews.some((item) => item.applicationId === experienceForm.applicationId) && (
+                      <label className="full-width">
+                        <span>关联面试场次</span>
+                        <DropdownSelect
+                          value={experienceForm.interviewId}
+                          onChange={(interviewId) => {
+                            const interview = interviews.find((item) => item.id === interviewId);
+                            setExperienceForm((current) => ({ ...current, interviewId, round: interview?.round ?? current.round }));
+                          }}
+                          options={interviews
+                            .filter((item) => item.applicationId === experienceForm.applicationId)
+                            .sort((a, b) => (a.scheduledAt ?? "").localeCompare(b.scheduledAt ?? ""))
+                            .map((item) => ({ value: item.id, label: `${item.round || "面试"} · ${formatInterviewDate(item.scheduledAt)}` }))}
+                          placeholder="按轮次自动匹配"
+                          ariaLabel="选择关联面试场次"
+                        />
+                        <small className="experience-link-hint">选择具体场次最准确；留空时会按岗位和轮次自动关联最近一场。</small>
+                      </label>
+                    )}
                     <label className="full-width">
                       <span>{"\u6807\u9898 *"}</span>
                       <input value={experienceForm.title} onChange={(event) => setExperienceForm((current) => ({ ...current, title: event.target.value }))} placeholder={"\u4f8b\u5982\uff1a\u4e00\u9762\u9ad8\u9891\u7b97\u6cd5\u9898\u4e0e\u9879\u76ee\u6df1\u6316"} required autoFocus />
@@ -3876,12 +4113,11 @@ export function RecruitmentTracker({
                         {companyInterviews.filter((interview) => interview.applicationId === item.id).length > 0 && (
                           <small>{companyInterviews.filter((interview) => interview.applicationId === item.id).length} 场面试记录</small>
                         )}
+                        {(INTERVIEW_STATUSES.includes(item.status) || companyInterviews.some((interview) => interview.applicationId === item.id)) && renderInterviewRounds(item, true)}
                       </div></td>
-                      {view === "friends" && <td data-label="岗位链接"><SharedPositionLink application={item} /></td>}
+                      {view === "friends" && <td data-label="岗位链接"><PositionLinkAction application={item} /></td>}
                       <td className="cell-actions" data-label="操作">
-                        {(view === "mine" || item.visibility === "full") && externalHttpUrl(item.link) && (
-                          <button className="action-btn" onClick={() => void copyPositionLink(item)}>复制链接</button>
-                        )}
+                        {view === "mine" && externalHttpUrl(item.link) && <><PositionLinkAction application={item} compact /><button className="action-btn" onClick={() => void copyPositionLink(item)} title="复制岗位链接">复制</button></>}
                         {view === "mine" && <div className="action-buttons">
                           <button className="action-btn" onClick={() => openEdit(item)} title="编辑岗位信息">编辑岗位</button>
                           <button className="action-btn" onClick={() => { const src = item; closeCompany(); openCreate(src); }} title="复制创建同公司新岗位">复制</button>
