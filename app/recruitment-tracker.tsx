@@ -5,6 +5,8 @@ import type { CSSProperties, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { match, pinyin } from "pinyin-pro";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { createWorkspaceWorkbook, readWorkspaceWorkbook } from "@/lib/workbook-backup";
+import type { WorkspaceBackup } from "@/lib/workbook-backup";
 import type { Application, Interview, InterviewExperience, GroupInfo, ApplicationStatus, Visibility } from "@/db/schema";
 import type { ChatGPTUser } from "./chatgpt-auth";
 
@@ -66,6 +68,8 @@ interface InterviewForm {
 interface ExperienceForm {
   applicationId: string;
   interviewId: string;
+  scheduledAt: string;
+  endedAt: string;
   title: string;
   company: string;
   position: string;
@@ -79,7 +83,16 @@ interface ImportPreview {
   fileName: string;
   applications: Application[];
   interviews: Interview[];
+  experiences: InterviewExperience[];
   ignoredInterviews: number;
+  ignoredExperiences: number;
+}
+
+interface RecoverySnapshot extends WorkspaceBackup {
+  id: string;
+  ownerKey: string;
+  savedAt: string;
+  fingerprint: string;
 }
 
 type ListMode = "companyList" | "companyCards" | "position" | "kanban";
@@ -209,6 +222,8 @@ const EMPTY_INTERVIEW: InterviewForm = {
 const EMPTY_EXPERIENCE: ExperienceForm = {
   applicationId: "",
   interviewId: "",
+  scheduledAt: "",
+  endedAt: "",
   title: "",
   company: "",
   position: "",
@@ -445,6 +460,74 @@ function normalizeInterviews(items: Interview[]) {
 
 function normalizeExperiences(items: InterviewExperience[]) {
   return items.map((item) => ({ ...item, interviewId: item.interviewId ?? "", tags: Array.isArray(item.tags) ? item.tags.filter(Boolean) : [] }));
+}
+
+const RECOVERY_DATABASE_NAME = "offer-journey-recovery";
+const RECOVERY_STORE_NAME = "workspace-snapshots";
+const RECOVERY_SNAPSHOT_LIMIT = 5;
+
+function openRecoveryDatabase() {
+  return new Promise<IDBDatabase>((resolve, reject) => {
+    if (typeof indexedDB === "undefined") {
+      reject(new Error("当前浏览器不支持本地恢复快照"));
+      return;
+    }
+    const request = indexedDB.open(RECOVERY_DATABASE_NAME, 1);
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains(RECOVERY_STORE_NAME)) {
+        const store = database.createObjectStore(RECOVERY_STORE_NAME, { keyPath: "id" });
+        store.createIndex("ownerKey", "ownerKey", { unique: false });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error("无法打开本地恢复空间"));
+  });
+}
+
+async function loadRecoverySnapshots(ownerKey: string) {
+  const database = await openRecoveryDatabase();
+  return new Promise<RecoverySnapshot[]>((resolve, reject) => {
+    const transaction = database.transaction(RECOVERY_STORE_NAME, "readonly");
+    const request = transaction.objectStore(RECOVERY_STORE_NAME).index("ownerKey").getAll(ownerKey);
+    request.onsuccess = () => resolve((request.result as RecoverySnapshot[]).sort((a, b) => b.savedAt.localeCompare(a.savedAt)));
+    request.onerror = () => reject(request.error ?? new Error("无法读取本地恢复快照"));
+    transaction.oncomplete = () => database.close();
+  });
+}
+
+async function saveRecoverySnapshot(ownerKey: string, data: WorkspaceBackup) {
+  if (!data.applications.length && !data.interviews.length && !data.experiences.length) return loadRecoverySnapshots(ownerKey);
+  const fingerprint = [
+    ...data.applications.map((item) => `a:${item.id}:${item.updatedAt}`),
+    ...data.interviews.map((item) => `i:${item.id}:${item.updatedAt}`),
+    ...data.experiences.map((item) => `e:${item.id}:${item.updatedAt}`),
+  ].sort().join("|");
+  const existingSnapshots = await loadRecoverySnapshots(ownerKey);
+  if (existingSnapshots[0]?.fingerprint === fingerprint) return existingSnapshots;
+  const savedAt = new Date().toISOString();
+  const snapshot: RecoverySnapshot = { id: `${ownerKey}:${savedAt}`, ownerKey, savedAt, fingerprint, ...data };
+  const database = await openRecoveryDatabase();
+  await new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(RECOVERY_STORE_NAME, "readwrite");
+    transaction.objectStore(RECOVERY_STORE_NAME).put(snapshot);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error ?? new Error("无法保存本地恢复快照"));
+  });
+  database.close();
+  const snapshots = await loadRecoverySnapshots(ownerKey);
+  if (snapshots.length > RECOVERY_SNAPSHOT_LIMIT) {
+    const cleanupDatabase = await openRecoveryDatabase();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = cleanupDatabase.transaction(RECOVERY_STORE_NAME, "readwrite");
+      const store = transaction.objectStore(RECOVERY_STORE_NAME);
+      snapshots.slice(RECOVERY_SNAPSHOT_LIMIT).forEach((item) => store.delete(item.id));
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error ?? new Error("无法清理旧快照"));
+    });
+    cleanupDatabase.close();
+  }
+  return snapshots.slice(0, RECOVERY_SNAPSHOT_LIMIT);
 }
 function applicationImportKey(item: Pick<Application, "company" | "position" | "appliedAt">) {
   return [companyKey(item.company), item.position.trim().toLocaleLowerCase(), item.appliedAt || ""].join("|");
@@ -898,6 +981,7 @@ export function RecruitmentTracker({
   const [experienceForm, setExperienceForm] = useState(EMPTY_EXPERIENCE);
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [importMode, setImportMode] = useState<"merge" | "replace">("merge");
+  const [recoverySnapshots, setRecoverySnapshots] = useState<RecoverySnapshot[]>([]);
   const [groupName, setGroupName] = useState("秋招搭子小组");
   const [inviteCode, setInviteCode] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
@@ -905,6 +989,7 @@ export function RecruitmentTracker({
   const inviteHandledRef = useRef(false);
   const busy = pendingAction !== null;
   const workspaceCacheKey = user ? `workspace-cache:${user.email}` : null;
+  const recoveryOwnerKey = user?.email ?? "local";
 
   useEffect(() => {
     const timer = window.setTimeout(
@@ -1001,6 +1086,22 @@ export function RecruitmentTracker({
       }));
     const normalizedInterviews = normalizeInterviews(result.interviews);
     const normalizedExperiences = normalizeExperiences(experienceData);
+    if (workspaceCacheKey) {
+      try {
+        const cached = JSON.parse(localStorage.getItem(workspaceCacheKey) ?? "null") as { applications?: unknown; interviews?: unknown; experiences?: unknown } | null;
+        const cachedExperiences = cached?.experiences ?? [];
+        if (cached && safeApplications(cached.applications) && safeInterviews(cached.interviews) && safeExperiences(cachedExperiences)) {
+          const cachedOwnerIds = new Set(cached.applications.filter((item) => item.isOwner !== false).map((item) => item.id));
+          void saveRecoverySnapshot(recoveryOwnerKey, {
+            applications: cached.applications.filter((item) => item.isOwner !== false),
+            interviews: cached.interviews.filter((item) => cachedOwnerIds.has(item.applicationId)),
+            experiences: cachedExperiences.filter((item) => !item.applicationId || cachedOwnerIds.has(item.applicationId)),
+          }).then(setRecoverySnapshots).catch(() => {});
+        }
+      } catch {
+        // A malformed fast-start cache should never block the cloud workspace.
+      }
+    }
     setApplications(normalizedApplications);
     setInterviews(normalizedInterviews);
     setExperiences(normalizedExperiences);
@@ -1021,7 +1122,7 @@ export function RecruitmentTracker({
       setActiveGroupId(null);
     }
     return groupsData;
-  }, [accessToken, activeGroupId, workspaceCacheKey]);
+  }, [accessToken, activeGroupId, workspaceCacheKey, recoveryOwnerKey]);
 
   const loadLocal = useCallback(() => {
     try {
@@ -1637,7 +1738,23 @@ export function RecruitmentTracker({
           );
           const content = (
             <>
-              <strong>{interview.round || "面试"}{linkedExperience ? <i title="已关联面经">✦</i> : null}</strong>
+              <strong>
+                {interview.round || "面试"}
+                {linkedExperience && (
+                  canEdit ? (
+                    <i
+                      role="button"
+                      tabIndex={0}
+                      className="interview-experience-link"
+                      title="查看并编辑关联面经"
+                      onClick={(event) => { event.stopPropagation(); openExperienceEdit(linkedExperience); }}
+                      onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.stopPropagation(); openExperienceEdit(linkedExperience); } }}
+                    >✦</i>
+                  ) : (
+                    <i className="interview-experience-link" title="已关联面经" aria-hidden="true">✦</i>
+                  )
+                )}
+              </strong>
               <span>{formatInterviewDate(interview.scheduledAt)}</span>
             </>
           );
@@ -1659,10 +1776,10 @@ export function RecruitmentTracker({
           <button
             type="button"
             className="interview-date-chip add"
-            onClick={() => openInterviewCreate(item.id, defaultRoundForStage(interviewStage(item.status)))}
+            onClick={() => openExperienceCreate(item.id, defaultRoundForStage(interviewStage(item.status)))}
           >
-            <strong>＋ 安排{applicationInterviews.length ? "下一场" : item.status}</strong>
-            <span>{applicationInterviews.length ? "补充后续轮次" : "设置面试日期"}</span>
+            <strong>＋ 记录面经</strong>
+            <span>{applicationInterviews.length ? "补充下一场面经" : "顺手记录面试时间"}</span>
           </button>
         )}
         {!canEdit && applicationInterviews.length === 0 && <span className="interview-date-empty">暂未共享面试安排</span>}
@@ -1787,6 +1904,25 @@ export function RecruitmentTracker({
     [user, runCloudMutation, ownApplications, experiences],
   );
 
+  useEffect(() => {
+    loadRecoverySnapshots(recoveryOwnerKey).then(setRecoverySnapshots).catch(() => setRecoverySnapshots([]));
+  }, [recoveryOwnerKey]);
+
+  useEffect(() => {
+    if (!ready) return;
+    const ownIds = new Set(ownApplications.map((item) => item.id));
+    const snapshot: WorkspaceBackup = {
+      applications: ownApplications,
+      interviews: interviews.filter((item) => ownIds.has(item.applicationId)),
+      experiences: experiences.filter((item) => !item.applicationId || ownIds.has(item.applicationId)),
+    };
+    if (!snapshot.applications.length && !snapshot.interviews.length && !snapshot.experiences.length) return;
+    const timer = window.setTimeout(() => {
+      saveRecoverySnapshot(recoveryOwnerKey, snapshot).then(setRecoverySnapshots).catch(() => {});
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [experiences, interviews, ownApplications, ready, recoveryOwnerKey]);
+
   const updateInterview = useCallback(
     async (id: string, changes: Partial<Interview>) => {
       const current = interviews.find((item) => item.id === id);
@@ -1801,6 +1937,58 @@ export function RecruitmentTracker({
       return true;
     },
     [interviews, user, runCloudMutation],
+  );
+
+  // 面经表单保存时，按需创建或更新关联面试场次（不走 addInterview，避免自动生成面经草稿）
+  const ensureInterviewForExperience = useCallback(
+    async (input: { applicationId: string; round: string; scheduledAt: string; endedAt: string; interviewId: string }): Promise<string> => {
+      const { applicationId, round, scheduledAt, endedAt, interviewId } = input;
+      if (!applicationId) return "";
+      const explicit = interviews.find((item) => item.id === interviewId && item.applicationId === applicationId);
+      if (explicit) {
+        const changes: Partial<Interview> = {};
+        if (round && round !== explicit.round) changes.round = round;
+        if (scheduledAt && scheduledAt !== explicit.scheduledAt) changes.scheduledAt = scheduledAt;
+        if (endedAt !== (explicit.endedAt ?? "") ) changes.endedAt = endedAt;
+        if (Object.keys(changes).length) await updateInterview(explicit.id, changes);
+        return explicit.id;
+      }
+      const matched = [...interviews]
+        .filter((item) => item.applicationId === applicationId && (!round || interviewStage(item.round) === interviewStage(round)))
+        .sort((a, b) => (b.scheduledAt ?? "").localeCompare(a.scheduledAt ?? ""))[0];
+      if (matched) {
+        if (scheduledAt || endedAt) {
+          const changes: Partial<Interview> = { round: round || matched.round };
+          if (scheduledAt) changes.scheduledAt = scheduledAt;
+          if (endedAt) changes.endedAt = endedAt;
+          await updateInterview(matched.id, changes);
+        }
+        return matched.id;
+      }
+      if (!scheduledAt) return "";
+      const now = new Date().toISOString();
+      const item: Interview = {
+        id: crypto.randomUUID(),
+        applicationId,
+        scheduledAt,
+        endedAt,
+        round: round || "技术一面",
+        format: "视频面试",
+        result: "待定",
+        interviewer: "",
+        summary: "",
+        nextSteps: "",
+        createdAt: now,
+        updatedAt: now,
+      };
+      if (user) {
+        const saved = await runCloudMutation("保存面试安排中", { action: "saveInterview", interview: item });
+        if (!saved) return "";
+      }
+      setInterviews((prev) => [...prev, item]);
+      return item.id;
+    },
+    [interviews, user, runCloudMutation, updateInterview],
   );
 
   const removeInterview = useCallback(
@@ -1848,18 +2036,34 @@ export function RecruitmentTracker({
     return true;
   }, [user, runCloudMutation]);
 
-  const openExperienceCreate = useCallback((applicationId = "") => {
+  const openExperienceCreate = useCallback((applicationId = "", round = "") => {
     const application = ownApplications.find((item) => item.id === applicationId);
-    setExperienceForm({ ...EMPTY_EXPERIENCE, applicationId, company: application?.company ?? "", position: application?.position ?? "" });
+    setExperienceForm({ ...EMPTY_EXPERIENCE, applicationId, round, company: application?.company ?? "", position: application?.position ?? "" });
     setEditingExperienceId(null);
     setIsExperienceOpen(true);
   }, [ownApplications]);
 
   const openExperienceEdit = useCallback((item: InterviewExperience) => {
-    setExperienceForm({ applicationId: item.applicationId ?? "", interviewId: item.interviewId ?? "", title: item.title, company: item.company, position: item.position, round: item.round, tags: item.tags.join(" / "), content: item.content, takeaway: item.takeaway });
+    const linkedInterview = interviews.find((interview) =>
+      (item.interviewId && interview.id === item.interviewId) ||
+      (!item.interviewId && item.applicationId && interview.applicationId === item.applicationId && interviewStage(interview.round) === interviewStage(item.round)),
+    );
+    setExperienceForm({
+      applicationId: item.applicationId ?? "",
+      interviewId: item.interviewId ?? "",
+      scheduledAt: dateTimeLocalValue(linkedInterview?.scheduledAt ?? ""),
+      endedAt: dateTimeLocalValue(linkedInterview?.endedAt ?? ""),
+      title: item.title,
+      company: item.company,
+      position: item.position,
+      round: item.round,
+      tags: item.tags.join(" / "),
+      content: item.content,
+      takeaway: item.takeaway,
+    });
     setEditingExperienceId(item.id);
     setIsExperienceOpen(true);
-  }, []);
+  }, [interviews]);
 
   const groupAction = useCallback(
     async (action: string) => {
@@ -1936,50 +2140,58 @@ export function RecruitmentTracker({
     }
   }, []);
 
-  const exportData = useCallback(() => {
+  const exportData = useCallback(async () => {
+    setPendingAction("正在生成 Excel 完整备份");
     try {
       const ownIds = new Set(ownApplications.map((item) => item.id));
-      const backup = {
-        app: "秋招同行录",
-        schemaVersion: 2,
-        exportedAt: new Date().toISOString(),
+      const backup: WorkspaceBackup = {
         applications: ownApplications,
         interviews: interviews.filter((item) => ownIds.has(item.applicationId)),
+        experiences: experiences.filter((item) => !item.applicationId || ownIds.has(item.applicationId)),
       };
-      const blob = new Blob([JSON.stringify(backup, null, 2)], {
-        type: "application/json",
-      });
+      const blob = await createWorkspaceWorkbook(backup);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `投递记录备份_${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `秋招同行录_完整备份_${new Date().toISOString().slice(0, 10)}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
-      // ignore
+      setRecoverySnapshots(await saveRecoverySnapshot(recoveryOwnerKey, backup));
+      setNotice("Excel 完整备份已导出，并已更新本地恢复快照");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Excel 备份生成失败，请稍后重试");
+    } finally {
+      setPendingAction(null);
     }
-  }, [ownApplications, interviews]);
+  }, [experiences, interviews, ownApplications, recoveryOwnerKey]);
 
   const importData = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       if (!file) return;
+      setPendingAction("正在读取完整备份");
       try {
-        if (!file.name.toLocaleLowerCase().endsWith(".json")) {
-          setNotice("请选择从秋招同行录导出的 JSON 备份文件");
+        const extension = file.name.toLocaleLowerCase().split(".").pop();
+        if (extension !== "xlsx" && extension !== "json") {
+          setNotice("请选择秋招同行录导出的 Excel（.xlsx）或旧版 JSON 备份");
           return;
         }
-        if (file.size > 5 * 1024 * 1024) {
-          setNotice("备份文件不能超过 5MB");
+        if (file.size > 20 * 1024 * 1024) {
+          setNotice("备份文件不能超过 20MB");
           return;
         }
-        const text = await file.text();
-        const parsed = JSON.parse(text) as unknown;
-        const data = Array.isArray(parsed)
-          ? { applications: parsed }
-          : parsed && typeof parsed === "object"
-            ? parsed as { applications?: unknown; interviews?: unknown }
-            : {};
+        let data: { applications?: unknown; interviews?: unknown; experiences?: unknown };
+        if (extension === "xlsx") {
+          data = await readWorkspaceWorkbook(file);
+        } else {
+          const text = await file.text();
+          const parsed = JSON.parse(text) as unknown;
+          data = Array.isArray(parsed)
+            ? { applications: parsed }
+            : parsed && typeof parsed === "object"
+              ? parsed as { applications?: unknown; interviews?: unknown; experiences?: unknown }
+              : {};
+        }
         if (!safeApplications(data.applications) || data.applications.length > 500) {
           setNotice("格式错误，请检查备份文件");
           return;
@@ -1990,35 +2202,64 @@ export function RecruitmentTracker({
           ? normalizeInterviews(data.interviews).filter((item) => applicationIds.has(item.applicationId))
           : [];
         const ignoredInterviews = safeInterviews(data.interviews) ? data.interviews.length - normalizedInterviews.length : 0;
+        const experienceData = data.experiences ?? [];
+        const normalizedExperiences = safeExperiences(experienceData)
+          ? normalizeExperiences(experienceData).map((item) => ({
+              ...item,
+              applicationId: item.applicationId && applicationIds.has(item.applicationId) ? item.applicationId : "",
+              interviewId: item.interviewId && normalizedInterviews.some((interview) => interview.id === item.interviewId) ? item.interviewId : "",
+            }))
+          : [];
+        const ignoredExperiences = Array.isArray(data.experiences) ? data.experiences.length - normalizedExperiences.length : 0;
         setImportPreview({
           fileName: file.name,
           applications: normalizedApplications,
           interviews: normalizedInterviews,
+          experiences: normalizedExperiences,
           ignoredInterviews,
+          ignoredExperiences,
         });
         setImportMode("merge");
-      } catch {
-        setNotice("无法读取备份文件，请确认它是有效的 JSON 文件");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "无法读取备份文件，请确认文件完整且未损坏");
       } finally {
+        setPendingAction(null);
         if (importRef.current) importRef.current.value = "";
       }
     },
     [],
   );
 
+  const openRecoverySnapshot = useCallback((snapshot: RecoverySnapshot) => {
+    setImportPreview({
+      fileName: `本地恢复快照 · ${new Date(snapshot.savedAt).toLocaleString("zh-CN")}`,
+      applications: normalizeLocal(snapshot.applications),
+      interviews: normalizeInterviews(snapshot.interviews),
+      experiences: normalizeExperiences(snapshot.experiences),
+      ignoredInterviews: 0,
+      ignoredExperiences: 0,
+    });
+    setImportMode("merge");
+  }, []);
+
   const applyImport = useCallback(async () => {
     if (!importPreview) return;
     const availableGroupIds = new Set(groups.map((group) => group.id));
     const now = new Date().toISOString();
     const existingByKey = new Map(ownApplications.map((item) => [applicationImportKey(item), item]));
-    const existingIds = new Set(ownApplications.map((item) => item.id));
+    const existingById = new Map(ownApplications.map((item) => [item.id, item]));
     const idMap = new Map<string, string>();
     const accepted: Application[] = [];
     const seenIncomingKeys = new Set<string>();
 
     for (const source of importPreview.applications) {
       const key = applicationImportKey(source);
-      if (importMode === "merge" && (existingIds.has(source.id) || existingByKey.has(key) || seenIncomingKeys.has(key))) continue;
+      const existing = existingById.get(source.id) ?? existingByKey.get(key);
+      if (importMode === "merge" && existing) {
+        idMap.set(source.id, existing.id);
+        continue;
+      }
+      if (importMode === "merge" && seenIncomingKeys.has(key)) continue;
       const item = importedApplication(source, availableGroupIds, defaultGroupId);
       const id = importMode === "merge" ? crypto.randomUUID() : item.id;
       idMap.set(source.id, id);
@@ -2026,21 +2267,39 @@ export function RecruitmentTracker({
       accepted.push({ ...item, id, createdAt: item.createdAt || now, updatedAt: now });
     }
 
-    const existingInterviewKeys = new Set(interviews.map((item) => `${item.applicationId}|${item.scheduledAt}|${item.round}`));
-    const acceptedInterviews = importPreview.interviews
-      .filter((item) => idMap.has(item.applicationId))
-      .filter((item) => importMode === "replace" || !existingInterviewKeys.has(`${idMap.get(item.applicationId)}|${item.scheduledAt}|${item.round}`))
-      .map((item) => ({
-        ...item,
-        id: importMode === "merge" ? crypto.randomUUID() : item.id,
-        applicationId: idMap.get(item.applicationId)!,
-        createdAt: item.createdAt || now,
-        updatedAt: now,
-      }));
+    const existingInterviewByKey = new Map(interviews.map((item) => [`${item.applicationId}|${item.scheduledAt}|${item.round}`, item]));
+    const interviewIdMap = new Map<string, string>();
+    const acceptedInterviews: Interview[] = [];
+    for (const source of importPreview.interviews) {
+      const applicationId = idMap.get(source.applicationId);
+      if (!applicationId) continue;
+      const key = `${applicationId}|${source.scheduledAt}|${source.round}`;
+      const existing = existingInterviewByKey.get(key);
+      if (importMode === "merge" && existing) {
+        interviewIdMap.set(source.id, existing.id);
+        continue;
+      }
+      const id = importMode === "merge" ? crypto.randomUUID() : source.id;
+      interviewIdMap.set(source.id, id);
+      acceptedInterviews.push({ ...source, id, applicationId, createdAt: source.createdAt || now, updatedAt: now });
+    }
 
-    if (importMode === "merge" && !accepted.length && !acceptedInterviews.length) {
+    const experienceKey = (item: Pick<InterviewExperience, "applicationId" | "round" | "title">) => `${item.applicationId ?? ""}|${item.round.trim().toLocaleLowerCase()}|${item.title.trim().toLocaleLowerCase()}`;
+    const existingExperienceKeys = new Set(experiences.map(experienceKey));
+    const acceptedExperiences = importPreview.experiences
+      .map((source) => ({
+        ...source,
+        id: importMode === "merge" ? crypto.randomUUID() : source.id,
+        applicationId: source.applicationId ? idMap.get(source.applicationId) ?? "" : "",
+        interviewId: source.interviewId ? interviewIdMap.get(source.interviewId) ?? "" : "",
+        createdAt: source.createdAt || now,
+        updatedAt: now,
+      }))
+      .filter((item) => importMode === "replace" || !existingExperienceKeys.has(experienceKey(item)));
+
+    if (importMode === "merge" && !accepted.length && !acceptedInterviews.length && !acceptedExperiences.length) {
       setImportPreview(null);
-      setNotice("没有可导入的新记录，重复的公司、岗位与投递日期已自动跳过");
+      setNotice("没有可导入的新记录，重复的岗位、面试与面经已自动跳过");
       return;
     }
     if (user) {
@@ -2049,23 +2308,28 @@ export function RecruitmentTracker({
         mode: importMode,
         applications: accepted,
         interviews: acceptedInterviews,
+        experiences: acceptedExperiences,
       });
       if (!saved) return;
     }
     if (importMode === "replace") {
       setApplications((current) => [...current.filter((item) => item.isOwner === false), ...accepted]);
       setInterviews(acceptedInterviews);
+      setExperiences(acceptedExperiences);
       saveLocal(accepted);
       saveInterviewsLocal(acceptedInterviews);
+      saveExperiencesLocal(acceptedExperiences);
     } else {
       setApplications((current) => [...current, ...accepted]);
       setInterviews((current) => [...current, ...acceptedInterviews]);
+      setExperiences((current) => [...acceptedExperiences, ...current]);
       saveLocal([...ownApplications, ...accepted]);
       saveInterviewsLocal([...interviews, ...acceptedInterviews]);
+      saveExperiencesLocal([...acceptedExperiences, ...experiences]);
     }
     setImportPreview(null);
-    setNotice(`导入完成：新增 ${accepted.length} 个岗位${acceptedInterviews.length ? `、${acceptedInterviews.length} 条面试记录` : ""}`);
-  }, [defaultGroupId, groups, importMode, importPreview, interviews, ownApplications, runCloudMutation, saveInterviewsLocal, saveLocal, user]);
+    setNotice(`导入完成：${accepted.length} 个岗位、${acceptedInterviews.length} 条面试、${acceptedExperiences.length} 篇面经`);
+  }, [defaultGroupId, experiences, groups, importMode, importPreview, interviews, ownApplications, runCloudMutation, saveExperiencesLocal, saveInterviewsLocal, saveLocal, user]);
 
   const clearFilters = useCallback(() => {
     setQuery("");
@@ -2332,15 +2596,36 @@ export function RecruitmentTracker({
       setNotice("\u8bf7\u586b\u5199\u9762\u7ecf\u6807\u9898\u548c\u9762\u8bd5\u5185\u5bb9");
       return;
     }
+    const scheduledAt = storedDateTimeValue(experienceForm.scheduledAt);
+    const endedAt = storedDateTimeValue(experienceForm.endedAt);
+    if (scheduledAt && !experienceForm.applicationId) {
+      setNotice("\u8bf7\u5148\u9009\u62e9\u5173\u8054\u5c97\u4f4d\u518d\u586b\u5199\u9762\u8bd5\u65f6\u95f4");
+      return;
+    }
+    if (endedAt && scheduledAt && new Date(endedAt).getTime() < new Date(scheduledAt).getTime()) {
+      setNotice("\u7ed3\u675f\u65f6\u95f4\u4e0d\u80fd\u65e9\u4e8e\u9762\u8bd5\u5f00\u59cb\u65f6\u95f4");
+      return;
+    }
+    const interviewId = await ensureInterviewForExperience({
+      applicationId: experienceForm.applicationId,
+      round: experienceForm.round.trim(),
+      scheduledAt,
+      endedAt,
+      interviewId: experienceForm.interviewId,
+    });
     const now = new Date().toISOString();
     const tags = experienceForm.tags.split(/[\/,\u3001\uff0c]/).map((tag) => tag.trim()).filter(Boolean);
-    const matchedInterview = [...interviews]
-      .filter((item) => item.applicationId === experienceForm.applicationId && (!experienceForm.round || interviewStage(item.round) === interviewStage(experienceForm.round)))
-      .sort((a, b) => (b.scheduledAt ?? "").localeCompare(a.scheduledAt ?? ""))[0];
-    const interviewId = interviews.some((item) => item.id === experienceForm.interviewId && item.applicationId === experienceForm.applicationId)
-      ? experienceForm.interviewId
-      : matchedInterview?.id ?? "";
-    const changes = { ...experienceForm, interviewId, title: experienceForm.title.trim(), company: experienceForm.company.trim(), position: experienceForm.position.trim(), round: experienceForm.round.trim(), content: experienceForm.content.trim(), takeaway: experienceForm.takeaway.trim(), tags };
+    const changes = {
+      applicationId: experienceForm.applicationId,
+      interviewId,
+      title: experienceForm.title.trim(),
+      company: experienceForm.company.trim(),
+      position: experienceForm.position.trim(),
+      round: experienceForm.round.trim(),
+      tags,
+      content: experienceForm.content.trim(),
+      takeaway: experienceForm.takeaway.trim(),
+    };
     const saved = editingExperienceId
       ? await updateExperience(editingExperienceId, changes)
       : await addExperience({ id: crypto.randomUUID(), ...changes, createdAt: now, updatedAt: now });
@@ -2365,6 +2650,8 @@ export function RecruitmentTracker({
       ...EMPTY_EXPERIENCE,
       applicationId: interview.applicationId,
       interviewId: interview.id,
+      scheduledAt: dateTimeLocalValue(interview.scheduledAt),
+      endedAt: dateTimeLocalValue(interview.endedAt ?? ""),
       company: application?.company ?? "",
       position: application?.position ?? "",
       round: interview.round,
@@ -2722,9 +3009,17 @@ export function RecruitmentTracker({
                       <button className="secondary-button batch-select-button" onClick={toggleFilteredSelection} disabled={filteredIds.length === 0}>
                         {allFilteredSelected ? "取消当前筛选" : `全选当前筛选${filteredIds.length ? `（${filteredIds.length}）` : ""}`}
                       </button>
-                      <button className="secondary-button" onClick={exportData}>导出</button>
-                      <input ref={importRef} type="file" accept=".json,application/json" onChange={importData} className="hidden" />
+                      <button className="secondary-button" onClick={() => void exportData()} disabled={busy}>导出 Excel</button>
+                      <input ref={importRef} type="file" accept=".xlsx,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json" onChange={importData} className="hidden" />
                       <button className="secondary-button" onClick={() => importRef.current?.click()} disabled={busy}>导入备份</button>
+                      <button
+                        className="secondary-button recovery-button"
+                        onClick={() => recoverySnapshots[0] && openRecoverySnapshot(recoverySnapshots[0])}
+                        disabled={busy || recoverySnapshots.length === 0}
+                        title={recoverySnapshots[0] ? `恢复 ${new Date(recoverySnapshots[0].savedAt).toLocaleString("zh-CN")} 的本地快照` : "产生非空记录后会自动保留本地快照"}
+                      >
+                        本地恢复{recoverySnapshots.length ? ` · ${recoverySnapshots.length}` : ""}
+                      </button>
                     </>
                   )}
                 </div>
@@ -3267,7 +3562,7 @@ export function RecruitmentTracker({
                               <div className="action-buttons">
                                 <button className="action-btn" onClick={() => openEdit(item)} title="编辑岗位信息">编辑岗位</button>
                                 <button className="action-btn" onClick={() => openCreate(item)} title="复制创建同公司新岗位">复制</button>
-                                <button className="action-btn" onClick={() => openInterviewCreate(item.id)} title="添加面试">添加面试</button>
+                                <button className="action-btn" onClick={() => openExperienceCreate(item.id)} title="记录面经">记录面经</button>
                                 <button className="action-btn danger" onClick={() => removeApplication(item)} title="删除">删除</button>
                               </div>
                             )}
@@ -3321,13 +3616,14 @@ export function RecruitmentTracker({
                   <div>
                     <p className="modal-kicker">IMPORT BACKUP</p>
                     <h2 id="import-title">确认导入备份</h2>
-                    <p className="modal-subtitle">已读取 {importPreview.fileName}。选择处理方式后才会写入你的投递记录。</p>
+                    <p className="modal-subtitle">已读取 {importPreview.fileName}。确认后将同时恢复岗位、面试和面经关联。</p>
                   </div>
                   <button type="button" className="close-button" onClick={() => setImportPreview(null)} disabled={busy} aria-label="关闭">×</button>
                 </div>
                 <div className="import-summary-grid">
                   <div><strong>{importPreview.applications.length}</strong><span>岗位记录</span></div>
                   <div><strong>{importPreview.interviews.length}</strong><span>面试记录</span></div>
+                  <div><strong>{importPreview.experiences.length}</strong><span>面经记录</span></div>
                   <div><strong>{importDuplicateCount}</strong><span>可能重复</span></div>
                 </div>
                 <div className="import-mode-list">
@@ -3337,12 +3633,13 @@ export function RecruitmentTracker({
                   </label>
                   <label className={importMode === "replace" ? "active warning" : ""}>
                     <input type="radio" name="import-mode" value="replace" checked={importMode === "replace"} onChange={() => setImportMode("replace")} />
-                    <span><strong>替换我的全部记录</strong><small>用备份内容覆盖当前账号下的投递与面试记录；好友共享记录不受影响。</small></span>
+                    <span><strong>替换我的全部记录</strong><small>用备份内容覆盖当前账号下的岗位、面试和面经；好友共享记录不受影响。</small></span>
                   </label>
                 </div>
                 <div className="import-notes">
                   <span>共享小组不会随备份迁移；找不到原小组的记录会安全地转为“仅自己可见”。</span>
                   {importPreview.ignoredInterviews > 0 && <span>{importPreview.ignoredInterviews} 条未关联岗位的面试记录不会导入。</span>}
+                  {importPreview.ignoredExperiences > 0 && <span>{importPreview.ignoredExperiences} 篇格式不完整的面经不会导入。</span>}
                   {importMode === "merge" && importDuplicateCount > 0 && <span>{importDuplicateCount} 条可能重复的岗位将被跳过。</span>}
                 </div>
                 <div className="modal-actions import-actions">
@@ -3835,7 +4132,13 @@ export function RecruitmentTracker({
                           value={experienceForm.interviewId}
                           onChange={(interviewId) => {
                             const interview = interviews.find((item) => item.id === interviewId);
-                            setExperienceForm((current) => ({ ...current, interviewId, round: interview?.round ?? current.round }));
+                            setExperienceForm((current) => ({
+                              ...current,
+                              interviewId,
+                              round: interview?.round ?? current.round,
+                              scheduledAt: interview ? dateTimeLocalValue(interview.scheduledAt) : current.scheduledAt,
+                              endedAt: interview ? dateTimeLocalValue(interview.endedAt ?? "") : current.endedAt,
+                            }));
                           }}
                           options={interviews
                             .filter((item) => item.applicationId === experienceForm.applicationId)
@@ -3847,6 +4150,14 @@ export function RecruitmentTracker({
                         <small className="experience-link-hint">选择具体场次最准确；留空时会按岗位和轮次自动关联最近一场。</small>
                       </label>
                     )}
+                    <label>
+                      <span>{"\u9762\u8bd5\u65f6\u95f4"}{experienceForm.applicationId ? " *" : ""}</span>
+                      <input type="datetime-local" value={experienceForm.scheduledAt} required={Boolean(experienceForm.applicationId)} onChange={(event) => setExperienceForm((current) => ({ ...current, scheduledAt: event.target.value }))} />
+                    </label>
+                    <label>
+                      <span>{"\u7ed3\u675f\u65f6\u95f4"}</span>
+                      <input type="datetime-local" value={experienceForm.endedAt} onChange={(event) => setExperienceForm((current) => ({ ...current, endedAt: event.target.value }))} />
+                    </label>
                     <label className="full-width">
                       <span>{"\u6807\u9898 *"}</span>
                       <input value={experienceForm.title} onChange={(event) => setExperienceForm((current) => ({ ...current, title: event.target.value }))} placeholder={"\u4f8b\u5982\uff1a\u4e00\u9762\u9ad8\u9891\u7b97\u6cd5\u9898\u4e0e\u9879\u76ee\u6df1\u6316"} required autoFocus />
@@ -4121,7 +4432,7 @@ export function RecruitmentTracker({
                         {view === "mine" && <div className="action-buttons">
                           <button className="action-btn" onClick={() => openEdit(item)} title="编辑岗位信息">编辑岗位</button>
                           <button className="action-btn" onClick={() => { const src = item; closeCompany(); openCreate(src); }} title="复制创建同公司新岗位">复制</button>
-                          <button className="action-btn" onClick={() => { closeCompany(); openInterviewCreate(item.id); }} title="添加面试">添加面试</button>
+                          <button className="action-btn" onClick={() => { closeCompany(); openExperienceCreate(item.id); }} title="记录面经">记录面经</button>
                           <button className="action-btn danger" onClick={() => removeApplication(item)} title="删除">删除</button>
                         </div>}
                       </td>

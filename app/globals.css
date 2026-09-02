@@ -464,10 +464,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .modal-overlay .modal form { padding: 20px 0 0; }
 .modal-wide { width: min(980px, 100%); }
 .import-modal { width: min(570px, 100%); }
-.import-summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin: 22px 0 16px; }
+.import-summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin: 22px 0 16px; }
 .import-summary-grid > div { display: grid; gap: 4px; padding: 15px 13px; border: 1px solid #dce8df; border-radius: 11px; background: #f8fbf8; }
 .import-summary-grid strong { color: var(--brand); font-family: "STSong", "SimSun", serif; font-size: 26px; line-height: 1; }
 .import-summary-grid span { color: var(--muted); font-size: 11px; }
+.recovery-button:not(:disabled) { border-color: #c9dfd2; background: #f0f8f3; color: #356b55; }
 .import-mode-list { display: grid; gap: 9px; }
 .import-mode-list label { display: flex; align-items: flex-start; gap: 11px; padding: 14px; border: 1px solid var(--line); border-radius: 11px; background: white; cursor: pointer; }
 .import-mode-list label.active { border-color: #84ae91; background: var(--brand-soft); box-shadow: 0 0 0 2px rgba(78, 125, 92, .08); }
@@ -1950,6 +1951,9 @@ button.interview-date-chip:hover { border-color: #769abb; box-shadow: 0 7px 17px
 .interview-date-chip strong, .interview-date-chip span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .interview-date-chip strong { font-size: 10px; }
 .interview-date-chip strong i { margin-left: 4px; color: #168262; font-size: 9px; font-style: normal; }
+.interview-date-chip .interview-experience-link { cursor: pointer; transition: color .16s ease, transform .16s ease; }
+.interview-date-chip .interview-experience-link:hover { color: #0f6b50; transform: scale(1.18); }
+.interview-date-chip .interview-experience-link:focus-visible { outline: 2px solid #168262; outline-offset: 1px; border-radius: 4px; }
 .interview-date-chip span { color: #668099; font-size: 9px; }
 .interview-date-chip.add { border-style: dashed; background: #fbfcfb; color: #4d7764; }
 .interview-date-chip.add span { color: #84928a; }

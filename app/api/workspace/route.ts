@@ -243,6 +243,8 @@ export async function POST(request: Request) {
       });
       if (payload.some((item) => !item.company || !item.position)) return json({ error: "公司和岗位不能为空" }, 400);
       if (workspaceImport && textValue(body.mode, 20) === "replace") {
+        const { error: experienceDeleteError } = await supabase.from("interview_experiences").delete().eq("owner_id", user.id);
+        if (experienceDeleteError && experienceDeleteError.code !== "42P01") return json({ error: experienceDeleteError.message }, 400);
         const { error: interviewDeleteError } = await supabase.from("interviews").delete().eq("owner_id", user.id);
         if (interviewDeleteError) return json({ error: interviewDeleteError.message }, 400);
         const { error: applicationDeleteError } = await supabase.from("applications").delete().eq("owner_id", user.id);
@@ -256,7 +258,9 @@ export async function POST(request: Request) {
         if (!Array.isArray(body.interviews) || body.interviews.length > 1000) {
           return json({ error: "面试记录格式不正确或数量过多" }, 400);
         }
-        const allowedApplicationIds = new Set(payload.map((item) => item.id).filter((id): id is string => Boolean(id)));
+        const { data: ownedApplications, error: ownedApplicationsError } = await supabase.from("applications").select("id").eq("owner_id", user.id);
+        if (ownedApplicationsError) return json({ error: ownedApplicationsError.message }, 400);
+        const allowedApplicationIds = new Set((ownedApplications ?? []).map((item) => item.id));
         const interviewPayload = body.interviews.map((item) => {
           const value = (item ?? {}) as Record<string, unknown>;
           return {
@@ -279,6 +283,40 @@ export async function POST(request: Request) {
         if (interviewPayload.length) {
           const { error } = await supabase.from("interviews").upsert(interviewPayload, { onConflict: "id" });
           if (error) return json({ error: error.message }, 400);
+        }
+        if (!Array.isArray(body.experiences) || body.experiences.length > 1000) {
+          return json({ error: "面经记录格式不正确或数量过多" }, 400);
+        }
+        const { data: ownedInterviews, error: ownedInterviewsError } = await supabase.from("interviews").select("id, application_id").eq("owner_id", user.id);
+        if (ownedInterviewsError) return json({ error: ownedInterviewsError.message }, 400);
+        const ownedInterviewMap = new Map((ownedInterviews ?? []).map((item) => [item.id, item.application_id]));
+        const experiencePayload = body.experiences.map((item) => {
+          const value = (item ?? {}) as Record<string, unknown>;
+          return {
+            ...(textValue(value.id, 80) ? { id: textValue(value.id, 80) } : {}),
+            owner_id: user.id,
+            application_id: textValue(value.applicationId, 80) || null,
+            interview_id: textValue(value.interviewId, 80) || null,
+            title: textValue(value.title, 180),
+            company: textValue(value.company, 120),
+            position: textValue(value.position, 160),
+            round: textValue(value.round, 40),
+            tags: tagValues(value.tags),
+            content: textValue(value.content, 12000),
+            takeaway: textValue(value.takeaway, 4000),
+          };
+        });
+        if (experiencePayload.some((item) =>
+          !item.title || !item.content ||
+          (item.application_id && !allowedApplicationIds.has(item.application_id)) ||
+          (item.interview_id && !ownedInterviewMap.has(item.interview_id)) ||
+          (item.interview_id && item.application_id && ownedInterviewMap.get(item.interview_id) !== item.application_id),
+        )) {
+          return json({ error: "面经记录没有匹配到本账号的岗位或面试" }, 400);
+        }
+        if (experiencePayload.length) {
+          const { error } = await supabase.from("interview_experiences").upsert(experiencePayload, { onConflict: "id" });
+          if (error) return json({ error: error.code === "42703" ? "请先执行 005_experience_interview_link.sql" : error.message }, 400);
         }
       }
     } else if (action === "updateStatus") {
