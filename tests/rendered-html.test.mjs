@@ -45,11 +45,11 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(tracker, /experience-library/);
   assert.match(tracker, /openExperienceFromInterview/);
   assert.match(tracker, /saveExperience/);
-  assert.match(tracker, /正在生成面经草稿/);
+  assert.match(tracker, /experience-interview-meta/);
   assert.match(route, /interview_experiences/);
   assert.match(tracker, /openStatFilter/);
   assert.match(tracker, /interview-stage-workspace/);
-  assert.match(tracker, /renderInterviewRounds/);
+  assert.match(tracker, /renderExperienceLink/);
   assert.match(tracker, /formatInterviewDate/);
   assert.match(tracker, /关联面试场次/);
   assert.match(route, /interview_id/);

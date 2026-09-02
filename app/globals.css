@@ -1916,6 +1916,17 @@ body::before {
 .experience-card footer { display: flex; align-items: center; gap: 10px; margin-top: auto; padding-top: 15px; }
 .experience-card .text-button { padding-right: 10px; font-size: 12px; }
 .experience-card .danger-text { border-right: 0; color: #bd5d61; }
+.experience-interview-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 12px; margin-top: 12px; padding: 8px 11px; border-radius: 11px; background: linear-gradient(110deg, #f3f8f4, #eef6f1); color: #527568; font-size: 12px; line-height: 1.5; }
+.experience-interview-meta .eim-time { color: #2c5a48; font-weight: 650; }
+.experience-interview-meta .eim-result { padding: 2px 8px; border-radius: 999px; background: #e4eee7; color: #5c7568; font-size: 11px; font-weight: 700; letter-spacing: .03em; }
+.experience-interview-meta .eim-format { color: #7c9888; font-size: 11px; }
+.experience-interview-meta .eim-interviewer { color: #6e8a7d; font-size: 11px; }
+.experience-interview-meta.result-通过 .eim-result { background: #d6f0dd; color: #1f7a4e; }
+.experience-interview-meta.result-未通过 .eim-result { background: #f7dadc; color: #b04649; }
+.experience-interview-meta.result-待定 .eim-result { background: #fbf1d6; color: #9a7a1f; }
+.experience-interview-meta.result-未参加 .eim-result { background: #e8ece8; color: #87917f; }
+.experience-auto-link { display: block; margin-top: 12px; color: #9fb2a6; font-size: 11px; }
+.experience-application-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 12px; padding: 9px 13px; border: 1px solid rgba(27, 126, 92, .2); border-radius: 13px; background: linear-gradient(110deg, #eef8f1, #e7f4ec); color: #2c5a48; font-size: 12px; }
 .experience-empty { display: grid; justify-items: center; max-width: 630px; margin: 35px auto 12px; padding: 42px 20px; border: 1px dashed #bddccb; border-radius: 22px; background: rgba(255,255,255,.58); color: #6e877a; text-align: center; }
 .experience-empty-mark { display: grid; width: 44px; height: 44px; place-items: center; border-radius: 15px; background: linear-gradient(135deg, #e1f4e6, #d2ebde); color: #16745b; font-size: 22px; }
 .experience-empty h3 { margin: 15px 0 6px; color: #254b3e; font-size: 18px; }

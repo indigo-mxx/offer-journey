@@ -53,18 +53,6 @@ interface BatchPositionEntry {
   base: string;
 }
 
-interface InterviewForm {
-  applicationId: string;
-  scheduledAt: string;
-  endedAt: string;
-  round: string;
-  format: string;
-  result: string;
-  interviewer: string;
-  summary: string;
-  nextSteps: string;
-}
-
 interface ExperienceForm {
   applicationId: string;
   interviewId: string;
@@ -74,6 +62,9 @@ interface ExperienceForm {
   company: string;
   position: string;
   round: string;
+  format: string;
+  result: string;
+  interviewer: string;
   tags: string;
   content: string;
   takeaway: string;
@@ -207,18 +198,6 @@ const EMPTY_COMPANY_FORM: CompanyFormState = {
   companyScale: "",
 };
 
-const EMPTY_INTERVIEW: InterviewForm = {
-  applicationId: "",
-  scheduledAt: "",
-  endedAt: "",
-  round: "",
-  format: "",
-  result: "",
-  interviewer: "",
-  summary: "",
-  nextSteps: "",
-};
-
 const EMPTY_EXPERIENCE: ExperienceForm = {
   applicationId: "",
   interviewId: "",
@@ -228,6 +207,9 @@ const EMPTY_EXPERIENCE: ExperienceForm = {
   company: "",
   position: "",
   round: "",
+  format: "视频面试",
+  result: "待定",
+  interviewer: "",
   tags: "",
   content: "",
   takeaway: "",
@@ -970,12 +952,10 @@ export function RecruitmentTracker({
     rejectionReason: string;
   } | null>(null);
   const [interviews, setInterviews] = useState<Interview[]>([]);
-  const [isInterviewOpen, setIsInterviewOpen] = useState(false);
-  const [editingInterviewId, setEditingInterviewId] = useState<string | null>(null);
-  const [interviewForm, setInterviewForm] = useState(EMPTY_INTERVIEW);
   const [notice, setNotice] = useState("");
   const [experiences, setExperiences] = useState<InterviewExperience[]>([]);
   const [experienceQuery, setExperienceQuery] = useState("");
+  const [experienceApplicationFilter, setExperienceApplicationFilter] = useState("");
   const [isExperienceOpen, setIsExperienceOpen] = useState(false);
   const [editingExperienceId, setEditingExperienceId] = useState<string | null>(null);
   const [experienceForm, setExperienceForm] = useState(EMPTY_EXPERIENCE);
@@ -1291,9 +1271,10 @@ export function RecruitmentTracker({
   const filteredExperiences = useMemo(() => {
     const keyword = experienceQuery.trim();
     return [...experiences]
+      .filter((item) => !experienceApplicationFilter || item.applicationId === experienceApplicationFilter)
       .filter((item) => !keyword || matchesTextSearch(`${item.title} ${item.company} ${item.position} ${item.round} ${item.tags.join(" ")} ${item.content} ${item.takeaway}`, keyword))
       .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
-  }, [experiences, experienceQuery]);
+  }, [experiences, experienceQuery, experienceApplicationFilter]);
 
   const importDuplicateCount = useMemo(() => {
     if (!importPreview) return 0;
@@ -1723,66 +1704,32 @@ export function RecruitmentTracker({
     />;
   };
 
-  const renderInterviewRounds = (item: Application, compact = false) => {
-    const applicationInterviews = interviews
-      .filter((interview) => interview.applicationId === item.id)
-      .sort((a, b) => (a.scheduledAt ?? "").localeCompare(b.scheduledAt ?? ""));
+  const renderExperienceLink = (item: Application, compact = false) => {
+    const count = experiences.filter((experience) => experience.applicationId === item.id).length;
     const canEdit = view === "mine";
-
+    const viewExperiences = () => {
+      setExperienceApplicationFilter(item.id);
+      setView("experiences");
+    };
     return (
-      <div className={`interview-round-strip ${compact ? "compact" : ""}`} aria-label={`${item.company} ${item.position} 的面试轮次`}>
-        {applicationInterviews.map((interview) => {
-          const linkedExperience = experiences.find((experience) =>
-            experience.interviewId === interview.id ||
-            (!experience.interviewId && experience.applicationId === item.id && interviewStage(experience.round) === interviewStage(interview.round)),
-          );
-          const content = (
-            <>
-              <strong>
-                {interview.round || "面试"}
-                {linkedExperience && (
-                  canEdit ? (
-                    <i
-                      role="button"
-                      tabIndex={0}
-                      className="interview-experience-link"
-                      title="查看并编辑关联面经"
-                      onClick={(event) => { event.stopPropagation(); openExperienceEdit(linkedExperience); }}
-                      onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.stopPropagation(); openExperienceEdit(linkedExperience); } }}
-                    >✦</i>
-                  ) : (
-                    <i className="interview-experience-link" title="已关联面经" aria-hidden="true">✦</i>
-                  )
-                )}
-              </strong>
-              <span>{formatInterviewDate(interview.scheduledAt)}</span>
-            </>
-          );
-          return canEdit ? (
-            <button
-              type="button"
-              className={`interview-date-chip result-${interview.result || "待定"}`}
-              key={interview.id}
-              onClick={() => openInterviewEdit(interview)}
-              title="点击修改面试时间与记录"
-            >
-              {content}
-            </button>
-          ) : (
-            <span className="interview-date-chip readonly" key={interview.id}>{content}</span>
-          );
-        })}
-        {canEdit && (
+      <div className={`interview-round-strip experience-link-strip ${compact ? "compact" : ""}`} aria-label={`${item.company} ${item.position} 的面经`}>
+        {count > 0 ? (
+          <button type="button" className="interview-date-chip experience-link-chip" onClick={viewExperiences} title="查看该岗位全部面经">
+            <strong>{count} 篇面经</strong>
+            <span>查看 ↗</span>
+          </button>
+        ) : canEdit ? (
           <button
             type="button"
             className="interview-date-chip add"
             onClick={() => openExperienceCreate(item.id, defaultRoundForStage(interviewStage(item.status)))}
           >
             <strong>＋ 记录面经</strong>
-            <span>{applicationInterviews.length ? "补充下一场面经" : "顺手记录面试时间"}</span>
+            <span>顺手记录面试时间</span>
           </button>
+        ) : (
+          <span className="interview-date-empty">暂未共享面经</span>
         )}
-        {!canEdit && applicationInterviews.length === 0 && <span className="interview-date-empty">暂未共享面试安排</span>}
       </div>
     );
   };
@@ -1860,50 +1807,6 @@ export function RecruitmentTracker({
     setNotice(`已批量更新 ${changed.length} 条投递`);
   }, [selectedApplicationIds, batchStatus, batchCompanyNature, batchCompanySubtype, batchVisibility, batchGroupId, batchFinalOutcome, batchRejectionReason, defaultGroupId, ownApplications, user, runCloudMutation]);
 
-  const addInterview = useCallback(
-    async (item: Interview) => {
-      if (user) {
-        const saved = await runCloudMutation("保存面试安排中", { action: "saveInterview", interview: item });
-        if (!saved) return false;
-      }
-      setInterviews((prev) => [...prev, item]);
-      setNotice("面试安排已保存");
-      const existingExperience = experiences.find((experience) =>
-        !experience.interviewId && experience.applicationId === item.applicationId && interviewStage(experience.round) === interviewStage(item.round),
-      );
-      if (existingExperience) {
-        const linked = { ...existingExperience, interviewId: item.id, updatedAt: new Date().toISOString() };
-        const linkSaved = !user || await runCloudMutation("正在关联已有面经", { action: "updateExperience", experience: linked });
-        if (linkSaved) {
-          setExperiences((current) => current.map((experience) => experience.id === linked.id ? linked : experience));
-          setNotice("面试安排已保存，并已关联面经库中的同轮次记录");
-        }
-      } else {
-        const application = ownApplications.find((entry) => entry.id === item.applicationId);
-        const now = new Date().toISOString();
-        const draft: InterviewExperience = {
-          id: crypto.randomUUID(),
-          applicationId: item.applicationId,
-          interviewId: item.id,
-          title: [application?.company ?? "本次", item.round || "面试", "面经草稿"].filter(Boolean).join(" / "),
-          company: application?.company ?? "",
-          position: application?.position ?? "",
-          round: item.round ?? "",
-          tags: ["面试记录", "待复盘"],
-          content: item.summary?.trim() || "已创建面试记录，请在这里补充题目、回答思路和复盘要点。",
-          takeaway: item.nextSteps?.trim() || "",
-          createdAt: now,
-          updatedAt: now,
-        };
-        const draftSaved = !user || await runCloudMutation("正在生成面经草稿", { action: "saveExperience", experience: draft });
-        if (draftSaved) setExperiences((current) => [draft, ...current]);
-        setNotice(draftSaved ? "\u9762\u8bd5\u5b89\u6392\u5df2\u4fdd\u5b58\uff0c\u5df2\u81ea\u52a8\u751f\u6210\u9762\u7ecf\u8349\u7a3f" : "面试安排已保存，面经关联未同步，请执行最新数据库迁移");
-      }
-      return true;
-    },
-    [user, runCloudMutation, ownApplications, experiences],
-  );
-
   useEffect(() => {
     loadRecoverySnapshots(recoveryOwnerKey).then(setRecoverySnapshots).catch(() => setRecoverySnapshots([]));
   }, [recoveryOwnerKey]);
@@ -1939,10 +1842,10 @@ export function RecruitmentTracker({
     [interviews, user, runCloudMutation],
   );
 
-  // 面经表单保存时，按需创建或更新关联面试场次（不走 addInterview，避免自动生成面经草稿）
+  // 面经表单保存时，按需创建或更新关联面试场次（面经表单是面试时间/结果/面试官/形式的唯一入口）
   const ensureInterviewForExperience = useCallback(
-    async (input: { applicationId: string; round: string; scheduledAt: string; endedAt: string; interviewId: string }): Promise<string> => {
-      const { applicationId, round, scheduledAt, endedAt, interviewId } = input;
+    async (input: { applicationId: string; round: string; scheduledAt: string; endedAt: string; interviewId: string; format: string; result: string; interviewer: string }): Promise<string> => {
+      const { applicationId, round, scheduledAt, endedAt, interviewId, format, result, interviewer } = input;
       if (!applicationId) return "";
       const explicit = interviews.find((item) => item.id === interviewId && item.applicationId === applicationId);
       if (explicit) {
@@ -1950,6 +1853,9 @@ export function RecruitmentTracker({
         if (round && round !== explicit.round) changes.round = round;
         if (scheduledAt && scheduledAt !== explicit.scheduledAt) changes.scheduledAt = scheduledAt;
         if (endedAt !== (explicit.endedAt ?? "") ) changes.endedAt = endedAt;
+        if (format && format !== (explicit.format ?? "")) changes.format = format;
+        if (result && result !== (explicit.result ?? "")) changes.result = result;
+        if (interviewer !== (explicit.interviewer ?? "")) changes.interviewer = interviewer;
         if (Object.keys(changes).length) await updateInterview(explicit.id, changes);
         return explicit.id;
       }
@@ -1957,12 +1863,13 @@ export function RecruitmentTracker({
         .filter((item) => item.applicationId === applicationId && (!round || interviewStage(item.round) === interviewStage(round)))
         .sort((a, b) => (b.scheduledAt ?? "").localeCompare(a.scheduledAt ?? ""))[0];
       if (matched) {
-        if (scheduledAt || endedAt) {
-          const changes: Partial<Interview> = { round: round || matched.round };
-          if (scheduledAt) changes.scheduledAt = scheduledAt;
-          if (endedAt) changes.endedAt = endedAt;
-          await updateInterview(matched.id, changes);
-        }
+        const changes: Partial<Interview> = { round: round || matched.round };
+        if (scheduledAt) changes.scheduledAt = scheduledAt;
+        if (endedAt) changes.endedAt = endedAt;
+        if (format && format !== (matched.format ?? "")) changes.format = format;
+        if (result && result !== (matched.result ?? "")) changes.result = result;
+        if (interviewer !== (matched.interviewer ?? "")) changes.interviewer = interviewer;
+        if (Object.keys(changes).length) await updateInterview(matched.id, changes);
         return matched.id;
       }
       if (!scheduledAt) return "";
@@ -1973,9 +1880,9 @@ export function RecruitmentTracker({
         scheduledAt,
         endedAt,
         round: round || "技术一面",
-        format: "视频面试",
-        result: "待定",
-        interviewer: "",
+        format: format || "视频面试",
+        result: result || "待定",
+        interviewer,
         summary: "",
         nextSteps: "",
         createdAt: now,
@@ -1992,14 +1899,14 @@ export function RecruitmentTracker({
   );
 
   const removeInterview = useCallback(
-    async (item: Interview) => {
-      if (!confirm(`确定删除这条面试记录吗？`)) return false;
+    async (item: Interview, options: { silent?: boolean } = {}) => {
+      if (!options.silent && !confirm(`确定删除这条面试记录吗？`)) return false;
       if (user) {
         const removed = await runCloudMutation("删除面试记录中", { action: "deleteInterview", id: item.id });
         if (!removed) return false;
       }
       setInterviews((prev) => prev.filter((entry) => entry.id !== item.id));
-      setNotice("面试记录已删除");
+      if (!options.silent) setNotice("面试记录已删除");
       return true;
     },
     [user, runCloudMutation],
@@ -2027,14 +1934,23 @@ export function RecruitmentTracker({
   }, [experiences, user, runCloudMutation]);
 
   const removeExperience = useCallback(async (item: InterviewExperience) => {
-    if (!confirm("Delete this interview experience?")) return false;
+    if (!confirm("删除这条面经？关联的面试时间记录也会一并删除。")) return false;
     if (user) {
       const removed = await runCloudMutation("Deleting experience", { action: "deleteExperience", id: item.id });
       if (!removed) return false;
     }
     setExperiences((items) => items.filter((entry) => entry.id !== item.id));
+    // 级联删除关联面试记录（best-effort：失败仅告警，不回滚面经删除）
+    const linkedInterview = interviews.find((interview) =>
+      (item.interviewId && interview.id === item.interviewId) ||
+      (!item.interviewId && item.applicationId && interview.applicationId === item.applicationId && interviewStage(interview.round) === interviewStage(item.round)),
+    );
+    if (linkedInterview) {
+      const cascaded = await removeInterview(linkedInterview, { silent: true });
+      if (!cascaded) setNotice("面经已删除，关联面试记录删除失败，可在面经库重新补录");
+    }
     return true;
-  }, [user, runCloudMutation]);
+  }, [user, runCloudMutation, interviews, removeInterview]);
 
   const openExperienceCreate = useCallback((applicationId = "", round = "") => {
     const application = ownApplications.find((item) => item.id === applicationId);
@@ -2057,6 +1973,9 @@ export function RecruitmentTracker({
       company: item.company,
       position: item.position,
       round: item.round,
+      format: linkedInterview?.format ?? "视频面试",
+      result: linkedInterview?.result ?? "待定",
+      interviewer: linkedInterview?.interviewer ?? "",
       tags: item.tags.join(" / "),
       content: item.content,
       takeaway: item.takeaway,
@@ -2526,64 +2445,6 @@ export function RecruitmentTracker({
     if (saved) closeForm();
   }
 
-  // ────────────────────────────────── interview form
-  function openInterviewCreate(applicationId = "", round = "") {
-    setInterviewForm({ ...EMPTY_INTERVIEW, applicationId, round });
-    setEditingInterviewId(null);
-    setIsInterviewOpen(true);
-  }
-
-  function openInterviewEdit(item: Interview) {
-    setInterviewForm({
-      applicationId: item.applicationId,
-      scheduledAt: dateTimeLocalValue(item.scheduledAt),
-      endedAt: dateTimeLocalValue(item.endedAt ?? ""),
-      round: item.round,
-      format: item.format,
-      result: item.result,
-      interviewer: item.interviewer ?? "",
-      summary: item.summary ?? "",
-      nextSteps: item.nextSteps ?? "",
-    });
-    setEditingInterviewId(item.id);
-    setIsInterviewOpen(true);
-  }
-
-  function closeInterviewForm() {
-    setIsInterviewOpen(false);
-    setEditingInterviewId(null);
-  }
-
-  async function submitInterviewForm(event: React.FormEvent) {
-    event.preventDefault();
-    if (!interviewForm.applicationId || !interviewForm.scheduledAt) {
-      setNotice("请选择关联岗位和面试时间");
-      return;
-    }
-    if (interviewForm.endedAt && new Date(interviewForm.endedAt).getTime() < new Date(interviewForm.scheduledAt).getTime()) {
-      setNotice("结束时间不能早于面试开始时间");
-      return;
-    }
-    const normalizedInterviewForm = {
-      ...interviewForm,
-      scheduledAt: storedDateTimeValue(interviewForm.scheduledAt),
-      endedAt: storedDateTimeValue(interviewForm.endedAt),
-    };
-    let saved = false;
-    if (editingInterviewId) {
-      saved = await updateInterview(editingInterviewId, normalizedInterviewForm);
-    } else {
-      const item: Interview = {
-        id: crypto.randomUUID(),
-        ...normalizedInterviewForm,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      saved = await addInterview(item);
-    }
-    if (saved) closeInterviewForm();
-  }
-
   function closeExperienceForm() {
     setIsExperienceOpen(false);
     setEditingExperienceId(null);
@@ -2612,6 +2473,9 @@ export function RecruitmentTracker({
       scheduledAt,
       endedAt,
       interviewId: experienceForm.interviewId,
+      format: experienceForm.format,
+      result: experienceForm.result,
+      interviewer: experienceForm.interviewer.trim(),
     });
     const now = new Date().toISOString();
     const tags = experienceForm.tags.split(/[\/,\u3001\uff0c]/).map((tag) => tag.trim()).filter(Boolean);
@@ -2655,14 +2519,30 @@ export function RecruitmentTracker({
       company: application?.company ?? "",
       position: application?.position ?? "",
       round: interview.round,
+      format: interview.format ?? "\u89c6\u9891\u9762\u8bd5",
+      result: interview.result ?? "\u5f85\u5b9a",
+      interviewer: interview.interviewer ?? "",
       title: `${application?.company ?? "\u672c\u6b21"}${interview.round ? ` \u00b7 ${interview.round}` : ""}\u9762\u7ecf`,
       content: interview.summary,
       takeaway: interview.nextSteps,
     });
     setEditingExperienceId(null);
-    setIsInterviewOpen(false);
     setIsExperienceOpen(true);
   }
+
+  // 从面试记录跳转：有对应面经则打开面经编辑，没有则带面试信息新建面经
+  function openExperienceByInterview(interview: Interview) {
+    const linked = experiences.find((experience) =>
+      (interview.id && experience.interviewId === interview.id) ||
+      (!experience.interviewId && experience.applicationId === interview.applicationId && interviewStage(experience.round) === interviewStage(interview.round)),
+    );
+    if (linked) {
+      openExperienceEdit(linked);
+    } else {
+      openExperienceFromInterview(interview);
+    }
+  }
+
   function openCompany(company: string) {
     setSelectedCompany(company);
   }
@@ -2910,6 +2790,12 @@ export function RecruitmentTracker({
                 <span aria-hidden="true">+</span> {"\u8bb0\u5f55\u9762\u7ecf"}
               </button>
             </div>
+            {experienceApplicationFilter && (
+              <div className="experience-application-filter">
+                <span>仅显示：{ownApplications.find((app) => app.id === experienceApplicationFilter)?.company ?? "该岗位"} 的面经</span>
+                <button type="button" className="text-button" onClick={() => setExperienceApplicationFilter("")}>← 返回全部面经</button>
+              </div>
+            )}
             <div className="experience-library-tools">
               <label className="experience-search">
                 <span aria-hidden="true">{"\u2315"}</span>
@@ -2944,11 +2830,17 @@ export function RecruitmentTracker({
                         interview.id === experience.interviewId ||
                         (!experience.interviewId && interview.applicationId === experience.applicationId && interviewStage(interview.round) === interviewStage(experience.round)),
                       );
-                      return linkedInterview ? (
-                        <button type="button" className="experience-interview-link" onClick={() => openInterviewEdit(linkedInterview)}>
-                          <span>已关联 {linkedInterview.round || "面试"}</span><strong>{formatInterviewDate(linkedInterview.scheduledAt)}</strong><i>查看安排 →</i>
-                        </button>
-                      ) : experience.applicationId ? <span className="experience-auto-link">已关联岗位 · 新增对应轮次面试后将自动连接</span> : null;
+                      if (linkedInterview) {
+                        return (
+                          <div className={`experience-interview-meta result-${linkedInterview.result || "待定"}`}>
+                            <span className="eim-time">{formatInterviewDate(linkedInterview.scheduledAt)}</span>
+                            <span className="eim-result">{linkedInterview.result || "结果待定"}</span>
+                            {linkedInterview.format && <span className="eim-format">{linkedInterview.format}</span>}
+                            {linkedInterview.interviewer && <span className="eim-interviewer">面试官 · {linkedInterview.interviewer}</span>}
+                          </div>
+                        );
+                      }
+                      return experience.applicationId ? <span className="experience-auto-link">已关联岗位 · 填写面试时间后自动建联</span> : null;
                     })()}
                     {experience.tags.length > 0 && <div className="experience-tags">{experience.tags.map((tag) => <span key={`${experience.id}-${tag}`}>#{tag}</span>)}</div>}
                     <p className="experience-content">{experience.content}</p>
@@ -3200,7 +3092,7 @@ export function RecruitmentTracker({
                   <div>
                     <span className="section-kicker">INTERVIEW CONTROL ROOM</span>
                     <h2>面试轮次作战台</h2>
-                    <p>岗位按当前轮次分开排列；卡片内保留一面到后续轮次的全部日期，直接点日期即可修改时间与面试记录。</p>
+                    <p>岗位按当前轮次分开排列；点「查看面经」进入该岗位全部面经与面试记录。</p>
                   </div>
                   <div className="interview-stage-summary">
                     <span><b>{filtered.length}</b> 个面试中岗位</span>
@@ -3231,7 +3123,7 @@ export function RecruitmentTracker({
                                 <div className="interview-stage-current">
                                   <span>当前进度</span>{renderStatusControl(item, true)}
                                 </div>
-                                {renderInterviewRounds(item)}
+                                {renderExperienceLink(item)}
                                 <footer>
                                   <PositionLinkAction application={item} compact />
                                   {view === "mine" && <button type="button" onClick={() => openEdit(item)}>编辑岗位</button>}
@@ -3482,7 +3374,7 @@ export function RecruitmentTracker({
                                 <span>{item.base || "地点待定"}</span>
                                 <span>{formatDate(item.appliedAt)}</span>
                               </div>
-                              {(INTERVIEW_STATUSES.includes(item.status) || interviews.some((interview) => interview.applicationId === item.id)) && renderInterviewRounds(item, true)}
+                              {(INTERVIEW_STATUSES.includes(item.status) || experiences.some((experience) => experience.applicationId === item.id)) && renderExperienceLink(item, true)}
                               <div className="kanban-card-foot">
                                 {renderStatusControl(item, true)}
                                 <PositionLinkAction application={item} compact />
@@ -3552,7 +3444,7 @@ export function RecruitmentTracker({
                           <td data-label="面试进度"><div className="status-result-cell">{renderStatusControl(item)}
                             {item.finalOutcome && <small>最终：{item.finalOutcome}</small>}
                             {item.rejectionReason && <small>原因：{item.rejectionReason}</small>}
-                            {(INTERVIEW_STATUSES.includes(item.status) || interviews.some((interview) => interview.applicationId === item.id)) && renderInterviewRounds(item, true)}
+                            {(INTERVIEW_STATUSES.includes(item.status) || experiences.some((experience) => experience.applicationId === item.id)) && renderExperienceLink(item, true)}
                           </div></td>
                           <td data-label="公开状态"><span className={`privacy-tag ${item.visibility}`}>{visibilityLabel(item.visibility)}</span></td>
                           {view === "friends" && <td data-label="岗位链接"><PositionLinkAction application={item} /></td>}
@@ -3595,7 +3487,7 @@ export function RecruitmentTracker({
                       <small>{reminder.detail}</small>
                       <button
                         type="button"
-                        onClick={() => reminder.interview ? openInterviewEdit(reminder.interview) : openEdit(reminder.application)}
+                        onClick={() => reminder.interview ? openExperienceByInterview(reminder.interview) : openEdit(reminder.application)}
                       >
                         {reminder.kind === "upcoming" ? "查看安排" : reminder.kind === "result" ? "补充结果" : "更新进度"} →
                       </button>
@@ -3991,121 +3883,6 @@ export function RecruitmentTracker({
           </ModalPortal>
         )}
 
-        {/* ────────────────────────────────── interview form modal */}
-        {isInterviewOpen && (
-          <ModalPortal>
-          <div className="modal-overlay">
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
-              <h2>{editingInterviewId ? "编辑面试" : "添加面试"}</h2>
-              <form onSubmit={submitInterviewForm}>
-                <div className="form-grid">
-                  <label className="full-width">
-                    关联岗位
-                    <DropdownSelect value={interviewForm.applicationId} onChange={(applicationId) => setInterviewForm((prev) => ({ ...prev, applicationId }))} options={ownApplications.map((app) => ({ value: app.id, label: `${app.company} - ${app.position}` }))} placeholder="选择岗位…" ariaLabel="选择关联岗位" />
-                  </label>
-                  <label>
-                    面试时间 *
-                    <input
-                      type="datetime-local"
-                      value={interviewForm.scheduledAt}
-                      onChange={(e) => setInterviewForm((prev) => ({ ...prev, scheduledAt: e.target.value }))}
-                      required
-                    />
-                  </label>
-                  <label>
-                    结束时间
-                    <input
-                      type="datetime-local"
-                      value={interviewForm.endedAt}
-                      onChange={(e) => setInterviewForm((prev) => ({ ...prev, endedAt: e.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    轮次
-                    <DropdownSelect value={interviewForm.round} onChange={(round) => setInterviewForm((prev) => ({ ...prev, round }))} options={INTERVIEW_ROUNDS.map((option) => ({ value: option, label: option }))} placeholder="选择轮次" ariaLabel="选择面试轮次" />
-                  </label>
-                  <label>
-                    形式
-                    <DropdownSelect value={interviewForm.format} onChange={(format) => setInterviewForm((prev) => ({ ...prev, format }))} options={INTERVIEW_FORMATS.map((option) => ({ value: option, label: option }))} placeholder="选择形式" ariaLabel="选择面试形式" />
-                  </label>
-                  <label>
-                    结果
-                    <DropdownSelect value={interviewForm.result} onChange={(result) => setInterviewForm((prev) => ({ ...prev, result }))} options={INTERVIEW_RESULTS.map((option) => ({ value: option, label: option }))} placeholder="选择结果" ariaLabel="选择面试结果" />
-                  </label>
-                  <label>
-                    面试官
-                    <input
-                      value={interviewForm.interviewer}
-                      onChange={(e) => setInterviewForm((prev) => ({ ...prev, interviewer: e.target.value }))}
-                      placeholder="姓名/职位"
-                    />
-                  </label>
-                  <label className="full-width">
-                    总结
-                    <textarea
-                      value={interviewForm.summary}
-                      onChange={(e) => setInterviewForm((prev) => ({ ...prev, summary: e.target.value }))}
-                      rows={2}
-                    />
-                  </label>
-                  <label className="full-width">
-                    后续安排
-                    <textarea
-                      value={interviewForm.nextSteps}
-                      onChange={(e) => setInterviewForm((prev) => ({ ...prev, nextSteps: e.target.value }))}
-                      rows={2}
-                    />
-                  </label>
-                </div>
-                <div className="form-actions">
-                  {editingInterviewId && (
-                    <button
-                      type="button"
-                      className="danger-button form-delete-button"
-                      disabled={busy}
-                      onClick={async () => {
-                        const item = interviews.find((interview) => interview.id === editingInterviewId);
-                        if (!item) return;
-                        if (await removeInterview(item)) closeInterviewForm();
-                      }}
-                    >
-                      删除记录
-                    </button>
-                  )}
-                  <button type="button" className="secondary-button" onClick={closeInterviewForm}>取消</button>
-                  {editingInterviewId && (
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      disabled={busy}
-                      onClick={() => {
-                        const item = interviews.find((interview) => interview.id === editingInterviewId);
-                        if (!item) return;
-                        const linkedExperience = experiences.find((experience) =>
-                          experience.interviewId === item.id ||
-                          (!experience.interviewId && experience.applicationId === item.applicationId && interviewStage(experience.round) === interviewStage(item.round)),
-                        );
-                        if (linkedExperience) {
-                          setIsInterviewOpen(false);
-                          openExperienceEdit(linkedExperience);
-                        } else {
-                          openExperienceFromInterview(item);
-                        }
-                      }}
-                    >
-                      {experiences.some((experience) => experience.interviewId === editingInterviewId) ? "编辑关联面经" : "沉淀为面经"}
-                    </button>
-                  )}
-                  <button type="submit" className="primary-button" disabled={busy}>
-                    {busy ? "保存中…" : editingInterviewId ? "保存修改" : "添加面试"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-          </ModalPortal>
-        )}
-
         {/* ────────────────────────────────── company edit modal */}
         {isExperienceOpen && (
           <ModalPortal>
@@ -4138,6 +3915,9 @@ export function RecruitmentTracker({
                               round: interview?.round ?? current.round,
                               scheduledAt: interview ? dateTimeLocalValue(interview.scheduledAt) : current.scheduledAt,
                               endedAt: interview ? dateTimeLocalValue(interview.endedAt ?? "") : current.endedAt,
+                              format: interview?.format ?? current.format,
+                              result: interview?.result ?? current.result,
+                              interviewer: interview?.interviewer ?? current.interviewer,
                             }));
                           }}
                           options={interviews
@@ -4158,6 +3938,22 @@ export function RecruitmentTracker({
                       <span>{"\u7ed3\u675f\u65f6\u95f4"}</span>
                       <input type="datetime-local" value={experienceForm.endedAt} onChange={(event) => setExperienceForm((current) => ({ ...current, endedAt: event.target.value }))} />
                     </label>
+                    {experienceForm.applicationId && (
+                      <>
+                        <label>
+                          <span>\u5f62\u5f0f</span>
+                          <DropdownSelect value={experienceForm.format} onChange={(format) => setExperienceForm((current) => ({ ...current, format }))} options={INTERVIEW_FORMATS.map((option) => ({ value: option, label: option }))} placeholder="\u9009\u62e9\u5f62\u5f0f" ariaLabel="\u9009\u62e9\u9762\u8bd5\u5f62\u5f0f" />
+                        </label>
+                        <label>
+                          <span>\u7ed3\u679c</span>
+                          <DropdownSelect value={experienceForm.result} onChange={(result) => setExperienceForm((current) => ({ ...current, result }))} options={INTERVIEW_RESULTS.map((option) => ({ value: option, label: option }))} placeholder="\u9009\u62e9\u7ed3\u679c" ariaLabel="\u9009\u62e9\u9762\u8bd5\u7ed3\u679c" />
+                        </label>
+                        <label>
+                          <span>\u9762\u8bd5\u5b98</span>
+                          <input value={experienceForm.interviewer} onChange={(event) => setExperienceForm((current) => ({ ...current, interviewer: event.target.value }))} placeholder="\u59d3\u540d/\u804c\u4f4d" />
+                        </label>
+                      </>
+                    )}
                     <label className="full-width">
                       <span>{"\u6807\u9898 *"}</span>
                       <input value={experienceForm.title} onChange={(event) => setExperienceForm((current) => ({ ...current, title: event.target.value }))} placeholder={"\u4f8b\u5982\uff1a\u4e00\u9762\u9ad8\u9891\u7b97\u6cd5\u9898\u4e0e\u9879\u76ee\u6df1\u6316"} required autoFocus />
@@ -4332,7 +4128,7 @@ export function RecruitmentTracker({
                         <i aria-hidden="true" />
                         <div>
                           <span>{event.type}</span><strong>{event.title}</strong><small>{event.detail}</small>
-                          {view === "mine" && event.interview && <button type="button" onClick={() => { closeCompany(); openInterviewEdit(event.interview!); }}>编辑面试记录</button>}
+                          {view === "mine" && event.interview && <button type="button" onClick={() => { closeCompany(); openExperienceByInterview(event.interview!); }}>编辑面经</button>}
                         </div>
                       </article>
                     ))}
@@ -4424,7 +4220,7 @@ export function RecruitmentTracker({
                         {companyInterviews.filter((interview) => interview.applicationId === item.id).length > 0 && (
                           <small>{companyInterviews.filter((interview) => interview.applicationId === item.id).length} 场面试记录</small>
                         )}
-                        {(INTERVIEW_STATUSES.includes(item.status) || companyInterviews.some((interview) => interview.applicationId === item.id)) && renderInterviewRounds(item, true)}
+                        {(INTERVIEW_STATUSES.includes(item.status) || experiences.some((experience) => experience.applicationId === item.id)) && renderExperienceLink(item, true)}
                       </div></td>
                       {view === "friends" && <td data-label="岗位链接"><PositionLinkAction application={item} /></td>}
                       <td className="cell-actions" data-label="操作">
