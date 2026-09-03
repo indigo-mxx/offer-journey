@@ -3941,16 +3941,16 @@ export function RecruitmentTracker({
                     {experienceForm.applicationId && (
                       <>
                         <label>
-                          <span>\u5f62\u5f0f</span>
-                          <DropdownSelect value={experienceForm.format} onChange={(format) => setExperienceForm((current) => ({ ...current, format }))} options={INTERVIEW_FORMATS.map((option) => ({ value: option, label: option }))} placeholder="\u9009\u62e9\u5f62\u5f0f" ariaLabel="\u9009\u62e9\u9762\u8bd5\u5f62\u5f0f" />
+                          <span>形式</span>
+                          <DropdownSelect value={experienceForm.format} onChange={(format) => setExperienceForm((current) => ({ ...current, format }))} options={INTERVIEW_FORMATS.map((option) => ({ value: option, label: option }))} placeholder="选择形式" ariaLabel="选择面试形式" />
                         </label>
                         <label>
-                          <span>\u7ed3\u679c</span>
-                          <DropdownSelect value={experienceForm.result} onChange={(result) => setExperienceForm((current) => ({ ...current, result }))} options={INTERVIEW_RESULTS.map((option) => ({ value: option, label: option }))} placeholder="\u9009\u62e9\u7ed3\u679c" ariaLabel="\u9009\u62e9\u9762\u8bd5\u7ed3\u679c" />
+                          <span>结果</span>
+                          <DropdownSelect value={experienceForm.result} onChange={(result) => setExperienceForm((current) => ({ ...current, result }))} options={INTERVIEW_RESULTS.map((option) => ({ value: option, label: option }))} placeholder="选择结果" ariaLabel="选择面试结果" />
                         </label>
                         <label>
-                          <span>\u9762\u8bd5\u5b98</span>
-                          <input value={experienceForm.interviewer} onChange={(event) => setExperienceForm((current) => ({ ...current, interviewer: event.target.value }))} placeholder="\u59d3\u540d/\u804c\u4f4d" />
+                          <span>面试官</span>
+                          <input value={experienceForm.interviewer} onChange={(event) => setExperienceForm((current) => ({ ...current, interviewer: event.target.value }))} placeholder="姓名/职位" />
                         </label>
                       </>
                     )}

@@ -52,6 +52,11 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(tracker, /renderExperienceLink/);
   assert.match(tracker, /formatInterviewDate/);
   assert.match(tracker, /关联面试场次/);
+  assert.match(tracker, /<span>形式<\/span>/);
+  assert.match(tracker, /<span>结果<\/span>/);
+  assert.match(tracker, /<span>面试官<\/span>/);
+  assert.match(tracker, /placeholder="姓名\/职位"/);
+  assert.doesNotMatch(tracker, /(?:<span>|placeholder="|ariaLabel=")\\u[0-9a-f]{4}/i);
   assert.match(route, /interview_id/);
   assert.match(schema, /interviewId/);
   assert.match(styles, /interview-stage-board/);
