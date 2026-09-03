@@ -1,4 +1,5 @@
 import type { Application, ApplicationStatus, Interview, InterviewExperience, Visibility } from "@/db/schema";
+import type { Cell, Row, Worksheet } from "exceljs";
 
 export type WorkspaceBackup = {
   applications: Application[];
@@ -117,7 +118,7 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup) {
     const headerRow = sheet.getRow(4);
     headerRow.values = columns.map((column) => column.header);
     headerRow.height = 28;
-    headerRow.eachCell((cell) => {
+    headerRow.eachCell((cell: Cell) => {
       cell.font = { name: "Microsoft YaHei", size: 10, bold: true, color: { argb: palette.white } };
       cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: accent } };
       cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
@@ -126,7 +127,7 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup) {
     for (const rowData of rows) {
       const row = sheet.addRow(rowData);
       row.height = 28;
-      row.eachCell({ includeEmpty: true }, (cell) => {
+      row.eachCell({ includeEmpty: true }, (cell: Cell) => {
         cell.font = bodyFont;
         cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
         cell.border = { bottom: { style: "hair", color: { argb: palette.line } } };
@@ -165,7 +166,7 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup) {
   applicationsSheet.getColumn("appliedAt").numFmt = "yyyy-mm-dd";
   applicationsSheet.getColumn("createdAt").numFmt = "yyyy-mm-dd hh:mm";
   applicationsSheet.getColumn("updatedAt").numFmt = "yyyy-mm-dd hh:mm";
-  applicationsSheet.getColumn("link").eachCell((cell, rowNumber) => {
+  applicationsSheet.getColumn("link").eachCell((cell: Cell, rowNumber: number) => {
     if (rowNumber <= 4 || !cell.text) return;
     cell.value = { text: cell.text, hyperlink: cell.text, tooltip: "打开岗位链接" };
     cell.font = { ...bodyFont, color: { argb: palette.blue }, underline: true };
@@ -200,7 +201,7 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup) {
   experiencesSheet.getColumn("interviewAt").numFmt = "yyyy-mm-dd hh:mm";
   experiencesSheet.getColumn("createdAt").numFmt = "yyyy-mm-dd hh:mm";
   experiencesSheet.getColumn("updatedAt").numFmt = "yyyy-mm-dd hh:mm";
-  experiencesSheet.eachRow((row, rowNumber) => { if (rowNumber >= 5) row.height = 44; });
+  experiencesSheet.eachRow((row: Row, rowNumber: number) => { if (rowNumber >= 5) row.height = 44; });
 
   const guide = workbook.addWorksheet("使用说明", { views: [{ showGridLines: false }] });
   guide.columns = [{ width: 4 }, { width: 22 }, { width: 22 }, { width: 22 }, { width: 22 }, { width: 4 }];
@@ -260,10 +261,10 @@ export async function readWorkspaceWorkbook(file: File): Promise<WorkspaceBackup
   const experiencesSheet = workbook.getWorksheet("面经库");
   if (!applicationsSheet) throw new Error("Excel 中缺少“岗位记录”工作表");
 
-  function records(sheet: typeof applicationsSheet) {
+  function records(sheet: Worksheet | undefined) {
     if (!sheet) return [] as Record<string, unknown>[];
     const headers = new Map<number, string>();
-    sheet.getRow(4).eachCell({ includeEmpty: true }, (cell, column) => headers.set(column, cell.text.trim()));
+    sheet.getRow(4).eachCell({ includeEmpty: true }, (cell: Cell, column: number) => headers.set(column, cell.text.trim()));
     const result: Record<string, unknown>[] = [];
     // actualRowCount undercounts after xlsx.load (it is not recomputed on
     // read), so iterate up to rowCount and let the empty-row filter below drop

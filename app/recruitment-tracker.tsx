@@ -1272,7 +1272,7 @@ export function RecruitmentTracker({
     const keyword = experienceQuery.trim();
     return [...experiences]
       .filter((item) => !experienceApplicationFilter || item.applicationId === experienceApplicationFilter)
-      .filter((item) => !keyword || matchesTextSearch(`${item.title} ${item.company} ${item.position} ${item.round} ${item.tags.join(" ")} ${item.content} ${item.takeaway}`, keyword))
+      .filter((item) => !keyword || matchesTextSearch(`${item.title} ${item.company} ${item.position} ${item.round} ${item.content} ${item.takeaway}`, keyword))
       .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
   }, [experiences, experienceQuery, experienceApplicationFilter]);
 
@@ -1842,10 +1842,10 @@ export function RecruitmentTracker({
     [interviews, user, runCloudMutation],
   );
 
-  // 面经表单保存时，按需创建或更新关联面试场次（面经表单是面试时间/结果/面试官/形式的唯一入口）
+  // 面经表单保存时，按需创建或更新关联面试场次。
   const ensureInterviewForExperience = useCallback(
-    async (input: { applicationId: string; round: string; scheduledAt: string; endedAt: string; interviewId: string; format: string; result: string; interviewer: string }): Promise<string> => {
-      const { applicationId, round, scheduledAt, endedAt, interviewId, format, result, interviewer } = input;
+    async (input: { applicationId: string; round: string; scheduledAt: string; endedAt: string; interviewId: string; format: string; result: string }): Promise<string> => {
+      const { applicationId, round, scheduledAt, endedAt, interviewId, format, result } = input;
       if (!applicationId) return "";
       const explicit = interviews.find((item) => item.id === interviewId && item.applicationId === applicationId);
       if (explicit) {
@@ -1855,7 +1855,6 @@ export function RecruitmentTracker({
         if (endedAt !== (explicit.endedAt ?? "") ) changes.endedAt = endedAt;
         if (format && format !== (explicit.format ?? "")) changes.format = format;
         if (result && result !== (explicit.result ?? "")) changes.result = result;
-        if (interviewer !== (explicit.interviewer ?? "")) changes.interviewer = interviewer;
         if (Object.keys(changes).length) await updateInterview(explicit.id, changes);
         return explicit.id;
       }
@@ -1868,7 +1867,6 @@ export function RecruitmentTracker({
         if (endedAt) changes.endedAt = endedAt;
         if (format && format !== (matched.format ?? "")) changes.format = format;
         if (result && result !== (matched.result ?? "")) changes.result = result;
-        if (interviewer !== (matched.interviewer ?? "")) changes.interviewer = interviewer;
         if (Object.keys(changes).length) await updateInterview(matched.id, changes);
         return matched.id;
       }
@@ -1882,7 +1880,7 @@ export function RecruitmentTracker({
         round: round || "技术一面",
         format: format || "视频面试",
         result: result || "待定",
-        interviewer,
+        interviewer: "",
         summary: "",
         nextSteps: "",
         createdAt: now,
@@ -2475,7 +2473,6 @@ export function RecruitmentTracker({
       interviewId: experienceForm.interviewId,
       format: experienceForm.format,
       result: experienceForm.result,
-      interviewer: experienceForm.interviewer.trim(),
     });
     const now = new Date().toISOString();
     const tags = experienceForm.tags.split(/[\/,\u3001\uff0c]/).map((tag) => tag.trim()).filter(Boolean);
@@ -2629,7 +2626,7 @@ export function RecruitmentTracker({
         date: item.scheduledAt,
         type: item.round || "面试",
         title: application?.position ?? "关联岗位",
-        detail: [item.format, item.result, item.interviewer].filter(Boolean).join(" · ") || "等待补充面试信息",
+        detail: [item.format, item.result].filter(Boolean).join(" · ") || "等待补充面试信息",
         tone: "interview",
         interview: item,
       };
@@ -2799,7 +2796,7 @@ export function RecruitmentTracker({
             <div className="experience-library-tools">
               <label className="experience-search">
                 <span aria-hidden="true">{"\u2315"}</span>
-                <input value={experienceQuery} onChange={(event) => setExperienceQuery(event.target.value)} placeholder={"\u641c\u7d22\u516c\u53f8\u3001\u5c97\u4f4d\u3001\u9898\u76ee\u3001\u6807\u7b7e\u6216\u590d\u76d8\u5185\u5bb9\uff08\u652f\u6301\u62fc\u97f3\uff09"} />
+                <input value={experienceQuery} onChange={(event) => setExperienceQuery(event.target.value)} placeholder={"\u641c\u7d22\u516c\u53f8\u3001\u5c97\u4f4d\u3001\u9898\u76ee\u6216\u590d\u76d8\u5185\u5bb9\uff08\u652f\u6301\u62fc\u97f3\uff09"} />
               </label>
               <div className="experience-counts">
                 <span><b>{experiences.length}</b> {"\u7bc7\u6c89\u6dc0"}</span>
@@ -2836,13 +2833,11 @@ export function RecruitmentTracker({
                             <span className="eim-time">{formatInterviewDate(linkedInterview.scheduledAt)}</span>
                             <span className="eim-result">{linkedInterview.result || "结果待定"}</span>
                             {linkedInterview.format && <span className="eim-format">{linkedInterview.format}</span>}
-                            {linkedInterview.interviewer && <span className="eim-interviewer">面试官 · {linkedInterview.interviewer}</span>}
                           </div>
                         );
                       }
                       return experience.applicationId ? <span className="experience-auto-link">已关联岗位 · 填写面试时间后自动建联</span> : null;
                     })()}
-                    {experience.tags.length > 0 && <div className="experience-tags">{experience.tags.map((tag) => <span key={`${experience.id}-${tag}`}>#{tag}</span>)}</div>}
                     <p className="experience-content">{experience.content}</p>
                     {experience.takeaway && <div className="experience-takeaway"><strong>{"\u590d\u76d8\u8981\u70b9"}</strong><span>{experience.takeaway}</span></div>}
                     <footer>
@@ -3948,10 +3943,6 @@ export function RecruitmentTracker({
                           <span>结果</span>
                           <DropdownSelect value={experienceForm.result} onChange={(result) => setExperienceForm((current) => ({ ...current, result }))} options={INTERVIEW_RESULTS.map((option) => ({ value: option, label: option }))} placeholder="选择结果" ariaLabel="选择面试结果" />
                         </label>
-                        <label>
-                          <span>面试官</span>
-                          <input value={experienceForm.interviewer} onChange={(event) => setExperienceForm((current) => ({ ...current, interviewer: event.target.value }))} placeholder="姓名/职位" />
-                        </label>
                       </>
                     )}
                     <label className="full-width">
@@ -3969,10 +3960,6 @@ export function RecruitmentTracker({
                     <label>
                       <span>{"\u8f6e\u6b21"}</span>
                       <DropdownSelect value={experienceForm.round} onChange={(round) => setExperienceForm((current) => ({ ...current, round }))} options={[...INTERVIEW_ROUNDS, "\u7b14\u8bd5", "\u7efc\u5408\u590d\u76d8"].map((option) => ({ value: option, label: option }))} placeholder={"\u9009\u62e9\u6216\u7559\u7a7a"} ariaLabel={"\u9009\u62e9\u9762\u8bd5\u8f6e\u6b21"} />
-                    </label>
-                    <label>
-                      <span>{"\u6807\u7b7e"}</span>
-                      <input value={experienceForm.tags} onChange={(event) => setExperienceForm((current) => ({ ...current, tags: event.target.value }))} placeholder={"\u7b97\u6cd5 / \u9879\u76ee / HR\u9762 / \u9ad8\u9891"} />
                     </label>
                     <label className="full-width">
                       <span>{"\u9762\u8bd5\u5185\u5bb9 *"}</span>
