@@ -128,8 +128,8 @@ export async function GET(request: Request) {
     return json({ error: applicationError?.message ?? interviewError?.message ?? "云端同步失败" }, 400);
   }
 
-  if (experienceError && experienceError.code !== "42P01") return json({ error: experienceError.message }, 400);
-  const ownerIds = [...new Set((rows ?? []).map((row) => row.owner_id))];
+  if (experienceError && experienceError.code !== "42P01") return json({ error: experienceError.code === "42703" ? "请先执行 006_share_interview_experiences.sql" : experienceError.message }, 400);
+  const ownerIds = [...new Set([...(rows ?? []).map((row) => row.owner_id), ...(experienceRows ?? []).map((row) => row.owner_id)])];
   const { data: profiles } = ownerIds.length
     ? await supabase.from("profiles").select("id, email, display_name").in("id", ownerIds)
     : { data: [] };
@@ -177,6 +177,9 @@ export async function GET(request: Request) {
   }));
 
   const experiences = (experienceRows ?? []).map((row) => ({
+    ownerEmail: profileMap.get(row.owner_id)?.email ?? "",
+    ownerName: profileMap.get(row.owner_id)?.display_name ?? "好友",
+    isOwner: row.owner_id === user.id,
     id: row.id,
     applicationId: row.application_id ?? "",
     interviewId: row.interview_id ?? "",
@@ -187,6 +190,8 @@ export async function GET(request: Request) {
     tags: Array.isArray(row.tags) ? row.tags : [],
     content: row.content ?? "",
     takeaway: row.takeaway ?? "",
+    visibility: row.visibility ?? "private",
+    groupId: row.group_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }));
@@ -292,6 +297,11 @@ export async function POST(request: Request) {
         const ownedInterviewMap = new Map((ownedInterviews ?? []).map((item) => [item.id, item.application_id]));
         const experiencePayload = body.experiences.map((item) => {
           const value = (item ?? {}) as Record<string, unknown>;
+          const experienceVisibility = visibility(value.visibility) === "full" ? "full" : "private";
+          const requestedGroupId = textValue(value.groupId, 80);
+          const experienceGroupId = experienceVisibility === "full"
+            ? (allowedGroupIds.has(requestedGroupId) ? requestedGroupId : (userGroups[0]?.id ?? null))
+            : null;
           return {
             ...(textValue(value.id, 80) ? { id: textValue(value.id, 80) } : {}),
             owner_id: user.id,
@@ -304,6 +314,8 @@ export async function POST(request: Request) {
             tags: tagValues(value.tags),
             content: textValue(value.content, 12000),
             takeaway: textValue(value.takeaway, 4000),
+            visibility: experienceGroupId ? "full" : "private",
+            group_id: experienceGroupId,
           };
         });
         if (experiencePayload.some((item) =>
@@ -316,7 +328,7 @@ export async function POST(request: Request) {
         }
         if (experiencePayload.length) {
           const { error } = await supabase.from("interview_experiences").upsert(experiencePayload, { onConflict: "id" });
-          if (error) return json({ error: error.code === "42703" ? "请先执行 005_experience_interview_link.sql" : error.message }, 400);
+          if (error) return json({ error: error.code === "42703" ? "请先依次执行 005_experience_interview_link.sql 和 006_share_interview_experiences.sql" : error.message }, 400);
         }
       }
     } else if (action === "updateStatus") {
@@ -340,6 +352,7 @@ export async function POST(request: Request) {
       if (!group) return json({ error: "尚未加入该共享小组" }, 409);
       if (group.role === "owner") return json({ error: "创建者不能退出，请先删除小组" }, 409);
       await supabase.from("applications").update({ group_id: null, visibility: "private" }).eq("owner_id", user.id).eq("group_id", groupId);
+      await supabase.from("interview_experiences").update({ group_id: null, visibility: "private" }).eq("owner_id", user.id).eq("group_id", groupId);
       const { error } = await supabase.from("group_members").delete().eq("group_id", groupId).eq("user_id", user.id);
       if (error) return json({ error: error.message }, 400);
     } else if (action === "rotateInviteCode") {
@@ -358,6 +371,8 @@ export async function POST(request: Request) {
       if (!group || group.role !== "owner") return json({ error: "只有创建者可以删除小组" }, 403);
       const { error: resetError } = await supabase.from("applications").update({ group_id: null, visibility: "private" }).eq("owner_id", user.id).eq("group_id", groupId);
       if (resetError) return json({ error: resetError.message }, 400);
+      const { error: experienceResetError } = await supabase.from("interview_experiences").update({ group_id: null, visibility: "private" }).eq("owner_id", user.id).eq("group_id", groupId);
+      if (experienceResetError && experienceResetError.code !== "42703") return json({ error: experienceResetError.message }, 400);
       const { error } = await supabase.from("groups").delete().eq("id", groupId).eq("owner_id", user.id);
       if (error) return json({ error: error.message }, 400);
     } else if (["saveInterview", "updateInterview"].includes(action)) {
@@ -383,6 +398,11 @@ export async function POST(request: Request) {
       if (error) return json({ error: error.message }, 400);
     } else if (action === "saveExperience" || action === "updateExperience") {
       const value = (body.experience ?? {}) as Record<string, unknown>;
+      const userGroups = await groupsForUser(supabase, user.id);
+      const requestedGroupId = textValue(value.groupId, 80);
+      const experienceVisibility = visibility(value.visibility) === "full" ? "full" : "private";
+      const experienceGroupId = experienceVisibility === "full" && userGroups.some((group) => group.id === requestedGroupId) ? requestedGroupId : null;
+      if (experienceVisibility === "full" && !experienceGroupId) return json({ error: "请选择一个已加入的小组后再共享面经" }, 400);
       const experience = {
         ...(textValue(value.id, 80) ? { id: textValue(value.id, 80) } : {}),
         owner_id: user.id,
@@ -395,6 +415,8 @@ export async function POST(request: Request) {
         tags: tagValues(value.tags),
         content: textValue(value.content, 12000),
         takeaway: textValue(value.takeaway, 4000),
+        visibility: experienceVisibility,
+        group_id: experienceGroupId,
       };
       if (!experience.title || !experience.content) return json({ error: "\u8bf7\u586b\u5199\u9762\u7ecf\u6807\u9898\u548c\u9762\u8bd5\u5185\u5bb9" }, 400);
       if (experience.interview_id) {
@@ -409,7 +431,7 @@ export async function POST(request: Request) {
         experience.application_id = linkedInterview.application_id;
       }
       const { error } = await supabase.from("interview_experiences").upsert(experience, { onConflict: "id" });
-      if (error) return json({ error: error.code === "42P01" ? "\u9762\u7ecf\u5e93\u5c1a\u672a\u521d\u59cb\u5316\uff0c\u8bf7\u5148\u5728 Supabase SQL Editor \u6267\u884c 004_interview_experiences.sql" : error.code === "42703" ? "请先在 Supabase SQL Editor 执行 005_experience_interview_link.sql" : error.message }, 400);
+      if (error) return json({ error: error.code === "42P01" ? "\u9762\u7ecf\u5e93\u5c1a\u672a\u521d\u59cb\u5316\uff0c\u8bf7\u5148\u5728 Supabase SQL Editor \u6267\u884c 004_interview_experiences.sql" : error.code === "42703" ? "请先在 Supabase SQL Editor 执行 006_share_interview_experiences.sql" : error.message }, 400);
     } else if (action === "deleteExperience") {
       const { error } = await supabase.from("interview_experiences").delete().eq("id", textValue(body.id, 80)).eq("owner_id", user.id);
       if (error) return json({ error: error.code === "42P01" ? "\u9762\u7ecf\u5e93\u5c1a\u672a\u521d\u59cb化，请先在 Supabase SQL Editor 执行 004_interview_experiences.sql" : error.message }, 400);

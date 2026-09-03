@@ -190,13 +190,13 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup) {
   const experiencesSheet = addDataSheet("面经库", "面经库", "完整保存题目、回答思路与复盘要点，并通过隐藏 ID 保留岗位和面试关联。", [
     { header: "标题", key: "title", width: 28 }, { header: "公司", key: "company", width: 18 }, { header: "岗位", key: "position", width: 24 },
     { header: "轮次", key: "round", width: 14 }, { header: "标签", key: "tags", width: 22 }, { header: "面试内容", key: "content", width: 52 },
-    { header: "复盘要点", key: "takeaway", width: 40 }, { header: "面试时间", key: "interviewAt", width: 19 },
+    { header: "复盘要点", key: "takeaway", width: 40 }, { header: "共享范围", key: "visibility", width: 14 }, { header: "面试时间", key: "interviewAt", width: 19 },
     { header: "岗位ID", key: "applicationId", width: 18, hidden: true }, { header: "面试ID", key: "interviewId", width: 18, hidden: true },
-    { header: "面经ID", key: "id", width: 18, hidden: true }, { header: "创建时间", key: "createdAt", width: 20, hidden: true }, { header: "更新时间", key: "updatedAt", width: 20, hidden: true },
+    { header: "面经ID", key: "id", width: 18, hidden: true }, { header: "共享小组ID", key: "groupId", width: 18, hidden: true }, { header: "创建时间", key: "createdAt", width: 20, hidden: true }, { header: "更新时间", key: "updatedAt", width: 20, hidden: true },
   ], data.experiences.map((item) => ({
     title: item.title, company: item.company, position: item.position, round: item.round, tags: item.tags.join("、"), content: item.content, takeaway: item.takeaway,
     interviewAt: validDate(interviewById.get(item.interviewId ?? "")?.scheduledAt ?? ""), applicationId: item.applicationId ?? "", interviewId: item.interviewId ?? "", id: item.id,
-    createdAt: validDate(item.createdAt ?? ""), updatedAt: validDate(item.updatedAt),
+    visibility: item.visibility === "full" ? "共享给好友" : "仅自己", groupId: item.groupId ?? "", createdAt: validDate(item.createdAt ?? ""), updatedAt: validDate(item.updatedAt),
   })), palette.amber);
   experiencesSheet.getColumn("interviewAt").numFmt = "yyyy-mm-dd hh:mm";
   experiencesSheet.getColumn("createdAt").numFmt = "yyyy-mm-dd hh:mm";
@@ -310,7 +310,7 @@ export async function readWorkspaceWorkbook(file: File): Promise<WorkspaceBackup
     const title = excelText(row["标题"]).trim();
     const content = excelText(row["面试内容"]).trim();
     if (!title || !content) return null;
-    return { id: safeId(row["面经ID"]), applicationId: applicationIds.has(applicationId) ? applicationId : "", interviewId: interviewIds.has(interviewId) ? interviewId : "", title, company: excelText(row["公司"]).trim(), position: excelText(row["岗位"]).trim(), round: excelText(row["轮次"]).trim(), tags: splitTags(row["标签"]), content, takeaway: excelText(row["复盘要点"]).trim(), createdAt: dateFromExcel(row["创建时间"]) || now, updatedAt: dateFromExcel(row["更新时间"]) || now };
+    return { id: safeId(row["面经ID"]), applicationId: applicationIds.has(applicationId) ? applicationId : "", interviewId: interviewIds.has(interviewId) ? interviewId : "", title, company: excelText(row["公司"]).trim(), position: excelText(row["岗位"]).trim(), round: excelText(row["轮次"]).trim(), tags: splitTags(row["标签"]), content, takeaway: excelText(row["复盘要点"]).trim(), visibility: excelText(row["共享范围"]).trim() === "共享给好友" ? "full" : "private", groupId: excelText(row["共享小组ID"]).trim() || null, isOwner: true, createdAt: dateFromExcel(row["创建时间"]) || now, updatedAt: dateFromExcel(row["更新时间"]) || now };
   }).filter((item): item is InterviewExperience => Boolean(item));
   if (experiences.length > 1000) throw new Error("单次最多导入 1000 篇面经");
   return { applications, interviews, experiences };

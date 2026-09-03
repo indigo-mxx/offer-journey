@@ -68,6 +68,8 @@ interface ExperienceForm {
   tags: string;
   content: string;
   takeaway: string;
+  visibility: "private" | "full";
+  groupId: string;
 }
 
 interface ImportPreview {
@@ -213,6 +215,8 @@ const EMPTY_EXPERIENCE: ExperienceForm = {
   tags: "",
   content: "",
   takeaway: "",
+  visibility: "private",
+  groupId: "",
 };
 
 const INTERVIEW_ROUNDS = ["技术一面", "技术二面", "技术三面", "交叉面", "主管面", "HR面", "群面", "VP面", "其他"];
@@ -440,8 +444,15 @@ function normalizeInterviews(items: Interview[]) {
   return items.map((item) => ({ ...item, endedAt: item.endedAt ?? "" }));
 }
 
-function normalizeExperiences(items: InterviewExperience[]) {
-  return items.map((item) => ({ ...item, interviewId: item.interviewId ?? "", tags: Array.isArray(item.tags) ? item.tags.filter(Boolean) : [] }));
+function normalizeExperiences(items: InterviewExperience[]): InterviewExperience[] {
+  return items.map((item) => ({
+    ...item,
+    interviewId: item.interviewId ?? "",
+    tags: Array.isArray(item.tags) ? item.tags.filter(Boolean) : [],
+    visibility: item.visibility === "full" ? "full" as const : "private" as const,
+    groupId: item.groupId ?? null,
+    isOwner: item.isOwner ?? true,
+  }));
 }
 
 const RECOVERY_DATABASE_NAME = "offer-journey-recovery";
@@ -956,6 +967,7 @@ export function RecruitmentTracker({
   const [experiences, setExperiences] = useState<InterviewExperience[]>([]);
   const [experienceQuery, setExperienceQuery] = useState("");
   const [experienceApplicationFilter, setExperienceApplicationFilter] = useState("");
+  const [experienceScope, setExperienceScope] = useState<"all" | "mine" | "friends">("mine");
   const [isExperienceOpen, setIsExperienceOpen] = useState(false);
   const [editingExperienceId, setEditingExperienceId] = useState<string | null>(null);
   const [experienceForm, setExperienceForm] = useState(EMPTY_EXPERIENCE);
@@ -1075,7 +1087,7 @@ export function RecruitmentTracker({
           void saveRecoverySnapshot(recoveryOwnerKey, {
             applications: cached.applications.filter((item) => item.isOwner !== false),
             interviews: cached.interviews.filter((item) => cachedOwnerIds.has(item.applicationId)),
-            experiences: cachedExperiences.filter((item) => !item.applicationId || cachedOwnerIds.has(item.applicationId)),
+            experiences: cachedExperiences.filter((item) => item.isOwner !== false && (!item.applicationId || cachedOwnerIds.has(item.applicationId))),
           }).then(setRecoverySnapshots).catch(() => {});
         }
       } catch {
@@ -1271,10 +1283,11 @@ export function RecruitmentTracker({
   const filteredExperiences = useMemo(() => {
     const keyword = experienceQuery.trim();
     return [...experiences]
+      .filter((item) => experienceScope === "all" || (experienceScope === "mine" ? item.isOwner !== false : item.isOwner === false))
       .filter((item) => !experienceApplicationFilter || item.applicationId === experienceApplicationFilter)
       .filter((item) => !keyword || matchesTextSearch(`${item.title} ${item.company} ${item.position} ${item.round} ${item.content} ${item.takeaway}`, keyword))
       .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
-  }, [experiences, experienceQuery, experienceApplicationFilter]);
+  }, [experiences, experienceQuery, experienceApplicationFilter, experienceScope]);
 
   const importDuplicateCount = useMemo(() => {
     if (!importPreview) return 0;
@@ -1709,6 +1722,7 @@ export function RecruitmentTracker({
     const canEdit = view === "mine";
     const viewExperiences = () => {
       setExperienceApplicationFilter(item.id);
+      setExperienceScope("mine");
       setView("experiences");
     };
     return (
@@ -1817,7 +1831,7 @@ export function RecruitmentTracker({
     const snapshot: WorkspaceBackup = {
       applications: ownApplications,
       interviews: interviews.filter((item) => ownIds.has(item.applicationId)),
-      experiences: experiences.filter((item) => !item.applicationId || ownIds.has(item.applicationId)),
+      experiences: experiences.filter((item) => item.isOwner !== false && (!item.applicationId || ownIds.has(item.applicationId))),
     };
     if (!snapshot.applications.length && !snapshot.interviews.length && !snapshot.experiences.length) return;
     const timer = window.setTimeout(() => {
@@ -1953,6 +1967,7 @@ export function RecruitmentTracker({
   const openExperienceCreate = useCallback((applicationId = "", round = "") => {
     const application = ownApplications.find((item) => item.id === applicationId);
     setExperienceForm({ ...EMPTY_EXPERIENCE, applicationId, round, company: application?.company ?? "", position: application?.position ?? "" });
+    setExperienceScope("mine");
     setEditingExperienceId(null);
     setIsExperienceOpen(true);
   }, [ownApplications]);
@@ -1977,6 +1992,8 @@ export function RecruitmentTracker({
       tags: item.tags.join(" / "),
       content: item.content,
       takeaway: item.takeaway,
+      visibility: item.visibility === "full" ? "full" : "private",
+      groupId: item.groupId ?? "",
     });
     setEditingExperienceId(item.id);
     setIsExperienceOpen(true);
@@ -2008,7 +2025,7 @@ export function RecruitmentTracker({
           await loadCloud();
           setNotice("已退出小组");
         } else if (action === "delete") {
-          if (!activeGroupId || !confirm("确定删除这个小组吗？成员关系会一并移除，原投递记录会转为仅自己可见。")) return;
+          if (!activeGroupId || !confirm("确定删除这个小组吗？成员关系会一并移除，原投递记录和面经会转为仅自己可见。")) return;
           const deleted = await runCloudMutation("删除小组中", { action: "deleteGroup", groupId: activeGroupId }, true);
           if (!deleted) return;
           setActiveGroupId(null);
@@ -2064,7 +2081,7 @@ export function RecruitmentTracker({
       const backup: WorkspaceBackup = {
         applications: ownApplications,
         interviews: interviews.filter((item) => ownIds.has(item.applicationId)),
-        experiences: experiences.filter((item) => !item.applicationId || ownIds.has(item.applicationId)),
+        experiences: experiences.filter((item) => item.isOwner !== false && (!item.applicationId || ownIds.has(item.applicationId))),
       };
       const blob = await createWorkspaceWorkbook(backup);
       const url = URL.createObjectURL(blob);
@@ -2202,7 +2219,7 @@ export function RecruitmentTracker({
     }
 
     const experienceKey = (item: Pick<InterviewExperience, "applicationId" | "round" | "title">) => `${item.applicationId ?? ""}|${item.round.trim().toLocaleLowerCase()}|${item.title.trim().toLocaleLowerCase()}`;
-    const existingExperienceKeys = new Set(experiences.map(experienceKey));
+    const existingExperienceKeys = new Set(experiences.filter((item) => item.isOwner !== false).map(experienceKey));
     const acceptedExperiences = importPreview.experiences
       .map((source) => ({
         ...source,
@@ -2211,6 +2228,9 @@ export function RecruitmentTracker({
         interviewId: source.interviewId ? interviewIdMap.get(source.interviewId) ?? "" : "",
         createdAt: source.createdAt || now,
         updatedAt: now,
+        visibility: source.visibility === "full" && Boolean((source.groupId && availableGroupIds.has(source.groupId)) || defaultGroupId) ? "full" as const : "private" as const,
+        groupId: source.visibility === "full" ? (source.groupId && availableGroupIds.has(source.groupId) ? source.groupId : defaultGroupId || null) : null,
+        isOwner: true,
       }))
       .filter((item) => importMode === "replace" || !existingExperienceKeys.has(experienceKey(item)));
 
@@ -2232,7 +2252,7 @@ export function RecruitmentTracker({
     if (importMode === "replace") {
       setApplications((current) => [...current.filter((item) => item.isOwner === false), ...accepted]);
       setInterviews(acceptedInterviews);
-      setExperiences(acceptedExperiences);
+      setExperiences((current) => [...acceptedExperiences, ...current.filter((item) => item.isOwner === false)]);
       saveLocal(accepted);
       saveInterviewsLocal(acceptedInterviews);
       saveExperiencesLocal(acceptedExperiences);
@@ -2476,6 +2496,10 @@ export function RecruitmentTracker({
     });
     const now = new Date().toISOString();
     const tags = experienceForm.tags.split(/[\/,\u3001\uff0c]/).map((tag) => tag.trim()).filter(Boolean);
+    if (experienceForm.visibility === "full" && !experienceForm.groupId) {
+      setNotice("请选择共享小组");
+      return;
+    }
     const changes = {
       applicationId: experienceForm.applicationId,
       interviewId,
@@ -2486,6 +2510,8 @@ export function RecruitmentTracker({
       tags,
       content: experienceForm.content.trim(),
       takeaway: experienceForm.takeaway.trim(),
+      visibility: experienceForm.visibility,
+      groupId: experienceForm.visibility === "full" ? experienceForm.groupId : null,
     };
     const saved = editingExperienceId
       ? await updateExperience(editingExperienceId, changes)
@@ -2798,8 +2824,14 @@ export function RecruitmentTracker({
                 <span aria-hidden="true">{"\u2315"}</span>
                 <input value={experienceQuery} onChange={(event) => setExperienceQuery(event.target.value)} placeholder={"\u641c\u7d22\u516c\u53f8\u3001\u5c97\u4f4d\u3001\u9898\u76ee\u6216\u590d\u76d8\u5185\u5bb9\uff08\u652f\u6301\u62fc\u97f3\uff09"} />
               </label>
+              <div className="experience-scope-tabs" aria-label="面经查看范围">
+                <button type="button" className={experienceScope === "mine" ? "active" : ""} onClick={() => setExperienceScope("mine")}>我的</button>
+                <button type="button" className={experienceScope === "friends" ? "active" : ""} onClick={() => setExperienceScope("friends")} disabled={!user}>好友共享</button>
+                <button type="button" className={experienceScope === "all" ? "active" : ""} onClick={() => setExperienceScope("all")} disabled={!user}>全部</button>
+              </div>
               <div className="experience-counts">
-                <span><b>{experiences.length}</b> {"\u7bc7\u6c89\u6dc0"}</span>
+                <span><b>{experiences.filter((item) => item.isOwner !== false).length}</b> 我的面经</span>
+                <span><b>{experiences.filter((item) => item.isOwner === false).length}</b> 好友共享</span>
                 <span><b>{new Set(experiences.map((item) => item.company).filter(Boolean)).size}</b> {"\u5bb6\u516c\u53f8"}</span>
               </div>
             </div>
@@ -2819,7 +2851,12 @@ export function RecruitmentTracker({
                         <span className="experience-round">{experience.round || "\u901a\u7528\u590d\u76d8"}</span>
                         <h3>{experience.title}</h3>
                       </div>
-                      <time>{formatDateTime(experience.updatedAt)}</time>
+                      <div className="experience-card-origin">
+                        {experience.isOwner === false
+                          ? <span className="experience-owner">{experience.ownerName || "好友"} 分享</span>
+                          : <span className={`experience-visibility ${experience.visibility === "full" ? "shared" : ""}`}>{experience.visibility === "full" ? "已共享" : "仅自己"}</span>}
+                        <time>{formatDateTime(experience.updatedAt)}</time>
+                      </div>
                     </header>
                     {(experience.company || experience.position) && <p className="experience-company">{[experience.company, experience.position].filter(Boolean).join(" / ")}</p>}
                     {(() => {
@@ -2841,8 +2878,12 @@ export function RecruitmentTracker({
                     <p className="experience-content">{experience.content}</p>
                     {experience.takeaway && <div className="experience-takeaway"><strong>{"\u590d\u76d8\u8981\u70b9"}</strong><span>{experience.takeaway}</span></div>}
                     <footer>
-                      <button type="button" className="text-button" onClick={() => openExperienceEdit(experience)}>{"\u7f16\u8f91"}</button>
-                      <button type="button" className="text-button danger-text" onClick={() => void removeExperience(experience)}>{"\u5220\u9664"}</button>
+                      {experience.isOwner !== false ? (
+                        <>
+                          <button type="button" className="text-button" onClick={() => openExperienceEdit(experience)}>{"\u7f16\u8f91"}</button>
+                          <button type="button" className="text-button danger-text" onClick={() => void removeExperience(experience)}>{"\u5220\u9664"}</button>
+                        </>
+                      ) : <span className="experience-readonly">只读 · 来自共同小组</span>}
                     </footer>
                   </article>
                 ))}
@@ -3969,6 +4010,27 @@ export function RecruitmentTracker({
                       <span>{"\u590d\u76d8\u8981\u70b9"}</span>
                       <textarea value={experienceForm.takeaway} onChange={(event) => setExperienceForm((current) => ({ ...current, takeaway: event.target.value }))} rows={3} placeholder={"\u4e0b\u4e00\u6b21\u60f3\u4f18\u5316\u7684\u8868\u8fbe\u3001\u9700\u8981\u8865\u7684\u77e5\u8bc6\u70b9\u6216\u540e\u7eed\u884c\u52a8"} />
                     </label>
+                    <label className="full-width privacy-field">
+                      <span>共享范围</span>
+                      <DropdownSelect
+                        value={experienceForm.visibility}
+                        onChange={(visibility) => setExperienceForm((current) => ({ ...current, visibility: visibility as "private" | "full", groupId: visibility === "private" ? "" : (current.groupId || defaultGroupId) }))}
+                        options={[{ value: "private", label: "仅自己" }, { value: "full", label: "共享给好友" }]}
+                        ariaLabel="选择面经共享范围"
+                      />
+                      <small>{experienceForm.visibility === "full" ? "共同小组成员可以只读查看这篇面经。" : "只有你自己可以查看。"}</small>
+                    </label>
+                    {experienceForm.visibility === "full" && groups.length > 0 && (
+                      <label className="full-width">
+                        <span>共享到小组</span>
+                        <DropdownSelect value={experienceForm.groupId || defaultGroupId} onChange={(groupId) => setExperienceForm((current) => ({ ...current, groupId }))} options={groups.map((group) => ({ value: group.id, label: `${group.name} · ${group.members.length} 人` }))} ariaLabel="选择面经共享小组" />
+                      </label>
+                    )}
+                    {experienceForm.visibility === "full" && groups.length === 0 && (
+                      <div className="share-setup-prompt full-width">
+                        <div><strong>还没有共享小组</strong><small>请先保存为“仅自己”，再到共享管理创建或加入小组。</small></div>
+                      </div>
+                    )}
                   </div>
                   <div className="form-actions">
                     {editingExperienceId && (

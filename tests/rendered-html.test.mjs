@@ -3,13 +3,14 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("includes the cloud workspace, access control, and sharing surfaces", async () => {
-  const [page, tracker, route, schema, hosting, styles] = await Promise.all([
+  const [page, tracker, route, schema, hosting, styles, experienceSharingMigration] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/recruitment-tracker.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/workspace/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
     readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/006_share_interview_experiences.sql", import.meta.url), "utf8"),
   ]);
 
   assert.match(page, /SupabaseShell/);
@@ -47,6 +48,12 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(tracker, /saveExperience/);
   assert.match(tracker, /experience-interview-meta/);
   assert.match(route, /interview_experiences/);
+  assert.match(tracker, /好友共享/);
+  assert.match(tracker, /选择面经共享范围/);
+  assert.match(tracker, /只读 · 来自共同小组/);
+  assert.match(route, /experienceGroupId/);
+  assert.match(experienceSharingMigration, /public\.is_group_member\(group_id\)/);
+  assert.match(experienceSharingMigration, /visibility = 'full'/);
   assert.match(tracker, /openStatFilter/);
   assert.match(tracker, /interview-stage-workspace/);
   assert.match(tracker, /renderExperienceLink/);

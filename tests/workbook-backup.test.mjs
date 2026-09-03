@@ -102,6 +102,9 @@ const SAMPLE = {
       tags: ["操作系统", "手撕代码", "项目深挖"],
       content: "1. 中断上下文与软中断区别\n2. volatile 的语义与编译器优化\n3. 手撕：反转链表区间 [m, n]",
       takeaway: "中断部分回答偏浅，需补《深入理解Linux内核》第7章。",
+      visibility: "full",
+      groupId: "group-campus",
+      isOwner: true,
       createdAt: "2025-09-15T16:10:00.000Z",
       updatedAt: "2025-09-16T01:00:00.000Z",
     },
@@ -193,12 +196,15 @@ test("Excel round-trip preserves Chinese text, dates, tags and linkage with no �
     assert.equal(exp.takeaway, "中断部分回答偏浅，需补《深入理解Linux内核》第7章。", "takeaway with 《》 intact");
     assert.equal(exp.interviewId, "int-tech1", "experience→interview link preserved (Option B bridge)");
     assert.equal(exp.applicationId, "app-huawei", "experience→application link preserved");
+    assert.equal(exp.visibility, "full", "experience sharing visibility is preserved");
+    assert.equal(exp.groupId, "group-campus", "experience sharing group is preserved");
 
     const general = restored.experiences.find((item) => item.id === "exp-general");
     assert.ok(general, "exp-general id preserved");
     assert.equal(general.applicationId, "", "general experience has no application");
     assert.equal(general.interviewId, "", "general experience has no interview");
     assert.deepEqual(general.tags, ["自我介绍", "通用"], "general tags intact");
+    assert.equal(general.visibility, "private", "legacy experience defaults to private");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

@@ -74,6 +74,11 @@ export type InterviewExperience = {
   tags: string[];
   content: string;
   takeaway: string;
+  visibility?: "private" | "full";
+  groupId?: string | null;
+  ownerEmail?: string;
+  ownerName?: string;
+  isOwner?: boolean;
   createdAt?: string;
   updatedAt: string;
 };

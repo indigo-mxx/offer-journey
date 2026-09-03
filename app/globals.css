@@ -1892,6 +1892,10 @@ body::before {
 .experience-create-button { min-width: 126px; box-shadow: 0 12px 26px rgba(9, 95, 71, .22); }
 .experience-create-button span { font-size: 20px; line-height: 0; margin-right: 4px; }
 .experience-library-tools { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 13px; border: 1px solid rgba(36, 110, 83, .12); border-radius: 18px; background: rgba(255,255,255,.72); box-shadow: 0 11px 28px rgba(44, 91, 70, .05); }
+.experience-scope-tabs { display: inline-flex; flex: none; padding: 3px; border: 1px solid #d9e8dd; border-radius: 999px; background: #f4f8f5; }
+.experience-scope-tabs button { min-height: 30px; padding: 5px 11px; border: 0; border-radius: 999px; background: transparent; color: #718278; font-size: 11px; font-weight: 700; }
+.experience-scope-tabs button.active { background: #fff; color: var(--brand); box-shadow: 0 3px 10px rgba(36,91,68,.12); }
+.experience-scope-tabs button:disabled { cursor: not-allowed; opacity: .45; }
 .experience-search { display: flex; flex: 1; align-items: center; gap: 9px; min-width: 0; color: #2d8068; }
 .experience-search span { font-size: 21px; transform: rotate(-20deg); }
 .experience-search input { width: 100%; border: 0; outline: 0; background: transparent; color: #183b31; font: inherit; }
@@ -1906,6 +1910,11 @@ body::before {
 .experience-card header { display: flex; align-items: flex-start; justify-content: space-between; gap: 13px; }
 .experience-card h3 { margin: 8px 0 0; color: #193a30; font-size: 17px; line-height: 1.42; letter-spacing: -.025em; }
 .experience-card time { flex: none; padding-top: 2px; color: #9aaba1; font-size: 11px; }
+.experience-card-origin { display: grid; justify-items: end; gap: 5px; }
+.experience-owner, .experience-visibility, .experience-readonly { color: #788b80; font-size: 10px; font-weight: 700; }
+.experience-owner, .experience-visibility.shared { padding: 4px 7px; border-radius: 999px; background: #e7f4eb; color: #267052; }
+.experience-visibility { padding: 4px 7px; border-radius: 999px; background: #f1f2ef; }
+.experience-readonly { margin-left: auto; }
 .experience-round { display: inline-flex; padding: 4px 8px; border-radius: 7px; background: #e6f5ed; color: #15705a; font-size: 11px; font-weight: 750; letter-spacing: .04em; }
 .experience-company { margin: 11px 0 0; color: #598071; font-size: 12px; font-weight: 650; }
 .experience-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
