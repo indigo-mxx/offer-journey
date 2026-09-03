@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("includes the cloud workspace, access control, and sharing surfaces", async () => {
-  const [page, tracker, route, schema, hosting, styles, experienceSharingMigration] = await Promise.all([
+  const [page, tracker, route, schema, hosting, styles, experienceSharingMigration, search] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/recruitment-tracker.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/workspace/route.ts", import.meta.url), "utf8"),
@@ -11,6 +11,7 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
     readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../supabase/migrations/006_share_interview_experiences.sql", import.meta.url), "utf8"),
+    readFile(new URL("../lib/search.ts", import.meta.url), "utf8"),
   ]);
 
   assert.match(page, /SupabaseShell/);
@@ -30,8 +31,9 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(tracker, /company-merge-table/);
   assert.match(tracker, /view-mode-panel/);
   assert.match(tracker, /qiuzhao-list-mode/);
-  assert.match(tracker, /pinyinSearchForms/);
-  assert.match(tracker, /matchesTextSearch\(item\.company, q\)/);
+  assert.match(search, /pinyinSearchForms/);
+  assert.match(search, /keyword\.length === 2/);
+  assert.match(tracker, /matchesFieldsSearch\(\[item\.company, item\.position, item\.base/);
   assert.match(tracker, /支持拼音 \/ 首字母/);
   assert.match(tracker, /select-field \$\{className\}\$\{open \? " is-open" : ""\}/);
   assert.match(tracker, /select-popover portal-popover/);

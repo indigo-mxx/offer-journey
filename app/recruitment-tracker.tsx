@@ -3,8 +3,8 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { match, pinyin } from "pinyin-pro";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { autocompleteScore, matchesFieldsSearch, matchesLiteralSearch, matchesTextSearch, matchingAutocompleteOptions } from "@/lib/search";
 import { createWorkspaceWorkbook, readWorkspaceWorkbook } from "@/lib/workbook-backup";
 import type { WorkspaceBackup } from "@/lib/workbook-backup";
 import type { Application, Interview, InterviewExperience, GroupInfo, ApplicationStatus, Visibility } from "@/db/schema";
@@ -290,56 +290,6 @@ function defaultRoundForStage(stage: InterviewStage) {
 
 function companyKey(value: string) {
   return value.trim().toLocaleLowerCase();
-}
-
-function compactSearchText(value: string) {
-  return value.toLocaleLowerCase().replace(/[\s\-_/./]+/g, "");
-}
-
-function pinyinSearchForms(value: string) {
-  const syllables = pinyin(value, { toneType: "none", type: "array", nonZh: "consecutive" })
-    .flatMap((part) => part.toLocaleLowerCase().match(/[a-z0-9]+/g) ?? []);
-  return {
-    full: syllables.join(""),
-    initials: syllables.map((syllable) => syllable[0]).join(""),
-  };
-}
-
-function matchesTextSearch(value: string, query: string) {
-  const keyword = compactSearchText(query.trim());
-  if (!keyword) return true;
-  const normalized = compactSearchText(value);
-  if (normalized.includes(keyword)) return true;
-  const pinyinForms = pinyinSearchForms(value);
-  if (pinyinForms.full.includes(keyword) || pinyinForms.initials.includes(keyword)) return true;
-  return Boolean(match(value, keyword, { precision: "every", lastPrecision: "every", insensitive: true }));
-}
-
-function autocompleteScore(value: string, query: string) {
-  const keyword = compactSearchText(query.trim());
-  if (!keyword) return 0;
-  const normalized = compactSearchText(value);
-  if (normalized.startsWith(keyword)) return 100;
-  if (normalized.includes(keyword)) return 80;
-  const pinyinForms = pinyinSearchForms(value);
-  if (pinyinForms.full.startsWith(keyword)) return 75;
-  if (pinyinForms.initials.startsWith(keyword)) return 72;
-  if (pinyinForms.full.includes(keyword)) return 68;
-  if (pinyinForms.initials.includes(keyword)) return 64;
-  const matchedIndexes = match(value, keyword, { precision: "start", lastPrecision: "start", insensitive: true });
-  if (!matchedIndexes) return 0;
-  return matchedIndexes[0] === 0 ? 70 : 50;
-}
-
-function matchingAutocompleteOptions(values: string[], query: string) {
-  const options = [...new Set(values.map((value) => value.trim()).filter(Boolean))];
-  if (!query.trim()) return options;
-  return options
-    .map((value) => ({ value, score: autocompleteScore(value, query) }))
-    .filter(({ score }) => score > 0)
-    .sort((a, b) => b.score - a.score || a.value.localeCompare(b.value, "zh-CN"))
-    .slice(0, 6)
-    .map(({ value }) => value);
 }
 
 function companyClassification(tags: string[] = []) {
@@ -1285,7 +1235,7 @@ export function RecruitmentTracker({
     return [...experiences]
       .filter((item) => experienceScope === "all" || (experienceScope === "mine" ? item.isOwner !== false : item.isOwner === false))
       .filter((item) => !experienceApplicationFilter || item.applicationId === experienceApplicationFilter)
-      .filter((item) => !keyword || matchesTextSearch(`${item.title} ${item.company} ${item.position} ${item.round} ${item.content} ${item.takeaway}`, keyword))
+      .filter((item) => !keyword || matchesFieldsSearch([item.title, item.company, item.position, item.round], keyword) || matchesLiteralSearch(`${item.content} ${item.takeaway}`, keyword))
       .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
   }, [experiences, experienceQuery, experienceApplicationFilter, experienceScope]);
 
@@ -1371,15 +1321,7 @@ export function RecruitmentTracker({
     if (statFilter === "offer") items = items.filter((item) => item.status === "Offer");
     if (query.trim()) {
       const q = query.trim();
-      items = items.filter(
-        (item) =>
-          matchesTextSearch(item.company, q) ||
-          matchesTextSearch(item.position, q) ||
-          matchesTextSearch(item.base ?? "", q) ||
-          matchesTextSearch(item.note ?? "", q) ||
-          matchesTextSearch(item.channel ?? "", q) ||
-          matchesTextSearch((item.industryTags ?? []).join(" "), q),
-      );
+      items = items.filter((item) => matchesFieldsSearch([item.company, item.position, item.base ?? ""], q));
     }
     if (statusFilter !== "全部状态") items = items.filter((item) => matchesStatusFilter(item.status, statusFilter));
     if (batchFilter !== "全部批次") items = items.filter((item) => item.batch === batchFilter);
