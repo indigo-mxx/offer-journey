@@ -32,10 +32,10 @@ function matchesToken(value: string, token: string) {
   const forms = pinyinSearchForms(value);
   if (forms.full.includes(keyword)) return true;
 
-  // Two-letter initials are highly ambiguous: only accept an exact acronym
-  // ("ys" -> 影石), not every longer acronym beginning with the same letters.
-  if (keyword.length === 2) return forms.initials === keyword;
-  if (keyword.length === 3) return forms.initials.startsWith(keyword);
+  // Short initials stay useful, but only as a prefix of one visible field.
+  // This lets "ys" match 影石 / 云深处科技 / 宇树科技 without scanning
+  // hidden tags, notes, or loose characters in the middle of long text.
+  if (keyword.length <= 3) return forms.initials.startsWith(keyword);
   return forms.initials.includes(keyword);
 }
 
@@ -65,8 +65,9 @@ export function autocompleteScore(value: string, query: string) {
   const forms = pinyinSearchForms(value);
   if (forms.full.startsWith(keyword)) return 75;
   if (forms.full.includes(keyword)) return 68;
-  if (keyword.length === 2 && forms.initials === keyword) return 72;
-  if (keyword.length === 3 && forms.initials.startsWith(keyword)) return 70;
+  if (keyword.length <= 3 && forms.initials.startsWith(keyword)) {
+    return 74 - Math.min(forms.initials.length - keyword.length, 8);
+  }
   if (keyword.length >= 4 && forms.initials.includes(keyword)) return 64;
   return 0;
 }

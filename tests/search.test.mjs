@@ -23,8 +23,8 @@ test("full pinyin search does not leak into unrelated rows", () => {
   assert.deepEqual(companies("taida"), ["台达电子"]);
 });
 
-test("two-letter initials require an exact acronym", () => {
-  assert.deepEqual(companies("ys"), ["影石"]);
+test("two-letter initials match visible-name prefixes without unrelated leakage", () => {
+  assert.deepEqual(companies("ys"), ["云深处科技", "影石", "宇树科技"]);
   assert.deepEqual(companies("ysc"), ["云深处科技"]);
   assert.deepEqual(companies("yskj"), ["宇树科技"]);
 });
@@ -35,5 +35,5 @@ test("multiple query tokens may match different visible fields", () => {
 });
 
 test("autocomplete uses the same strict short-initial boundary", () => {
-  assert.deepEqual(matchingAutocompleteOptions(rows.map((row) => row[0]), "ys"), ["影石"]);
+  assert.deepEqual(matchingAutocompleteOptions(rows.map((row) => row[0]), "ys"), ["影石", "宇树科技", "云深处科技"]);
 });

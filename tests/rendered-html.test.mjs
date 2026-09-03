@@ -29,10 +29,12 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(tracker, /company-card-grid/);
   assert.match(tracker, /company-overview-card/);
   assert.match(tracker, /company-merge-table/);
+  assert.match(tracker, /position-detail-table/);
+  assert.match(styles, /position-detail-actions/);
   assert.match(tracker, /view-mode-panel/);
   assert.match(tracker, /qiuzhao-list-mode/);
   assert.match(search, /pinyinSearchForms/);
-  assert.match(search, /keyword\.length === 2/);
+  assert.match(search, /keyword\.length <= 3/);
   assert.match(tracker, /matchesFieldsSearch\(\[item\.company, item\.position, item\.base/);
   assert.match(tracker, /支持拼音 \/ 首字母/);
   assert.match(tracker, /select-field \$\{className\}\$\{open \? " is-open" : ""\}/);

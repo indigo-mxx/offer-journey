@@ -3368,7 +3368,7 @@ export function RecruitmentTracker({
               </div>
             ) : (
               <div className="table-wrap">
-                <table className="data-table">
+                <table className={`data-table position-detail-table ${view === "mine" ? "owner-view" : "friend-view"}`}>
                   <thead>
                       <tr>
                         {view === "mine" && <th className="selection-column"><input ref={selectAllRef} type="checkbox" aria-label="全选当前筛选结果" checked={allFilteredSelected} onChange={toggleFilteredSelection} /></th>}
@@ -3427,9 +3427,9 @@ export function RecruitmentTracker({
                           <td data-label="公开状态"><span className={`privacy-tag ${item.visibility}`}>{visibilityLabel(item.visibility)}</span></td>
                           {view === "friends" && <td data-label="岗位链接"><PositionLinkAction application={item} /></td>}
                           <td className="cell-actions" data-label="操作">
-                            {view === "mine" && externalHttpUrl(item.link) && <><PositionLinkAction application={item} compact /><button className="action-btn" onClick={() => void copyPositionLink(item)} title="复制岗位链接">复制</button></>}
                             {view === "mine" && (
-                              <div className="action-buttons">
+                              <div className="action-buttons position-detail-actions">
+                                {externalHttpUrl(item.link) && <><PositionLinkAction application={item} compact /><button className="action-btn" onClick={() => void copyPositionLink(item)} title="复制岗位链接">复制链接</button></>}
                                 <button className="action-btn" onClick={() => openEdit(item)} title="编辑岗位信息">编辑岗位</button>
                                 <button className="action-btn" onClick={() => openCreate(item)} title="复制创建同公司新岗位">复制</button>
                                 <button className="action-btn" onClick={() => openExperienceCreate(item.id)} title="记录面经">记录面经</button>

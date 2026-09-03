@@ -446,6 +446,20 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .company-link { padding: 0; border: 0; background: transparent; color: var(--brand); font-weight: 700; }
 .cell-muted { color: var(--muted); }
 .action-buttons { display: flex; gap: 6px; }
+.position-detail-table { min-width: 1240px; table-layout: fixed; }
+.position-detail-table.owner-view th:nth-child(1) { width: 46px; }
+.position-detail-table.owner-view th:nth-child(2) { width: 145px; }
+.position-detail-table.owner-view th:nth-child(3) { width: 300px; }
+.position-detail-table.owner-view th:nth-child(4) { width: 95px; }
+.position-detail-table.owner-view th:nth-child(5) { width: 72px; }
+.position-detail-table.owner-view th:nth-child(6) { width: 94px; }
+.position-detail-table.owner-view th:nth-child(7) { width: 165px; }
+.position-detail-table.owner-view th:nth-child(8) { width: 105px; }
+.position-detail-table.owner-view th:nth-child(9) { width: 218px; }
+.position-detail-table td:nth-child(3) { overflow-wrap: anywhere; white-space: normal; line-height: 1.5; }
+.position-detail-table .cell-actions { padding-right: 14px; white-space: normal; }
+.position-detail-actions { width: 100%; flex-wrap: wrap; align-items: center; }
+.position-detail-actions .action-btn, .position-detail-actions .position-link-action { flex: 0 0 auto; }
 .action-btn { min-height: 30px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 7px; background: white; color: var(--brand); font-size: 11px; }
 .action-btn.danger { color: var(--danger); }
 .hidden { display: none; }
@@ -1797,6 +1811,8 @@ body::before {
   .action-center-head { align-items: flex-start; flex-direction: column; gap: 5px; }
   .action-reminder-list { grid-template-columns: 1fr; }
   .company-merge-table { min-width: 0; table-layout: fixed; }
+  .position-detail-table { min-width: 0; table-layout: auto; }
+  .position-detail-table .cell-actions { padding-right: 0; }
   .company-merge-row { padding: 16px 0; }
   .company-merge-row > td { align-items: flex-start; }
   .company-merge-row > td::before { flex: none; padding-top: 8px; }

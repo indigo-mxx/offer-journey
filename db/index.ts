@@ -18,7 +18,7 @@ export function getDb() {
 export function ensureSchema(): Promise<void> {
   if (schemaReady) return schemaReady;
   const db = getD1();
-  schemaReady = db
+  const initialization = db
     .batch([
       db.prepare(`
         CREATE TABLE IF NOT EXISTS users (
@@ -86,9 +86,10 @@ export function ensureSchema(): Promise<void> {
       ),
     ])
     .then(() => undefined)
-    .catch((error) => {
+    .catch((error: unknown) => {
       schemaReady = null;
       throw error;
     });
-  return schemaReady;
+  schemaReady = initialization;
+  return initialization;
 }
