@@ -3809,6 +3809,11 @@ export function RecruitmentTracker({
                       <time>{calendarTodoTime(todo.scheduledAt)}</time>
                       <div className="calendar-todo-actions">
                         <button type="button" className="todo-ignore-button" disabled={busy} onClick={() => void dismissCalendarTodo(todo)} title="只隐藏这条提醒，不删除原记录">忽略</button>
+                        {externalHttpUrl(todo.application.link) ? (
+                          <a className="todo-job-link" href={externalHttpUrl(todo.application.link)} target="_blank" rel="noopener noreferrer" title="打开该岗位的官网或投递进度页面">打开岗位链接 ↗</a>
+                        ) : (
+                          <button type="button" className="todo-job-link missing" disabled title="请先在岗位信息中填写官网或投递链接">未填写岗位链接</button>
+                        )}
                         {todo.canComplete && todo.calendarItem && (
                           <button type="button" className="todo-complete-button" disabled={busy} onClick={() => void completeCalendarTodo(todo.calendarItem!)}>标记完成</button>
                         )}

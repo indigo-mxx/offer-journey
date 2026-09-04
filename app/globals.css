@@ -2211,10 +2211,15 @@ button.interview-date-chip:hover { border-color: #769abb; box-shadow: 0 7px 17px
 .calendar-todo-copy small { margin-top: 4px; color: #829087; font-size: 9px; }
 .calendar-todo-item time { color: #60746a; font-size: 10px; font-weight: 700; white-space: nowrap; }
 .calendar-todo-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
-.calendar-todo-actions button { min-height: 32px; padding: 0 10px; border-radius: 8px; font-size: 9px; font-weight: 800; white-space: nowrap; }
+.calendar-todo-actions button, .calendar-todo-actions a { min-height: 32px; padding: 0 10px; border-radius: 8px; font-size: 9px; font-weight: 800; white-space: nowrap; }
+.calendar-todo-actions a { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 .todo-complete-button { border: 1px solid #c9dbcf; background: #f0f8f3; color: #397052; }
 .todo-ignore-button { border: 1px solid #d9ddd9; background: #fff; color: #78817b; }
 .todo-ignore-button:hover:not(:disabled) { border-color: #aeb8b1; color: #4f5d54; }
+.todo-job-link { border: 1px solid #b9d3e2; background: #eef7fc; color: #356f8f; }
+.todo-job-link:hover { border-color: #77a9c4; background: #e3f2fa; transform: translateY(-1px); }
+.todo-job-link.missing { border-color: #e2e5e3; background: #f6f7f6; color: #a0a7a2; }
+.todo-job-link.missing:hover { transform: none; }
 .todo-primary-button { border: 1px solid var(--brand); background: var(--brand); color: #fff; }
 .calendar-todo-actions button:hover:not(:disabled) { transform: translateY(-1px); }
 .calendar-todo-actions button:disabled { cursor: wait; opacity: .55; }
