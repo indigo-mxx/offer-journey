@@ -344,7 +344,7 @@ function externalHttpUrl(value: string) {
 }
 
 function PositionLinkAction({ application, compact = false }: { application: Application; compact?: boolean }) {
-  if (!application.isOwner && application.visibility !== "full") {
+  if (application.isOwner === false && application.visibility !== "full") {
     return compact ? null : <span className="cell-muted">仅完整共享可见</span>;
   }
 
@@ -3380,13 +3380,13 @@ export function RecruitmentTracker({
                       <th><button className="sort-button" onClick={() => toggleSort("status")}>面试进度 {sortIndicator("status")}</button></th>
                       <th>公开状态</th>
                       {view === "friends" && <th>岗位链接</th>}
-                      <th>操作</th>
+                      {view === "mine" && <th>操作</th>}
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.length === 0 ? (
                         <tr>
-                          <td colSpan={9} className="empty-row">
+                          <td colSpan={view === "mine" ? 9 : 8} className="empty-row">
                             <div className="empty-state">
                               <span>{activeFilterCount > 0 ? "⌕" : "＋"}</span>
                               <h3>{activeFilterCount > 0 ? "没有符合条件的记录" : "还没有投递记录"}</h3>
@@ -3426,8 +3426,8 @@ export function RecruitmentTracker({
                           </div></td>
                           <td data-label="公开状态"><span className={`privacy-tag ${item.visibility}`}>{visibilityLabel(item.visibility)}</span></td>
                           {view === "friends" && <td data-label="岗位链接"><PositionLinkAction application={item} /></td>}
-                          <td className="cell-actions" data-label="操作">
-                            {view === "mine" && (
+                          {view === "mine" && (
+                            <td className="cell-actions" data-label="操作">
                               <div className="action-buttons position-detail-actions">
                                 {externalHttpUrl(item.link) && <><PositionLinkAction application={item} compact /><button className="action-btn" onClick={() => void copyPositionLink(item)} title="复制岗位链接">复制链接</button></>}
                                 <button className="action-btn" onClick={() => openEdit(item)} title="编辑岗位信息">编辑岗位</button>
@@ -3435,8 +3435,8 @@ export function RecruitmentTracker({
                                 <button className="action-btn" onClick={() => openExperienceCreate(item.id)} title="记录面经">记录面经</button>
                                 <button className="action-btn danger" onClick={() => removeApplication(item)} title="删除">删除</button>
                               </div>
-                            )}
-                          </td>
+                            </td>
+                          )}
                         </tr>
                       ))
                     )}
