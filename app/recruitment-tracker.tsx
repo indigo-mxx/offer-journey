@@ -1432,9 +1432,10 @@ export function RecruitmentTracker({
     const now = Date.now();
     const appById = new Map(ownApplications.map((item) => [item.id, item]));
     const upcomingApplicationIds = new Set<string>();
+    const interviewFollowUpApplicationIds = new Set<string>();
     const reminders: Array<{
       id: string;
-      kind: "upcoming" | "result" | "stale";
+      kind: "upcoming" | "experience" | "result" | "stale";
       label: string;
       title: string;
       detail: string;
@@ -1449,8 +1450,12 @@ export function RecruitmentTracker({
       const scheduledAt = new Date(interview.scheduledAt).getTime();
       if (!Number.isFinite(scheduledAt)) continue;
       const daysAway = (scheduledAt - now) / 86_400_000;
+      const recordedEnd = new Date(interview.endedAt).getTime();
+      const followUpAt = Number.isFinite(recordedEnd) ? recordedEnd : scheduledAt + 2 * 60 * 60 * 1000;
+      const daysSinceFollowUp = (now - followUpAt) / 86_400_000;
       if (daysAway >= 0 && daysAway <= 14) {
         upcomingApplicationIds.add(application.id);
+        interviewFollowUpApplicationIds.add(application.id);
         reminders.push({
           id: `upcoming-${interview.id}`,
           kind: "upcoming",
@@ -1461,22 +1466,44 @@ export function RecruitmentTracker({
           application,
           interview,
         });
-      } else if (daysAway < 0 && daysAway >= -30 && (!interview.result || interview.result === "待定")) {
-        reminders.push({
-          id: `result-${interview.id}`,
-          kind: "result",
-          label: "待补结果",
-          title: `${application.company} · ${interview.round || "面试"}`,
-          detail: `${formatDateTime(interview.scheduledAt)} · 记录结果与复盘`,
-          priority: now + 1_000_000_000 + Math.abs(scheduledAt - now),
-          application,
-          interview,
-        });
+      } else if (daysSinceFollowUp >= 0 && daysSinceFollowUp <= 30) {
+        const hasLinkedExperience = experiences.some((experience) =>
+          experience.isOwner !== false && (
+            (experience.interviewId && experience.interviewId === interview.id) ||
+            (!experience.interviewId && experience.applicationId === interview.applicationId && interviewStage(experience.round) === interviewStage(interview.round))
+          ),
+        );
+
+        if (!hasLinkedExperience) {
+          interviewFollowUpApplicationIds.add(application.id);
+          reminders.push({
+            id: `experience-${interview.id}`,
+            kind: "experience",
+            label: "待补面经",
+            title: `${application.company} · ${interview.round || "面试"}`,
+            detail: `${formatDateTime(interview.endedAt || interview.scheduledAt)} · 补充面试复盘`,
+            priority: now + 500_000_000 + Math.abs(followUpAt - now),
+            application,
+            interview,
+          });
+        } else if (!interview.result || interview.result === "待定") {
+          interviewFollowUpApplicationIds.add(application.id);
+          reminders.push({
+            id: `result-${interview.id}`,
+            kind: "result",
+            label: "待补结果",
+            title: `${application.company} · ${interview.round || "面试"}`,
+            detail: `${formatDateTime(interview.scheduledAt)} · 记录面试结果`,
+            priority: now + 1_000_000_000 + Math.abs(followUpAt - now),
+            application,
+            interview,
+          });
+        }
       }
     }
 
     for (const application of ownApplications) {
-      if ([...CLOSED_STATUSES, "Offer"].includes(application.status) || upcomingApplicationIds.has(application.id)) continue;
+      if ([...CLOSED_STATUSES, "Offer"].includes(application.status) || upcomingApplicationIds.has(application.id) || interviewFollowUpApplicationIds.has(application.id)) continue;
       const lastTouched = new Date(application.updatedAt || `${application.appliedAt}T00:00:00`).getTime();
       const staleDays = Math.floor((now - lastTouched) / 86_400_000);
       if (Number.isFinite(lastTouched) && staleDays >= 7) {
@@ -1493,7 +1520,7 @@ export function RecruitmentTracker({
     }
 
     return reminders.sort((a, b) => a.priority - b.priority).slice(0, 6);
-  }, [ownApplications, interviews]);
+  }, [ownApplications, interviews, experiences]);
 
   const toggleSort = useCallback((key: SortKey) => {
     if (sortKey === key) {
@@ -3452,13 +3479,13 @@ export function RecruitmentTracker({
                     <span>待跟进提醒</span>
                     <h3>接下来要处理的事情</h3>
                   </div>
-                  <small>根据面试安排和最近更新时间自动生成</small>
+                  <small>根据面试安排、面经记录和最近更新时间自动生成</small>
                 </div>
                 <div className="action-reminder-list">
                   {actionReminders.map((reminder) => (
                     <article className={`action-reminder ${reminder.kind}`} key={reminder.id}>
                       <i className="reminder-icon" aria-hidden="true">
-                        {reminder.kind === "upcoming" ? "◷" : reminder.kind === "result" ? "✓" : "↻"}
+                        {reminder.kind === "upcoming" ? "◷" : reminder.kind === "experience" ? "✎" : reminder.kind === "result" ? "✓" : "↻"}
                       </i>
                       <span>{reminder.label}</span>
                       <strong>{reminder.title}</strong>
@@ -3467,7 +3494,7 @@ export function RecruitmentTracker({
                         type="button"
                         onClick={() => reminder.interview ? openExperienceByInterview(reminder.interview) : openEdit(reminder.application)}
                       >
-                        {reminder.kind === "upcoming" ? "查看安排" : reminder.kind === "result" ? "补充结果" : "更新进度"} →
+                        {reminder.kind === "upcoming" ? "查看安排" : reminder.kind === "experience" ? "补充面经" : reminder.kind === "result" ? "补充结果" : "更新进度"} →
                       </button>
                     </article>
                   ))}
