@@ -101,6 +101,21 @@ interface CalendarEventForm {
   syncStatus: boolean;
 }
 
+interface CalendarTodoEntry {
+  id: string;
+  tone: "overdue" | "followup" | "missing" | "upcoming";
+  label: string;
+  title: string;
+  detail: string;
+  scheduledAt: string;
+  priority: number;
+  action: "scheduleInterview" | "editSchedule" | "writeExperience";
+  application: Application;
+  interview?: Interview;
+  calendarItem?: RecruitmentCalendarItem;
+  canComplete?: boolean;
+}
+
 interface RecoverySnapshot extends WorkspaceBackup {
   id: string;
   ownerKey: string;
@@ -335,6 +350,19 @@ function formatDateTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+function calendarTodoTime(value: string) {
+  if (!value) return "等待安排";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const today = new Date();
+  const dayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const targetStart = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const days = Math.round((targetStart - dayStart) / 86_400_000);
+  const prefix = days === 0 ? "今天" : days === 1 ? "明天" : days === -1 ? "昨天" : days > 1 && days <= 7 ? `${days} 天后` : days < -1 && days >= -7 ? `${Math.abs(days)} 天前` : "";
+  const formatted = date.toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+  return prefix ? `${prefix} · ${formatted}` : formatted;
 }
 
 function formatInterviewDate(value: string) {
@@ -1552,6 +1580,23 @@ export function RecruitmentTracker({
     return [...interviewItems, ...otherItems].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
   }, [events, interviews, ownApplications]);
 
+  const editingCalendarInterview = editingCalendarItem?.source === "interview"
+    ? interviews.find((item) => item.id === editingCalendarItem.id)
+    : undefined;
+  const editingCalendarInterviewFinished = editingCalendarInterview
+    ? (editingCalendarInterview.endedAt
+        ? new Date(editingCalendarInterview.endedAt).getTime()
+        : new Date(editingCalendarInterview.scheduledAt).getTime() + 2 * 60 * 60 * 1000) <= Date.now()
+    : false;
+  const editingCalendarInterviewHasExperience = editingCalendarInterview
+    ? experiences.some((experience) =>
+        experience.isOwner !== false && (
+          experience.interviewId === editingCalendarInterview.id ||
+          (!experience.interviewId && experience.applicationId === editingCalendarInterview.applicationId && interviewStage(experience.round) === interviewStage(editingCalendarInterview.round))
+        ),
+      )
+    : false;
+
   const filteredExperiences = useMemo(() => {
     const keyword = experienceQuery.trim();
     return [...experiences]
@@ -1885,6 +1930,117 @@ export function RecruitmentTracker({
 
     return reminders.sort((a, b) => a.priority - b.priority).slice(0, 6);
   }, [calendarItems, ownApplications, interviews, experiences]);
+
+  const calendarTodos = useMemo<CalendarTodoEntry[]>(() => {
+    const now = Date.now();
+    const applicationMap = new Map(ownApplications.map((item) => [item.id, item]));
+    const calendarItemMap = new Map(calendarItems.map((item) => [`${item.source}-${item.id}`, item]));
+    const todos: CalendarTodoEntry[] = [];
+
+    for (const application of ownApplications) {
+      if (!INTERVIEW_STATUSES.includes(application.status)) continue;
+      const stage = interviewStage(application.status);
+      const currentInterview = interviews.find((interview) =>
+        interview.applicationId === application.id && interviewStage(interview.round) === stage,
+      );
+      if (!currentInterview) {
+        todos.push({
+          id: `todo-missing-${application.id}-${stage}`,
+          tone: "missing",
+          label: "待定面试",
+          title: `${application.company} · ${application.status}`,
+          detail: `${application.position} · 还没有填写本轮面试时间`,
+          scheduledAt: "",
+          priority: 40_000_000_000_000,
+          action: "scheduleInterview",
+          application,
+        });
+      }
+    }
+
+    for (const interview of interviews) {
+      const application = applicationMap.get(interview.applicationId);
+      if (!application) continue;
+      const scheduledAt = new Date(interview.scheduledAt).getTime();
+      if (!Number.isFinite(scheduledAt) || interview.result === "未参加") continue;
+      const calendarItem = calendarItemMap.get(`interview-${interview.id}`);
+      const hasExperience = experiences.some((experience) =>
+        experience.isOwner !== false && (
+          experience.interviewId === interview.id ||
+          (!experience.interviewId && experience.applicationId === interview.applicationId && interviewStage(experience.round) === interviewStage(interview.round))
+        ),
+      );
+      const recordedEnd = new Date(interview.endedAt).getTime();
+      const finishedAt = Number.isFinite(recordedEnd) ? recordedEnd : scheduledAt + 2 * 60 * 60 * 1000;
+      if (finishedAt > now && calendarItem) {
+        todos.push({
+          id: `todo-interview-${interview.id}`,
+          tone: "upcoming",
+          label: scheduledAt <= now ? "面试进行中" : "待参加面试",
+          title: `${application.company} · ${interview.round || "面试"}`,
+          detail: `${application.position}${interview.format ? ` · ${interview.format}` : ""}`,
+          scheduledAt: interview.scheduledAt,
+          priority: 50_000_000_000_000 + scheduledAt,
+          action: "editSchedule",
+          application,
+          interview,
+          calendarItem,
+        });
+      } else if (finishedAt <= now && !hasExperience) {
+        todos.push({
+          id: `todo-experience-${interview.id}`,
+          tone: "followup",
+          label: "待补面经",
+          title: `${application.company} · ${interview.round || "面试"}`,
+          detail: `${application.position} · 面试已结束，趁记忆清晰完成复盘`,
+          scheduledAt: interview.endedAt || interview.scheduledAt,
+          priority: 20_000_000_000_000 - Math.max(finishedAt, 0),
+          action: "writeExperience",
+          application,
+          interview,
+          calendarItem,
+        });
+      } else if (finishedAt <= now && (!interview.result || interview.result === "待定") && calendarItem) {
+        todos.push({
+          id: `todo-result-${interview.id}`,
+          tone: "followup",
+          label: "待补面试结果",
+          title: `${application.company} · ${interview.round || "面试"}`,
+          detail: `${application.position} · 面经已记录，补充本轮结果`,
+          scheduledAt: interview.endedAt || interview.scheduledAt,
+          priority: 30_000_000_000_000 - Math.max(finishedAt, 0),
+          action: "editSchedule",
+          application,
+          interview,
+          calendarItem,
+        });
+      }
+    }
+
+    for (const event of events) {
+      if (event.isOwner === false || event.status !== "待进行") continue;
+      const application = applicationMap.get(event.applicationId);
+      const calendarItem = calendarItemMap.get(`event-${event.id}`);
+      const startsAt = new Date(event.startsAt).getTime();
+      if (!application || !calendarItem || !Number.isFinite(startsAt)) continue;
+      const overdue = startsAt < now;
+      todos.push({
+        id: `todo-event-${event.id}`,
+        tone: overdue ? "overdue" : "upcoming",
+        label: overdue ? `${calendarKindLabel(event.eventType)}已到期` : `待${calendarKindLabel(event.eventType)}`,
+        title: `${application.company} · ${event.title}`,
+        detail: `${application.position}${event.mode ? ` · ${event.mode}` : ""}`,
+        scheduledAt: event.startsAt,
+        priority: overdue ? 10_000_000_000_000 - Math.max(startsAt, 0) : 50_000_000_000_000 + startsAt,
+        action: "editSchedule",
+        application,
+        calendarItem,
+        canComplete: true,
+      });
+    }
+
+    return todos.sort((a, b) => a.priority - b.priority);
+  }, [calendarItems, events, experiences, interviews, ownApplications]);
 
   const toggleSort = useCallback((key: SortKey) => {
     if (sortKey === key) {
@@ -2305,18 +2461,19 @@ export function RecruitmentTracker({
 
   const openCalendarCreate = useCallback((date = new Date(), applicationId = "", kind: CalendarItemKind = "written_test") => {
     const form = emptyCalendarEventForm(date);
+    const application = ownApplications.find((item) => item.id === applicationId);
     setCalendarEventForm({
       ...form,
       applicationId,
       kind,
-      round: kind === "interview" ? "技术一面" : form.round,
+      round: kind === "interview" ? defaultRoundForStage(interviewStage(application?.status ?? "")) : form.round,
       mode: kind === "interview" ? "视频面试" : form.mode,
       status: kind === "interview" ? "待定" : "待进行",
       syncStatus: kind === "interview" || kind === "written_test",
     });
     setEditingCalendarItem(null);
     setIsCalendarEventOpen(true);
-  }, []);
+  }, [ownApplications]);
 
   const openCalendarEdit = useCallback((calendarItem: RecruitmentCalendarItem) => {
     if (calendarItem.source === "interview") {
@@ -2489,6 +2646,22 @@ export function RecruitmentTracker({
     closeCalendarEvent();
     setNotice("日程已删除");
   }, [closeCalendarEvent, editingCalendarItem, events, interviews, removeInterview, runCloudMutation, user]);
+
+  const completeCalendarTodo = useCallback(async (calendarItem: RecruitmentCalendarItem) => {
+    if (calendarItem.source !== "event") return;
+    const current = events.find((item) => item.id === calendarItem.id);
+    if (!current) {
+      setNotice("标记完成失败：日程记录不存在或已被删除，请刷新后重试");
+      return;
+    }
+    const next: RecruitmentEvent = { ...current, status: "已完成", updatedAt: new Date().toISOString() };
+    if (user) {
+      const saved = await runCloudMutation("标记日程完成中", { action: "updateEvent", event: next });
+      if (!saved) return;
+    }
+    setEvents((items) => items.map((item) => item.id === next.id ? next : item));
+    setNotice(`${calendarKindLabel(next.eventType)}已标记完成`);
+  }, [events, runCloudMutation, user]);
 
   const addExperience = useCallback(async (item: InterviewExperience) => {
     if (user) {
@@ -3450,6 +3623,50 @@ export function RecruitmentTracker({
               onCreate={(date) => ownApplications.length ? openCalendarCreate(date) : openCreate()}
               onEdit={openCalendarEdit}
             />
+            <section className="calendar-todo-panel" aria-label="招聘待做事项">
+              <header className="calendar-todo-head">
+                <div>
+                  <p className="section-kicker">NEXT ACTIONS</p>
+                  <h2>待做</h2>
+                  <p>网站会根据岗位进度和日程自动提醒：先定测评或面试，按时参加，结束后补充面经与结果。</p>
+                </div>
+                <span><strong>{calendarTodos.length}</strong> 项待处理</span>
+              </header>
+              {calendarTodos.length ? (
+                <div className="calendar-todo-list">
+                  {calendarTodos.slice(0, 12).map((todo) => (
+                    <article className={`calendar-todo-item ${todo.tone}`} key={todo.id}>
+                      <div className="calendar-todo-state"><i aria-hidden="true" /><span>{todo.label}</span></div>
+                      <div className="calendar-todo-copy">
+                        <strong>{todo.title}</strong>
+                        <small>{todo.detail}</small>
+                      </div>
+                      <time>{calendarTodoTime(todo.scheduledAt)}</time>
+                      <div className="calendar-todo-actions">
+                        {todo.canComplete && todo.calendarItem && (
+                          <button type="button" className="todo-complete-button" disabled={busy} onClick={() => void completeCalendarTodo(todo.calendarItem!)}>标记完成</button>
+                        )}
+                        <button
+                          type="button"
+                          className="todo-primary-button"
+                          disabled={busy}
+                          onClick={() => {
+                            if (todo.action === "scheduleInterview") openCalendarCreate(new Date(), todo.application.id, "interview");
+                            else if (todo.action === "writeExperience" && todo.interview) openExperienceByInterview(todo.interview);
+                            else if (todo.calendarItem) openCalendarEdit(todo.calendarItem);
+                          }}
+                        >
+                          {todo.action === "scheduleInterview" ? "定面试" : todo.action === "writeExperience" ? "补充面经" : "查看安排"} →
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                  {calendarTodos.length > 12 && <p className="calendar-todo-more">优先显示最近的 12 项，完成后会自动展示后续待做。</p>}
+                </div>
+              ) : (
+                <div className="calendar-todo-empty"><span>✓</span><div><strong>当前待做已经处理完毕</strong><small>新增测评或面试安排后，这里会自动生成提醒。</small></div></div>
+              )}
+            </section>
           </>
         ) : view === "experiences" ? (
           <section className="experience-library" aria-label={"\u9762\u7ecf\u5e93"}>
@@ -4919,6 +5136,11 @@ export function RecruitmentTracker({
                     <div>
                       {editingCalendarItem && <button type="button" className="danger-button" onClick={() => void removeCalendarEvent()} disabled={busy}>删除日程</button>}
                       {externalHttpUrl(calendarEventForm.eventUrl) && <a className="secondary-button button-link" href={externalHttpUrl(calendarEventForm.eventUrl)} target="_blank" rel="noopener noreferrer">打开链接 ↗</a>}
+                      {editingCalendarInterview && editingCalendarInterviewFinished && (
+                        <button type="button" className="secondary-button" disabled={busy} onClick={() => { closeCalendarEvent(); openExperienceByInterview(editingCalendarInterview); }}>
+                          {editingCalendarInterviewHasExperience ? "编辑面经" : "补充面经"}
+                        </button>
+                      )}
                     </div>
                     <div><button type="button" className="secondary-button" onClick={closeCalendarEvent} disabled={busy}>取消</button><button type="submit" className="primary-button" disabled={busy || ownApplications.length === 0}>{busy ? "保存中…" : "保存日程"}</button></div>
                   </footer>

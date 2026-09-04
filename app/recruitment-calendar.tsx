@@ -141,7 +141,7 @@ export function RecruitmentCalendar({
         <div>
           <p className="section-kicker">RECRUITMENT CALENDAR</p>
           <h2>日程日历</h2>
-          <p>把笔试、测评和每一轮面试放在同一条时间线上，点击日期即可安排。</p>
+          <p>从安排笔试、测评和每一轮面试，到结束后补充面经，在同一条时间线上完成提醒、记录与统计。</p>
         </div>
         <div className="calendar-hero-actions">
           <span><strong>{upcomingCount}</strong> 项未来 7 天日程</span>

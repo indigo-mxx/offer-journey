@@ -2172,6 +2172,43 @@ button.interview-date-chip:hover { border-color: #769abb; box-shadow: 0 7px 17px
 .calendar-empty strong { color: #52685c; font-size: 15px; }
 .calendar-empty span { font-size: 11px; }
 
+.calendar-todo-panel { padding: 27px 29px 31px; border-top: 1px solid #dce5de; background: linear-gradient(145deg, #fffdfa, #f6f9f6); }
+.calendar-todo-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 22px; }
+.calendar-todo-head h2 { margin: 4px 0 6px; color: #233e34; font-family: "STSong", "SimSun", serif; font-size: 27px; letter-spacing: -.04em; }
+.calendar-todo-head p:not(.section-kicker) { max-width: 690px; margin: 0; color: #738179; font-size: 12px; line-height: 1.65; }
+.calendar-todo-head > span { flex: none; display: flex; align-items: baseline; gap: 5px; padding: 8px 12px; border: 1px solid #d8e5dc; border-radius: 10px; background: #fff; color: #77877e; font-size: 10px; }
+.calendar-todo-head > span strong { color: var(--brand); font-family: Georgia, serif; font-size: 20px; }
+.calendar-todo-list { display: grid; gap: 8px; margin-top: 17px; }
+.calendar-todo-item { display: grid; grid-template-columns: 105px minmax(0,1fr) 145px auto; align-items: center; gap: 13px; min-height: 66px; padding: 10px 12px; border: 1px solid #dfe6e1; border-left: 4px solid #6f9c86; border-radius: 11px; background: rgba(255,255,255,.86); box-shadow: 0 5px 15px rgba(40,70,56,.035); }
+.calendar-todo-item:hover { border-color: #c6d9cd; box-shadow: 0 8px 19px rgba(40,70,56,.07); }
+.calendar-todo-item.overdue { border-left-color: #bd5b52; background: linear-gradient(90deg, #fff8f7, #fff); }
+.calendar-todo-item.followup { border-left-color: #c9821f; background: linear-gradient(90deg, #fffbf3, #fff); }
+.calendar-todo-item.missing { border-left-color: #7e61ae; background: linear-gradient(90deg, #faf7ff, #fff); }
+.calendar-todo-item.upcoming { border-left-color: #4e83af; }
+.calendar-todo-state { display: flex; align-items: center; gap: 6px; color: #5e7469; font-size: 10px; font-weight: 800; white-space: nowrap; }
+.calendar-todo-state i { width: 7px; height: 7px; flex: none; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 4px rgba(83,126,105,.1); }
+.calendar-todo-item.overdue .calendar-todo-state { color: #a94f47; }
+.calendar-todo-item.followup .calendar-todo-state { color: #a66b1d; }
+.calendar-todo-item.missing .calendar-todo-state { color: #7656a5; }
+.calendar-todo-item.upcoming .calendar-todo-state { color: #48799f; }
+.calendar-todo-copy { min-width: 0; }
+.calendar-todo-copy strong, .calendar-todo-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calendar-todo-copy strong { color: #2d4238; font-size: 12px; }
+.calendar-todo-copy small { margin-top: 4px; color: #829087; font-size: 9px; }
+.calendar-todo-item time { color: #60746a; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.calendar-todo-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.calendar-todo-actions button { min-height: 32px; padding: 0 10px; border-radius: 8px; font-size: 9px; font-weight: 800; white-space: nowrap; }
+.todo-complete-button { border: 1px solid #c9dbcf; background: #f0f8f3; color: #397052; }
+.todo-primary-button { border: 1px solid var(--brand); background: var(--brand); color: #fff; }
+.calendar-todo-actions button:hover:not(:disabled) { transform: translateY(-1px); }
+.calendar-todo-actions button:disabled { cursor: wait; opacity: .55; }
+.calendar-todo-more { margin: 4px 0 0; color: #87938c; font-size: 9px; text-align: center; }
+.calendar-todo-empty { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 105px; margin-top: 17px; border: 1px dashed #c8ddd0; border-radius: 13px; background: rgba(244,250,246,.65); }
+.calendar-todo-empty > span { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: #dff0e5; color: #297052; font-weight: 900; }
+.calendar-todo-empty strong, .calendar-todo-empty small { display: block; }
+.calendar-todo-empty strong { color: #365447; font-size: 12px; }
+.calendar-todo-empty small { margin-top: 4px; color: #849189; font-size: 9px; }
+
 .upcoming-schedule-card { margin: 14px 18px 0; overflow: hidden; border: 1px solid #d7e4db; border-radius: 13px; background: linear-gradient(120deg, #f7fbf8, #eef6f1); }
 .upcoming-schedule-card > header { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; border-bottom: 1px solid #dfe9e2; }
 .upcoming-schedule-card > header div { display: flex; align-items: baseline; gap: 8px; }
@@ -2225,6 +2262,9 @@ button.interview-date-chip:hover { border-color: #769abb; box-shadow: 0 7px 17px
 .company-timeline-event.other i { background: #768184; }
 
 @media (max-width: 980px) {
+  .calendar-todo-item { grid-template-columns: 100px minmax(0,1fr) auto; }
+  .calendar-todo-item time { grid-column: 2; grid-row: 2; }
+  .calendar-todo-actions { grid-column: 3; grid-row: 1 / 3; }
   .upcoming-schedule-card > div { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .upcoming-schedule-card > div > button:nth-child(2) { border-right: 0; }
   .upcoming-schedule-card > div > button:nth-child(-n+2) { border-bottom: 1px solid #e2e9e4; }
@@ -2247,6 +2287,13 @@ button.interview-date-chip:hover { border-color: #769abb; box-shadow: 0 7px 17px
   .calendar-agenda { padding: 3px 13px 18px; }
   .agenda-event { grid-template-columns: 58px minmax(0,1fr); gap: 8px; }
   .agenda-event > i { display: none; }
+  .calendar-todo-panel { padding: 21px 14px 24px; }
+  .calendar-todo-head { align-items: flex-start; flex-direction: column; gap: 11px; }
+  .calendar-todo-item { grid-template-columns: 1fr auto; gap: 7px 10px; padding: 11px; }
+  .calendar-todo-state { grid-column: 1; }
+  .calendar-todo-copy { grid-column: 1 / -1; }
+  .calendar-todo-item time { grid-column: 2; grid-row: 1; }
+  .calendar-todo-actions { grid-column: 1 / -1; grid-row: auto; }
   .upcoming-schedule-card { margin: 11px 12px 0; }
   .upcoming-schedule-card > div { grid-template-columns: 1fr; }
   .upcoming-schedule-card > div > button { border-right: 0; border-bottom: 1px solid #e2e9e4; }
