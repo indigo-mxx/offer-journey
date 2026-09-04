@@ -89,8 +89,10 @@ interface RecoverySnapshot extends WorkspaceBackup {
 }
 
 type ListMode = "companyList" | "companyCards" | "position" | "kanban";
+type NoticeTone = "success" | "error" | "warning" | "info";
 
 const LIST_MODE_STORAGE_KEY = "qiuzhao-list-mode";
+const CLOUD_REQUEST_TIMEOUT_MS = 20_000;
 const LIST_MODE_OPTIONS: Array<{
   value: ListMode;
   icon: string;
@@ -103,6 +105,13 @@ const LIST_MODE_OPTIONS: Array<{
   { value: "position", icon: "≡", label: "岗位明细", description: "逐条查看每个投递岗位" },
   { value: "kanban", icon: "◫", label: "进度看板", description: "按求职阶段推进流程" },
 ];
+
+function noticeToneFor(message: string): NoticeTone {
+  if (/失败|错误|超时|无法|未保存|不可用/.test(message)) return "error";
+  if (/请|不能|暂时|没有可|未登录/.test(message)) return "warning";
+  if (/已保存|保存成功|已更新|更新完成|已删除|已加入|已创建|已退出|导出|导入完成|已复制/.test(message)) return "success";
+  return "info";
+}
 
 function ModalPortal({ children }: { children: ReactNode }) {
   return createPortal(children, document.body);
@@ -930,6 +939,7 @@ export function RecruitmentTracker({
   const selectAllRef = useRef<HTMLInputElement>(null);
   const inviteHandledRef = useRef(false);
   const busy = pendingAction !== null;
+  const noticeTone = notice ? noticeToneFor(notice) : "info";
   const workspaceCacheKey = user ? `workspace-cache:${user.email}` : null;
   const recoveryOwnerKey = user?.email ?? "local";
 
@@ -940,6 +950,12 @@ export function RecruitmentTracker({
     );
     return () => window.clearTimeout(timer);
   }, [pendingAction]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), noticeTone === "error" ? 8_000 : 4_500);
+    return () => window.clearTimeout(timer);
+  }, [notice, noticeTone]);
 
   const activeGroup = useMemo(
     () => groups.find((g) => g.id === activeGroupId) ?? null,
@@ -955,16 +971,30 @@ export function RecruitmentTracker({
       const { data } = supabase ? await supabase.auth.getSession() : { data: { session: null } };
       token = data.session?.access_token ?? null;
     }
-    const response = await fetch("/api/workspace", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      ...(token
-        ? { headers: { "content-type": "application/json", Authorization: `Bearer ${token}` } }
-        : {}),
-      body: JSON.stringify(payload),
-    });
-    const result = (await response.json()) as { error?: string };
-    if (!response.ok) throw new Error(result.error || "操作失败");
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), CLOUD_REQUEST_TIMEOUT_MS);
+    try {
+      const response = await fetch("/api/workspace", {
+        method: "POST",
+        headers: token
+          ? { "content-type": "application/json", Authorization: `Bearer ${token}` }
+          : { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      const result = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(result.error || `保存失败（${response.status}）`);
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error("请求超时，数据可能尚未同步，请刷新确认后再重试");
+      }
+      if (error instanceof TypeError) {
+        throw new Error("网络连接失败，数据尚未保存，请检查网络后重试");
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeout);
+    }
   }, [accessToken]);
 
   const runCloudMutation = useCallback(async (
@@ -972,12 +1002,14 @@ export function RecruitmentTracker({
     payload: Record<string, unknown>,
     keepPending = false,
   ) => {
+    setNotice("");
     setPendingAction(label);
     try {
       await cloudAction(payload);
       return true;
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "操作失败，请稍后重试");
+      const detail = error instanceof Error ? error.message : "请稍后重试";
+      setNotice(/失败|错误|超时|无法|未保存/.test(detail) ? detail : `操作失败：${detail}`);
       return false;
     } finally {
       if (!keepPending) setPendingAction(null);
@@ -1118,7 +1150,7 @@ export function RecruitmentTracker({
         localStorage.setItem("applications", JSON.stringify(items));
         setLocalBackup(items);
       } catch {
-        // ignore
+        setNotice("本地缓存保存失败，请立即导出 Excel 备份");
       }
     },
     [],
@@ -1129,7 +1161,7 @@ export function RecruitmentTracker({
       try {
         localStorage.setItem("interviews", JSON.stringify(items));
       } catch {
-        // ignore
+        setNotice("面试记录未保存到本地缓存，请立即导出 Excel 备份");
       }
     },
     [],
@@ -1140,7 +1172,7 @@ export function RecruitmentTracker({
       try {
         localStorage.setItem("interview-experiences", JSON.stringify(items));
       } catch {
-        // ignore
+        setNotice("面经未保存到本地缓存，请立即导出 Excel 备份");
       }
     },
     [],
@@ -1838,7 +1870,7 @@ export function RecruitmentTracker({
         if (endedAt !== (explicit.endedAt ?? "") ) changes.endedAt = endedAt;
         if (format && format !== (explicit.format ?? "")) changes.format = format;
         if (result && result !== (explicit.result ?? "")) changes.result = result;
-        if (Object.keys(changes).length) await updateInterview(explicit.id, changes);
+        if (Object.keys(changes).length && !(await updateInterview(explicit.id, changes))) return "";
         return explicit.id;
       }
       const matched = [...interviews]
@@ -1850,7 +1882,7 @@ export function RecruitmentTracker({
         if (endedAt) changes.endedAt = endedAt;
         if (format && format !== (matched.format ?? "")) changes.format = format;
         if (result && result !== (matched.result ?? "")) changes.result = result;
-        if (Object.keys(changes).length) await updateInterview(matched.id, changes);
+        if (Object.keys(changes).length && !(await updateInterview(matched.id, changes))) return "";
         return matched.id;
       }
       if (!scheduledAt) return "";
@@ -1895,10 +1927,11 @@ export function RecruitmentTracker({
 
   const addExperience = useCallback(async (item: InterviewExperience) => {
     if (user) {
-      const saved = await runCloudMutation("Saving experience", { action: "saveExperience", experience: item });
+      const saved = await runCloudMutation("保存面经中", { action: "saveExperience", experience: item });
       if (!saved) return false;
     }
     setExperiences((current) => [item, ...current]);
+    setNotice("面经已保存");
     return true;
   }, [user, runCloudMutation]);
 
@@ -1907,17 +1940,18 @@ export function RecruitmentTracker({
     if (!current) return false;
     const next = { ...current, ...changes, updatedAt: new Date().toISOString() };
     if (user) {
-      const saved = await runCloudMutation("Saving experience", { action: "updateExperience", experience: next });
+      const saved = await runCloudMutation("保存面经修改中", { action: "updateExperience", experience: next });
       if (!saved) return false;
     }
     setExperiences((items) => items.map((item) => item.id === id ? next : item));
+    setNotice("面经修改已保存");
     return true;
   }, [experiences, user, runCloudMutation]);
 
   const removeExperience = useCallback(async (item: InterviewExperience) => {
     if (!confirm("删除这条面经？关联的面试时间记录也会一并删除。")) return false;
     if (user) {
-      const removed = await runCloudMutation("Deleting experience", { action: "deleteExperience", id: item.id });
+      const removed = await runCloudMutation("删除面经中", { action: "deleteExperience", id: item.id });
       if (!removed) return false;
     }
     setExperiences((items) => items.filter((entry) => entry.id !== item.id));
@@ -1928,8 +1962,12 @@ export function RecruitmentTracker({
     );
     if (linkedInterview) {
       const cascaded = await removeInterview(linkedInterview, { silent: true });
-      if (!cascaded) setNotice("面经已删除，关联面试记录删除失败，可在面经库重新补录");
+      if (!cascaded) {
+        setNotice("面经已删除，关联面试记录删除失败，可在面经库重新补录");
+        return true;
+      }
     }
+    setNotice("面经已删除");
     return true;
   }, [user, runCloudMutation, interviews, removeInterview]);
 
@@ -2463,6 +2501,7 @@ export function RecruitmentTracker({
       format: experienceForm.format,
       result: experienceForm.result,
     });
+    if (experienceForm.applicationId && scheduledAt && !interviewId) return;
     const now = new Date().toISOString();
     const tags = experienceForm.tags.split(/[\/,\u3001\uff0c]/).map((tag) => tag.trim()).filter(Boolean);
     if (experienceForm.visibility === "full" && !experienceForm.groupId) {
@@ -4262,9 +4301,15 @@ export function RecruitmentTracker({
 
         {/* ────────────────────────────────── notice toast */}
         {notice && (
-          <div className="notice-toast" onClick={() => setNotice("")}>
-            {notice}
-          </div>
+          <ModalPortal>
+            <div className={`notice-toast ${noticeTone}`} role={noticeTone === "error" ? "alert" : "status"} aria-live={noticeTone === "error" ? "assertive" : "polite"}>
+              <span className="notice-toast-icon" aria-hidden="true">
+                {noticeTone === "success" ? "✓" : noticeTone === "error" ? "!" : noticeTone === "warning" ? "△" : "i"}
+              </span>
+              <span className="notice-toast-message">{notice}</span>
+              <button type="button" onClick={() => setNotice("")} aria-label="关闭提示">×</button>
+            </div>
+          </ModalPortal>
         )}
       </section>
 
