@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Application, RecruitmentEventType } from "@/db/schema";
 
 export type CalendarItemKind = "interview" | RecruitmentEventType;
@@ -19,6 +19,9 @@ export type RecruitmentCalendarItem = {
   location: string;
   eventUrl: string;
   status: string;
+  ownerName: string;
+  ownerEmail: string;
+  isOwner: boolean;
 };
 
 type CalendarMode = "month" | "week" | "agenda";
@@ -78,26 +81,38 @@ export function RecruitmentCalendar({
   items,
   applications,
   busy,
+  scope,
+  friendCount,
+  onScopeChange,
   onCreate,
   onEdit,
 }: {
   items: RecruitmentCalendarItem[];
   applications: Application[];
   busy: boolean;
-  onCreate: (date: Date) => void;
+  scope: "mine" | "friends";
+  friendCount: number;
+  onScopeChange: (scope: "mine" | "friends") => void;
+  onCreate?: (date: Date) => void;
   onEdit: (item: RecruitmentCalendarItem) => void;
 }) {
   const [cursor, setCursor] = useState(() => new Date());
   const [mode, setMode] = useState<CalendarMode>("month");
   const [kindFilter, setKindFilter] = useState<"all" | CalendarItemKind>("all");
+  const [ownerFilter, setOwnerFilter] = useState("all");
   const [query, setQuery] = useState("");
   const todayKey = localDateKey(new Date());
   const applicationIds = useMemo(() => new Set(applications.map((item) => item.id)), [applications]);
+  const ownerOptions = useMemo(() => [...new Map(items.map((item) => [item.ownerEmail || item.ownerName, { value: item.ownerEmail || item.ownerName, label: item.ownerName || "好友" }])).values()], [items]);
+  useEffect(() => {
+    if (ownerFilter !== "all" && !ownerOptions.some((owner) => owner.value === ownerFilter)) setOwnerFilter("all");
+  }, [ownerFilter, ownerOptions]);
   const filteredItems = useMemo(() => items
     .filter((item) => applicationIds.has(item.applicationId))
     .filter((item) => kindFilter === "all" || item.kind === kindFilter)
-    .filter((item) => !query.trim() || [item.company, item.position, item.title, item.location].join(" ").toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
-    .sort((a, b) => a.startsAt.localeCompare(b.startsAt)), [applicationIds, items, kindFilter, query]);
+    .filter((item) => ownerFilter === "all" || (item.ownerEmail || item.ownerName) === ownerFilter)
+    .filter((item) => !query.trim() || [item.company, item.position, item.title, item.location, item.ownerName].join(" ").toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
+    .sort((a, b) => a.startsAt.localeCompare(b.startsAt)), [applicationIds, items, kindFilter, ownerFilter, query]);
 
   const days = useMemo(() => mode === "week"
     ? Array.from({ length: 7 }, (_, index) => addDays(startOfWeek(cursor), index))
@@ -121,11 +136,11 @@ export function RecruitmentCalendar({
   const upcomingCount = useMemo(() => {
     const now = Date.now();
     const nextWeek = now + 7 * 86_400_000;
-    return items.filter((item) => item.status !== "已取消").filter((item) => {
+    return filteredItems.filter((item) => item.status !== "已取消").filter((item) => {
       const timestamp = new Date(item.startsAt).getTime();
       return timestamp >= now && timestamp <= nextWeek;
     }).length;
-  }, [items]);
+  }, [filteredItems]);
   const title = mode === "week"
     ? `${days[0].getMonth() + 1}月${days[0].getDate()}日 – ${days[6].getMonth() + 1}月${days[6].getDate()}日`
     : `${cursor.getFullYear()}年 ${cursor.getMonth() + 1}月`;
@@ -140,12 +155,17 @@ export function RecruitmentCalendar({
       <header className="calendar-hero">
         <div>
           <p className="section-kicker">RECRUITMENT CALENDAR</p>
-          <h2>日程日历</h2>
-          <p>从安排笔试、测评和每一轮面试，到结束后补充面经，在同一条时间线上完成提醒、记录与统计。</p>
+          <h2>{scope === "friends" ? "好友日历" : "日程日历"}</h2>
+          <p>{scope === "friends" ? "只读查看当前小组内好友完整共享的面试、笔试与测评安排。" : "从安排笔试、测评和每一轮面试，到结束后补充面经，在同一条时间线上完成提醒、记录与统计。"}</p>
         </div>
+        <button type="button" className={`calendar-scope-action ${scope === "friends" ? "active" : ""}`} onClick={() => { setOwnerFilter("all"); onScopeChange(scope === "mine" ? "friends" : "mine"); }} disabled={busy}>
+          <span aria-hidden="true">◎</span>
+          <strong>{scope === "friends" ? "返回我的日历" : "查看好友进度"}</strong>
+          <small>{scope === "friends" ? "当前为小组只读日历" : friendCount ? `${friendCount} 位好友已完整共享` : "暂无好友共享日程"}</small>
+        </button>
         <div className="calendar-hero-actions">
           <span><strong>{upcomingCount}</strong> 项未来 7 天日程</span>
-          <button type="button" className="primary-button" onClick={() => onCreate(new Date())} disabled={busy}>＋ 新增日程</button>
+          {scope === "mine" && onCreate && <button type="button" className="primary-button" onClick={() => onCreate(new Date())} disabled={busy}>＋ 新增日程</button>}
         </div>
       </header>
 
@@ -176,16 +196,23 @@ export function RecruitmentCalendar({
           ))}
         </div>
       </div>
+      {scope === "friends" && ownerOptions.length > 1 && (
+        <div className="calendar-owner-filters" aria-label="按好友筛选日程">
+          <span>查看成员</span>
+          <button type="button" className={ownerFilter === "all" ? "active" : ""} onClick={() => setOwnerFilter("all")}>全部好友</button>
+          {ownerOptions.map((owner) => <button type="button" className={ownerFilter === owner.value ? "active" : ""} key={owner.value} onClick={() => setOwnerFilter(owner.value)}>{owner.label}</button>)}
+        </div>
+      )}
 
       {mode === "agenda" ? (
         <div className="calendar-agenda">
           {agendaGroups.length ? agendaGroups.map(([key, dayItems]) => (
             <section key={key}>
-              <header><strong>{formatAgendaDate(key)}</strong><button type="button" onClick={() => onCreate(new Date(`${key}T09:00:00`))}>＋ 添加</button></header>
+              <header><strong>{formatAgendaDate(key)}</strong>{scope === "mine" && onCreate && <button type="button" onClick={() => onCreate(new Date(`${key}T09:00:00`))}>＋ 添加</button>}</header>
               <div>
                 {dayItems.map((item) => (
                   <button type="button" className={`agenda-event event-${item.kind} ${item.status === "已取消" ? "cancelled" : ""}`} key={`${item.source}-${item.id}`} onClick={() => onEdit(item)}>
-                    <time>{formatEventTime(item)}</time><span><strong>{item.title}</strong><small>{item.company} · {item.position}</small></span><i>{item.status}</i>
+                    <time>{formatEventTime(item)}</time><span><strong>{scope === "friends" ? `${item.ownerName} · ${item.title}` : item.title}</strong><small>{item.company} · {item.position}</small></span><i>{item.status}</i>
                   </button>
                 ))}
               </div>
@@ -203,13 +230,13 @@ export function RecruitmentCalendar({
               const visibleLimit = mode === "week" ? 8 : 3;
               return (
                 <article className={`calendar-day ${outside ? "outside" : ""} ${key === todayKey ? "today" : ""}`} role="gridcell" key={key}>
-                  <button type="button" className="calendar-day-add" onClick={() => onCreate(day)} aria-label={`${key} 新增日程`}>
-                    <span>{day.getDate()}</span><i aria-hidden="true">＋</i>
+                  <button type="button" className={`calendar-day-add ${scope === "friends" ? "readonly" : ""}`} onClick={() => scope === "mine" && onCreate?.(day)} disabled={scope === "friends"} aria-label={scope === "friends" ? key : `${key} 新增日程`}>
+                    <span>{day.getDate()}</span>{scope === "mine" && <i aria-hidden="true">＋</i>}
                   </button>
                   <div className="calendar-day-events">
                     {dayItems.slice(0, visibleLimit).map((item) => (
                       <button type="button" className={`calendar-event event-${item.kind} ${item.status === "已取消" ? "cancelled" : ""}`} key={`${item.source}-${item.id}`} onClick={() => onEdit(item)} title={`${item.company} · ${item.position}`}>
-                        <time>{formatEventTime(item)}</time><span>{item.title}</span>
+                        <time>{formatEventTime(item)}</time><span>{scope === "friends" ? `${item.ownerName} · ${item.title}` : item.title}</span>
                       </button>
                     ))}
                     {dayItems.length > visibleLimit && <button type="button" className="calendar-more" onClick={() => { setCursor(day); setMode("agenda"); }}>还有 {dayItems.length - visibleLimit} 项</button>}
