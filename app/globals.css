@@ -2213,6 +2213,8 @@ button.interview-date-chip:hover { border-color: #769abb; box-shadow: 0 7px 17px
 .calendar-todo-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .calendar-todo-actions button { min-height: 32px; padding: 0 10px; border-radius: 8px; font-size: 9px; font-weight: 800; white-space: nowrap; }
 .todo-complete-button { border: 1px solid #c9dbcf; background: #f0f8f3; color: #397052; }
+.todo-ignore-button { border: 1px solid #d9ddd9; background: #fff; color: #78817b; }
+.todo-ignore-button:hover:not(:disabled) { border-color: #aeb8b1; color: #4f5d54; }
 .todo-primary-button { border: 1px solid var(--brand); background: var(--brand); color: #fff; }
 .calendar-todo-actions button:hover:not(:disabled) { transform: translateY(-1px); }
 .calendar-todo-actions button:disabled { cursor: wait; opacity: .55; }
@@ -2260,6 +2262,13 @@ button.interview-date-chip:hover { border-color: #769abb; box-shadow: 0 7px 17px
 .calendar-record-phase small { color: #8c9992; font-size: 8px; }
 .calendar-record-phase button.active { border-color: #8bb6a0; background: #fff; color: var(--brand); box-shadow: 0 5px 14px rgba(42,87,67,.08); }
 .calendar-record-phase button.active.completed { border-color: #d2aa72; color: #98631e; }
+.calendar-written-test-timing { grid-column: 1 / -1; display: grid; gap: 7px; }
+.calendar-written-test-timing > span { color: #4d6458; font-size: 10px; font-weight: 800; }
+.calendar-written-test-timing > div { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+.calendar-written-test-timing button { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid #d8e1db; border-radius: 10px; background: #fff; color: #617168; text-align: left; }
+.calendar-written-test-timing button strong { font-size: 11px; }
+.calendar-written-test-timing button small { color: #8a958e; font-size: 8px; }
+.calendar-written-test-timing button.active { border-color: var(--brand); background: #eef8f2; color: var(--brand); box-shadow: inset 0 0 0 1px rgba(19,105,76,.08); }
 .calendar-completed-note { display: grid; align-content: center; gap: 3px; min-height: 43px; padding: 8px 12px; border: 1px solid #d9e6dd; border-radius: 9px; background: #eff8f2; }
 .calendar-completed-note strong { color: #347052; font-size: 10px; }
 .calendar-completed-note small { color: #819087; font-size: 8px; }

@@ -9,6 +9,7 @@ export type RecruitmentCalendarItem = {
   id: string;
   applicationId: string;
   kind: CalendarItemKind;
+  timingType: "scheduled" | "deadline";
   title: string;
   company: string;
   position: string;
@@ -66,10 +67,11 @@ function monthDays(cursor: Date) {
 }
 
 function formatEventTime(item: RecruitmentCalendarItem) {
-  if (item.allDay) return "全天";
+  if (item.allDay) return item.timingType === "deadline" ? "截止" : "全天";
   const date = new Date(item.startsAt);
   if (Number.isNaN(date.getTime())) return "时间待定";
-  return date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+  const time = date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+  return item.timingType === "deadline" ? `截止 ${time}` : time;
 }
 
 function formatAgendaDate(key: string) {
@@ -264,7 +266,7 @@ export function UpcomingScheduleCard({ items, onOpenCalendar, onEdit }: { items:
       <div>
         {upcoming.map((item) => (
           <button type="button" key={`${item.source}-${item.id}`} onClick={() => onEdit(item)}>
-            <time>{new Date(item.startsAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: item.allDay ? undefined : "2-digit", minute: item.allDay ? undefined : "2-digit", hour12: false })}</time>
+            <time>{item.timingType === "deadline" ? "截止 " : ""}{new Date(item.startsAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: item.allDay ? undefined : "2-digit", minute: item.allDay ? undefined : "2-digit", hour12: false })}</time>
             <span><strong>{item.title}</strong><small>{item.company} · {item.position}</small></span>
             <i className={`event-dot event-${item.kind}`} aria-label={calendarKindLabel(item.kind)} />
           </button>

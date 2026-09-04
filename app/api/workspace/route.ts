@@ -29,6 +29,10 @@ function calendarSchemaMessage() {
   return "招聘日历尚未初始化，请先在 Supabase SQL Editor 执行 007_recruitment_calendar.sql";
 }
 
+function calendarEnhancementsMessage() {
+  return "日历增强功能尚未初始化，请先在 Supabase SQL Editor 执行 008_calendar_deadlines_and_todo_dismissals.sql";
+}
+
 const FINAL_OUTCOME_PREFIX = "【最终结果】";
 const REJECTION_REASON_PREFIX = "【拒绝原因】";
 
@@ -124,12 +128,13 @@ export async function GET(request: Request) {
   if (!current) return json({ error: "请先登录" }, 401);
   const { supabase, user } = current;
 
-  const [[{ data: rows, error: applicationError }, { data: interviewRows, error: interviewError }, { data: experienceRows, error: experienceError }, { data: eventRows, error: eventError }], groups] = await Promise.all([
+  const [[{ data: rows, error: applicationError }, { data: interviewRows, error: interviewError }, { data: experienceRows, error: experienceError }, { data: eventRows, error: eventError }, { data: dismissalRows, error: dismissalError }], groups] = await Promise.all([
     Promise.all([
       supabase.from("applications").select("*").order("updated_at", { ascending: false }),
       supabase.from("interviews").select("*").order("scheduled_at", { ascending: true }),
       supabase.from("interview_experiences").select("*").order("updated_at", { ascending: false }),
       supabase.from("recruitment_events").select("*").order("starts_at", { ascending: true }),
+      supabase.from("todo_dismissals").select("reminder_key").eq("owner_id", user.id),
     ]),
     groupsForUser(supabase, user.id),
   ]);
@@ -139,6 +144,7 @@ export async function GET(request: Request) {
 
   if (experienceError && experienceError.code !== "42P01") return json({ error: experienceError.code === "42703" ? "请先执行 006_share_interview_experiences.sql" : experienceError.message }, 400);
   if (eventError && !calendarSchemaMissing(eventError)) return json({ error: eventError.message }, 400);
+  if (dismissalError && !calendarSchemaMissing(dismissalError)) return json({ error: dismissalError.message }, 400);
   const ownerIds = [...new Set([...(rows ?? []).map((row) => row.owner_id), ...(experienceRows ?? []).map((row) => row.owner_id), ...(eventRows ?? []).map((row) => row.owner_id)])];
   const { data: profiles } = ownerIds.length
     ? await supabase.from("profiles").select("id, email, display_name").in("id", ownerIds)
@@ -214,6 +220,7 @@ export async function GET(request: Request) {
       id: row.id,
       applicationId: row.application_id,
       eventType: row.event_type,
+      timingType: row.timing_type === "deadline" ? "deadline" : "scheduled",
       title: row.title,
       startsAt: row.starts_at,
       endsAt: row.ends_at ?? "",
@@ -229,7 +236,7 @@ export async function GET(request: Request) {
     };
   });
 
-  return json({ user, applications, interviews, experiences, events, groups, calendarReady: !calendarSchemaMissing(eventError) });
+  return json({ user, applications, interviews, experiences, events, groups, dismissedTodoKeys: (dismissalRows ?? []).map((row) => row.reminder_key), calendarReady: !calendarSchemaMissing(eventError) });
 }
 
 export async function POST(request: Request) {
@@ -245,7 +252,12 @@ export async function POST(request: Request) {
   const action = textValue(body.action, 40);
 
   try {
-    if (action === "saveApplication" || action === "importApplications" || action === "importWorkspace") {
+    if (action === "dismissTodo") {
+      const reminderKey = textValue(body.reminderKey, 300);
+      if (!reminderKey) return json({ error: "待做提醒标识无效" }, 400);
+      const { error } = await supabase.from("todo_dismissals").upsert({ owner_id: user.id, reminder_key: reminderKey }, { onConflict: "owner_id,reminder_key" });
+      if (error) return json({ error: calendarSchemaMissing(error) ? calendarEnhancementsMessage() : error.message }, 400);
+    } else if (action === "saveApplication" || action === "importApplications" || action === "importWorkspace") {
       const workspaceImport = action === "importWorkspace";
       const input = (action === "importApplications" || workspaceImport) && Array.isArray(body.applications)
         ? body.applications.slice(0, workspaceImport ? 500 : 200)
@@ -335,6 +347,7 @@ export async function POST(request: Request) {
             owner_id: user.id,
             application_id: textValue(value.applicationId, 80),
             event_type: textValue(value.eventType, 40),
+            timing_type: textValue(value.timingType, 20) === "deadline" ? "deadline" : "scheduled",
             title: textValue(value.title, 180),
             starts_at: textValue(value.startsAt, 60),
             ends_at: textValue(value.endsAt, 60) || null,
@@ -348,14 +361,16 @@ export async function POST(request: Request) {
         });
         const eventTypes = new Set(["written_test", "assessment", "deadline", "hr_contact", "other"]);
         const eventStatuses = new Set(["待进行", "已完成", "已取消"]);
+        const eventTimingTypes = new Set(["scheduled", "deadline"]);
         if (eventPayload.some((item) =>
-          !allowedApplicationIds.has(item.application_id) || !eventTypes.has(item.event_type) || !eventStatuses.has(item.status) ||
+          !allowedApplicationIds.has(item.application_id) || !eventTypes.has(item.event_type) || !eventStatuses.has(item.status) || !eventTimingTypes.has(item.timing_type) ||
+          (item.timing_type === "deadline" && item.event_type !== "written_test") ||
           !item.title || !item.starts_at || Number.isNaN(Date.parse(item.starts_at)) ||
           (item.ends_at && (Number.isNaN(Date.parse(item.ends_at)) || Date.parse(item.ends_at) < Date.parse(item.starts_at))),
         )) return json({ error: "日程记录格式不正确或没有匹配到本账号的岗位" }, 400);
         if (eventPayload.length) {
           const { error } = await supabase.from("recruitment_events").upsert(eventPayload, { onConflict: "id" });
-          if (error) return json({ error: calendarSchemaMissing(error) ? calendarSchemaMessage() : error.message }, 400);
+          if (error) return json({ error: error.code === "42703" || error.code === "PGRST204" ? calendarEnhancementsMessage() : calendarSchemaMissing(error) ? calendarSchemaMessage() : error.message }, 400);
         }
         if (!Array.isArray(body.experiences) || body.experiences.length > 1000) {
           return json({ error: "面经记录格式不正确或数量过多" }, 400);
@@ -478,10 +493,12 @@ export async function POST(request: Request) {
       if (applicationLookupError) return json({ error: applicationLookupError.message }, 400);
       if (!ownedApplication) return json({ error: "关联岗位不存在或无权修改" }, 404);
       const eventType = textValue(value.eventType, 40);
+      const timingType = textValue(value.timingType, 20) === "deadline" ? "deadline" : "scheduled";
       const status = textValue(value.status, 20) || "待进行";
       const startsAt = textValue(value.startsAt, 60);
       const endsAt = textValue(value.endsAt, 60);
       if (!["written_test", "assessment", "deadline", "hr_contact", "other"].includes(eventType)) return json({ error: "请选择有效的日程类型" }, 400);
+      if (timingType === "deadline" && eventType !== "written_test") return json({ error: "只有笔试支持截止时间模式" }, 400);
       if (!["待进行", "已完成", "已取消"].includes(status)) return json({ error: "请选择有效的日程状态" }, 400);
       if (!startsAt || Number.isNaN(Date.parse(startsAt))) return json({ error: "请填写有效的开始时间" }, 400);
       if (endsAt && (Number.isNaN(Date.parse(endsAt)) || Date.parse(endsAt) < Date.parse(startsAt))) return json({ error: "结束时间不能早于开始时间" }, 400);
@@ -490,6 +507,7 @@ export async function POST(request: Request) {
         owner_id: user.id,
         application_id: applicationId,
         event_type: eventType,
+        timing_type: timingType,
         title: textValue(value.title, 180),
         starts_at: startsAt,
         ends_at: endsAt || null,
@@ -502,7 +520,7 @@ export async function POST(request: Request) {
       };
       if (!event.title) return json({ error: "请填写日程标题" }, 400);
       const { error } = await supabase.from("recruitment_events").upsert(event, { onConflict: "id" });
-      if (error) return json({ error: calendarSchemaMissing(error) ? calendarSchemaMessage() : error.message }, 400);
+      if (error) return json({ error: error.code === "42703" || error.code === "PGRST204" ? calendarEnhancementsMessage() : calendarSchemaMissing(error) ? calendarSchemaMessage() : error.message }, 400);
     } else if (action === "deleteEvent") {
       const { error } = await supabase.from("recruitment_events").delete().eq("id", textValue(body.id, 80)).eq("owner_id", user.id);
       if (error) return json({ error: calendarSchemaMissing(error) ? calendarSchemaMessage() : error.message }, 400);

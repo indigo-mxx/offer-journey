@@ -88,6 +88,7 @@ interface ImportPreview {
 interface CalendarEventForm {
   phase: "scheduled" | "completed";
   kind: CalendarItemKind;
+  timingType: "scheduled" | "deadline";
   applicationId: string;
   title: string;
   startsAt: string;
@@ -104,6 +105,7 @@ interface CalendarEventForm {
 
 interface CalendarTodoEntry {
   id: string;
+  dismissKey: string;
   tone: "overdue" | "followup" | "missing" | "upcoming";
   label: string;
   title: string;
@@ -147,6 +149,7 @@ const RETRYABLE_CLOUD_ACTIONS = new Set([
   "saveEvent",
   "updateEvent",
   "deleteEvent",
+  "dismissTodo",
 ]);
 const RETRYABLE_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const LIST_MODE_OPTIONS: Array<{
@@ -320,11 +323,13 @@ const INTERVIEW_RESULTS = ["待定", "通过", "未通过", "未参加"];
 const RECRUITMENT_EVENT_TYPES: RecruitmentEventType[] = ["written_test", "assessment", "deadline", "hr_contact", "other"];
 const RECRUITMENT_EVENT_STATUSES: RecruitmentEventStatus[] = ["待进行", "已完成", "已取消"];
 const CALENDAR_EVENT_MODES = ["线上", "线下", "电话", "邮件", "其他"];
+const TODO_DISMISSALS_STORAGE_PREFIX = "dismissed-calendar-todos:";
 
 function emptyCalendarEventForm(date = new Date()): CalendarEventForm {
   return {
     phase: "scheduled",
     kind: "written_test",
+    timingType: "scheduled",
     applicationId: "",
     title: "",
     startsAt: calendarStartValue(date),
@@ -547,6 +552,7 @@ function normalizeInterviews(items: Interview[]) {
 function normalizeRecruitmentEvents(items: RecruitmentEvent[]): RecruitmentEvent[] {
   return items.map((item) => ({
     ...item,
+    timingType: item.timingType === "deadline" ? "deadline" : "scheduled",
     endsAt: item.endsAt ?? "",
     allDay: Boolean(item.allDay),
     mode: item.mode ?? "",
@@ -1092,6 +1098,7 @@ export function RecruitmentTracker({
   const [viewingFriendCalendarItem, setViewingFriendCalendarItem] = useState<RecruitmentCalendarItem | null>(null);
   const [calendarScope, setCalendarScope] = useState<"mine" | "friends">("mine");
   const [calendarEventForm, setCalendarEventForm] = useState<CalendarEventForm>(() => emptyCalendarEventForm());
+  const [dismissedTodoKeys, setDismissedTodoKeys] = useState<string[]>([]);
   const [editingExperienceId, setEditingExperienceId] = useState<string | null>(null);
   const [experienceForm, setExperienceForm] = useState(EMPTY_EXPERIENCE);
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
@@ -1106,6 +1113,7 @@ export function RecruitmentTracker({
   const noticeTone = notice ? noticeToneFor(notice) : "info";
   const workspaceCacheKey = user ? `workspace-cache:${user.email}` : null;
   const recoveryOwnerKey = user?.email ?? "local";
+  const todoDismissalsStorageKey = `${TODO_DISMISSALS_STORAGE_PREFIX}${recoveryOwnerKey}`;
 
   useEffect(() => {
     const timer = window.setTimeout(
@@ -1276,6 +1284,7 @@ export function RecruitmentTracker({
       groups?: unknown;
       experiences?: unknown;
       events?: unknown;
+      dismissedTodoKeys?: unknown;
       calendarReady?: unknown;
       error?: string;
       message?: string;
@@ -1305,6 +1314,15 @@ export function RecruitmentTracker({
     const normalizedInterviews = normalizeInterviews(result.interviews);
     const normalizedExperiences = normalizeExperiences(experienceData);
     const normalizedEvents = normalizeRecruitmentEvents(eventData);
+    const cloudDismissedTodoKeys = Array.isArray(result.dismissedTodoKeys) ? result.dismissedTodoKeys.filter((item): item is string => typeof item === "string") : [];
+    let localDismissedTodoKeys: string[] = [];
+    try {
+      const parsed = JSON.parse(localStorage.getItem(todoDismissalsStorageKey) ?? "[]") as unknown;
+      if (Array.isArray(parsed)) localDismissedTodoKeys = parsed.filter((item): item is string => typeof item === "string");
+    } catch {
+      // Invalid preference cache does not block cloud data.
+    }
+    const mergedDismissedTodoKeys = [...new Set([...cloudDismissedTodoKeys, ...localDismissedTodoKeys])];
     if (workspaceCacheKey) {
       try {
         const cached = JSON.parse(localStorage.getItem(workspaceCacheKey) ?? "null") as { applications?: unknown; interviews?: unknown; experiences?: unknown; events?: unknown } | null;
@@ -1327,6 +1345,8 @@ export function RecruitmentTracker({
     setInterviews(normalizedInterviews);
     setExperiences(normalizedExperiences);
     setEvents(normalizedEvents);
+    setDismissedTodoKeys(mergedDismissedTodoKeys);
+    try { localStorage.setItem(todoDismissalsStorageKey, JSON.stringify(mergedDismissedTodoKeys)); } catch { /* optional preference cache */ }
     setCalendarReady(result.calendarReady !== false);
     setGroups(groupsData);
     if (workspaceCacheKey) {
@@ -1345,10 +1365,12 @@ export function RecruitmentTracker({
       setActiveGroupId(null);
     }
     return groupsData;
-  }, [accessToken, activeGroupId, workspaceCacheKey, recoveryOwnerKey]);
+  }, [accessToken, activeGroupId, workspaceCacheKey, recoveryOwnerKey, todoDismissalsStorageKey]);
 
   const loadLocal = useCallback(() => {
     try {
+      const dismissed = JSON.parse(localStorage.getItem(todoDismissalsStorageKey) ?? "[]") as unknown;
+      if (Array.isArray(dismissed)) setDismissedTodoKeys(dismissed.filter((item): item is string => typeof item === "string"));
       if (workspaceCacheKey) {
         const cached = localStorage.getItem(workspaceCacheKey);
         if (cached) {
@@ -1397,7 +1419,7 @@ export function RecruitmentTracker({
     } catch {
       // ignore
     }
-  }, [workspaceCacheKey]);
+  }, [todoDismissalsStorageKey, workspaceCacheKey]);
 
   const saveLocal = useCallback(
     (items: Application[]) => {
@@ -1555,6 +1577,7 @@ export function RecruitmentTracker({
         id: item.id,
         applicationId: item.applicationId,
         kind: "interview" as const,
+        timingType: "scheduled" as const,
         title: item.round || "面试",
         company: application.company,
         position: application.position,
@@ -1578,6 +1601,7 @@ export function RecruitmentTracker({
         id: item.id,
         applicationId: item.applicationId,
         kind: item.eventType,
+        timingType: item.timingType === "deadline" ? "deadline" as const : "scheduled" as const,
         title: item.title || calendarKindLabel(item.eventType),
         company: application.company,
         position: application.position,
@@ -1610,6 +1634,7 @@ export function RecruitmentTracker({
         id: item.id,
         applicationId: item.applicationId,
         kind: "interview" as const,
+        timingType: "scheduled" as const,
         title: item.round || "面试",
         company: application.company,
         position: application.position,
@@ -1633,6 +1658,7 @@ export function RecruitmentTracker({
         id: item.id,
         applicationId: item.applicationId,
         kind: item.eventType,
+        timingType: item.timingType === "deadline" ? "deadline" as const : "scheduled" as const,
         title: item.title || calendarKindLabel(item.eventType),
         company: application.company,
         position: application.position,
@@ -1972,7 +1998,9 @@ export function RecruitmentTracker({
         reminders.push({
           id: `calendar-${calendarItem.id}`,
           kind: "event",
-          label: daysAway < 0 ? "日程已过期" : `即将${calendarKindLabel(calendarItem.kind)}`,
+          label: calendarItem.kind === "written_test" && calendarItem.timingType === "deadline"
+            ? (daysAway < 0 ? "笔试截止时间已过" : "笔试即将截止")
+            : daysAway < 0 ? "日程已过期" : `即将${calendarKindLabel(calendarItem.kind)}`,
           title: `${application.company} · ${calendarItem.title}`,
           detail: `${formatDateTime(calendarItem.startsAt)} · ${application.position}`,
           priority: daysAway < 0 ? now - startsAt : startsAt,
@@ -2017,6 +2045,7 @@ export function RecruitmentTracker({
       if (!currentInterview) {
         todos.push({
           id: `todo-missing-${application.id}-${stage}`,
+          dismissKey: `todo-missing-${application.id}-${stage}@${application.updatedAt}`,
           tone: "missing",
           label: "待定面试",
           title: `${application.company} · ${application.status}`,
@@ -2046,6 +2075,7 @@ export function RecruitmentTracker({
       if (finishedAt > now && calendarItem) {
         todos.push({
           id: `todo-interview-${interview.id}`,
+          dismissKey: `todo-interview-${interview.id}@${interview.updatedAt}`,
           tone: "upcoming",
           label: scheduledAt <= now ? "面试进行中" : "待参加面试",
           title: `${application.company} · ${interview.round || "面试"}`,
@@ -2060,6 +2090,7 @@ export function RecruitmentTracker({
       } else if (finishedAt <= now && !hasExperience) {
         todos.push({
           id: `todo-experience-${interview.id}`,
+          dismissKey: `todo-experience-${interview.id}@${interview.updatedAt}`,
           tone: "followup",
           label: "待补面经",
           title: `${application.company} · ${interview.round || "面试"}`,
@@ -2074,6 +2105,7 @@ export function RecruitmentTracker({
       } else if (finishedAt <= now && (!interview.result || interview.result === "待定" || interview.result === "未开始") && calendarItem) {
         todos.push({
           id: `todo-result-${interview.id}`,
+          dismissKey: `todo-result-${interview.id}@${interview.updatedAt}`,
           tone: "followup",
           label: "待补面试结果",
           title: `${application.company} · ${interview.round || "面试"}`,
@@ -2097,10 +2129,13 @@ export function RecruitmentTracker({
       const overdue = startsAt < now;
       todos.push({
         id: `todo-event-${event.id}`,
+        dismissKey: `todo-event-${event.id}@${event.updatedAt}`,
         tone: overdue ? "overdue" : "upcoming",
-        label: overdue ? `${calendarKindLabel(event.eventType)}已到期` : `待${calendarKindLabel(event.eventType)}`,
+        label: event.eventType === "written_test" && event.timingType === "deadline"
+          ? (overdue ? "笔试截止时间已过" : "笔试待截止")
+          : overdue ? `${calendarKindLabel(event.eventType)}已到期` : `待${calendarKindLabel(event.eventType)}`,
         title: `${application.company} · ${event.title}`,
-        detail: `${application.position}${event.mode ? ` · ${event.mode}` : ""}`,
+        detail: `${application.position}${event.timingType === "deadline" ? " · 截止前完成" : event.mode ? ` · ${event.mode}` : ""}`,
         scheduledAt: event.startsAt,
         priority: overdue ? 10_000_000_000_000 - Math.max(startsAt, 0) : 50_000_000_000_000 + startsAt,
         action: "editSchedule",
@@ -2110,8 +2145,8 @@ export function RecruitmentTracker({
       });
     }
 
-    return todos.sort((a, b) => a.priority - b.priority);
-  }, [calendarItems, events, experiences, interviews, ownApplications]);
+    return todos.filter((todo) => !dismissedTodoKeys.includes(todo.dismissKey)).sort((a, b) => a.priority - b.priority);
+  }, [calendarItems, dismissedTodoKeys, events, experiences, interviews, ownApplications]);
 
   const toggleSort = useCallback((key: SortKey) => {
     if (sortKey === key) {
@@ -2537,6 +2572,7 @@ export function RecruitmentTracker({
       ...form,
       applicationId,
       kind,
+      timingType: "scheduled",
       round: kind === "interview" ? defaultRoundForStage(interviewStage(application?.status ?? "")) : form.round,
       mode: kind === "interview" ? "视频面试" : form.mode,
       status: kind === "interview" ? "未开始" : "待进行",
@@ -2561,6 +2597,7 @@ export function RecruitmentTracker({
       setCalendarEventForm({
         phase: scheduled ? "scheduled" : "completed",
         kind: "interview",
+        timingType: "scheduled",
         applicationId: item.applicationId,
         title: item.round || "面试",
         startsAt: dateTimeLocalValue(item.scheduledAt),
@@ -2583,6 +2620,7 @@ export function RecruitmentTracker({
       setCalendarEventForm({
         phase: item.status === "已完成" ? "completed" : "scheduled",
         kind: item.eventType,
+        timingType: item.timingType === "deadline" ? "deadline" : "scheduled",
         applicationId: item.applicationId,
         title: item.title,
         startsAt: dateTimeLocalValue(item.startsAt),
@@ -2613,7 +2651,9 @@ export function RecruitmentTracker({
       setNotice("请选择需要关联的公司和岗位");
       return;
     }
-    const startInput = calendarEventForm.allDay ? `${calendarEventForm.startsAt.slice(0, 10)}T00:00:00` : calendarEventForm.startsAt;
+    const startInput = calendarEventForm.allDay
+      ? `${calendarEventForm.startsAt.slice(0, 10)}T${calendarEventForm.timingType === "deadline" ? "23:59:59" : "00:00:00"}`
+      : calendarEventForm.startsAt;
     const endInput = calendarEventForm.phase === "scheduled"
       ? ""
       : calendarEventForm.allDay && calendarEventForm.endsAt
@@ -2683,6 +2723,7 @@ export function RecruitmentTracker({
         id: current?.id ?? crypto.randomUUID(),
         applicationId: application.id,
         eventType: calendarEventForm.kind,
+        timingType: calendarEventForm.kind === "written_test" ? calendarEventForm.timingType : "scheduled",
         title: calendarEventForm.title.trim() || `${application.company} · ${calendarKindLabel(calendarEventForm.kind)}`,
         startsAt,
         endsAt,
@@ -2770,6 +2811,19 @@ export function RecruitmentTracker({
     setEvents((items) => items.map((item) => item.id === next.id ? next : item));
     setNotice(`${calendarKindLabel(next.eventType)}已标记完成`);
   }, [events, runCloudMutation, user]);
+
+  const dismissCalendarTodo = useCallback(async (todo: CalendarTodoEntry) => {
+    if (user) {
+      const saved = await runCloudMutation("忽略待做提醒中", { action: "dismissTodo", reminderKey: todo.dismissKey });
+      if (!saved) return;
+    }
+    setDismissedTodoKeys((current) => {
+      const next = current.includes(todo.dismissKey) ? current : [...current, todo.dismissKey];
+      try { localStorage.setItem(todoDismissalsStorageKey, JSON.stringify(next)); } catch { /* cloud copy remains authoritative */ }
+      return next;
+    });
+    setNotice("该条待做已忽略；原始日程和面试记录仍然保留");
+  }, [runCloudMutation, todoDismissalsStorageKey, user]);
 
   const addExperience = useCallback(async (item: InterviewExperience) => {
     if (user) {
@@ -3754,6 +3808,7 @@ export function RecruitmentTracker({
                       </div>
                       <time>{calendarTodoTime(todo.scheduledAt)}</time>
                       <div className="calendar-todo-actions">
+                        <button type="button" className="todo-ignore-button" disabled={busy} onClick={() => void dismissCalendarTodo(todo)} title="只隐藏这条提醒，不删除原记录">忽略</button>
                         {todo.canComplete && todo.calendarItem && (
                           <button type="button" className="todo-complete-button" disabled={busy} onClick={() => void completeCalendarTodo(todo.calendarItem!)}>标记完成</button>
                         )}
@@ -5148,7 +5203,7 @@ export function RecruitmentTracker({
                   <p>{viewingFriendCalendarItem.company} · {viewingFriendCalendarItem.position}</p>
                   <dl>
                     <div><dt>记录阶段</dt><dd>{["未开始", "待进行", "已取消"].includes(viewingFriendCalendarItem.status) ? "约好的日程" : "已完成的记录"}</dd></div>
-                    <div><dt>开始时间</dt><dd>{formatDateTime(viewingFriendCalendarItem.startsAt)}</dd></div>
+                    <div><dt>{viewingFriendCalendarItem.timingType === "deadline" ? "截止时间" : "开始时间"}</dt><dd>{formatDateTime(viewingFriendCalendarItem.startsAt)}</dd></div>
                     {viewingFriendCalendarItem.endsAt && <div><dt>结束时间</dt><dd>{formatDateTime(viewingFriendCalendarItem.endsAt)}</dd></div>}
                     {viewingFriendCalendarItem.mode && <div><dt>形式</dt><dd>{viewingFriendCalendarItem.mode}</dd></div>}
                     {viewingFriendCalendarItem.location && <div><dt>地点</dt><dd>{viewingFriendCalendarItem.location}</dd></div>}
@@ -5212,6 +5267,7 @@ export function RecruitmentTracker({
                         onChange={(kind) => setCalendarEventForm((current) => ({
                           ...current,
                           kind: kind as CalendarItemKind,
+                          timingType: kind === "written_test" ? current.timingType : "scheduled",
                           title: current.kind === "interview" && kind !== "interview" ? "" : current.title,
                           round: kind === "interview" && current.kind !== "interview" ? defaultRoundForStage(interviewStage(ownApplications.find((item) => item.id === current.applicationId)?.status ?? "")) : current.round,
                           mode: kind === "interview" ? "视频面试" : "线上",
@@ -5253,15 +5309,29 @@ export function RecruitmentTracker({
                       </label>
                     )}
 
+                    {calendarEventForm.kind === "written_test" && (
+                      <div className="calendar-written-test-timing" role="group" aria-label="选择笔试时间类型">
+                        <span>笔试时间类型 *</span>
+                        <div>
+                          <button type="button" className={calendarEventForm.timingType === "scheduled" ? "active" : ""} onClick={() => setCalendarEventForm((current) => ({ ...current, timingType: "scheduled", allDay: false }))}>
+                            <strong>指定时间</strong><small>有明确的开考时间</small>
+                          </button>
+                          <button type="button" className={calendarEventForm.timingType === "deadline" ? "active" : ""} onClick={() => setCalendarEventForm((current) => ({ ...current, timingType: "deadline", allDay: true, endsAt: "" }))}>
+                            <strong>截止时间</strong><small>在此之前自行完成</small>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     {calendarEventForm.kind !== "interview" && (
                       <label className="calendar-all-day-toggle">
                         <input type="checkbox" checked={calendarEventForm.allDay} onChange={(event) => setCalendarEventForm((current) => ({ ...current, allDay: event.target.checked }))} />
-                        <span>全天事项</span>
+                        <span>{calendarEventForm.kind === "written_test" && calendarEventForm.timingType === "deadline" ? "只记录截止日期，不指定具体时刻" : "全天事项"}</span>
                       </label>
                     )}
 
                     <label>
-                      <span>开始{calendarEventForm.allDay ? "日期" : "时间"} *</span>
+                      <span>{calendarEventForm.kind === "written_test" && calendarEventForm.timingType === "deadline" ? "截止" : "开始"}{calendarEventForm.allDay ? "日期" : "时间"} *</span>
                       <input
                         type={calendarEventForm.allDay ? "date" : "datetime-local"}
                         value={calendarEventForm.allDay ? calendarEventForm.startsAt.slice(0, 10) : calendarEventForm.startsAt}
@@ -5269,7 +5339,7 @@ export function RecruitmentTracker({
                         required
                       />
                     </label>
-                    {calendarEventForm.phase === "completed" && (
+                    {calendarEventForm.phase === "completed" && calendarEventForm.timingType !== "deadline" && (
                       <label>
                         <span>结束{calendarEventForm.allDay ? "日期" : "时间"}</span>
                         <input

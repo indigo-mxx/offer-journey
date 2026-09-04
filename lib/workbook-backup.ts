@@ -200,7 +200,7 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup) {
   });
 
   const eventsSheet = addDataSheet("日程安排", "日程安排", "保存笔试、测评、截止事项与 HR 沟通；面试仍在“面试安排”工作表中。", [
-    { header: "公司", key: "company", width: 18 }, { header: "岗位", key: "position", width: 24 }, { header: "类型", key: "eventType", width: 13 },
+    { header: "公司", key: "company", width: 18 }, { header: "岗位", key: "position", width: 24 }, { header: "类型", key: "eventType", width: 13 }, { header: "时间类型", key: "timingType", width: 14 },
     { header: "标题", key: "title", width: 28 }, { header: "开始时间", key: "startsAt", width: 19 }, { header: "结束时间", key: "endsAt", width: 19 },
     { header: "全天", key: "allDay", width: 10 }, { header: "形式", key: "mode", width: 14 }, { header: "地点", key: "location", width: 18 },
     { header: "日程链接", key: "eventUrl", width: 34 }, { header: "状态", key: "status", width: 12 }, { header: "备注", key: "note", width: 36 },
@@ -208,7 +208,7 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup) {
     { header: "创建时间", key: "createdAt", width: 20, hidden: true }, { header: "更新时间", key: "updatedAt", width: 20, hidden: true },
   ], recruitmentEvents.map((item) => {
     const application = appById.get(item.applicationId);
-    return { company: application?.company ?? "", position: application?.position ?? "", eventType: EVENT_TYPE_LABELS[item.eventType], title: item.title, startsAt: validDate(item.startsAt), endsAt: validDate(item.endsAt), allDay: item.allDay ? "是" : "否", mode: item.mode, location: item.location, eventUrl: item.eventUrl, status: item.status, note: item.note, applicationId: item.applicationId, id: item.id, createdAt: validDate(item.createdAt ?? ""), updatedAt: validDate(item.updatedAt) };
+    return { company: application?.company ?? "", position: application?.position ?? "", eventType: EVENT_TYPE_LABELS[item.eventType], timingType: item.timingType === "deadline" ? "截止时间" : "指定时间", title: item.title, startsAt: validDate(item.startsAt), endsAt: validDate(item.endsAt), allDay: item.allDay ? "是" : "否", mode: item.mode, location: item.location, eventUrl: item.eventUrl, status: item.status, note: item.note, applicationId: item.applicationId, id: item.id, createdAt: validDate(item.createdAt ?? ""), updatedAt: validDate(item.updatedAt) };
   }), palette.purple);
   eventsSheet.getColumn("startsAt").numFmt = "yyyy-mm-dd hh:mm";
   eventsSheet.getColumn("endsAt").numFmt = "yyyy-mm-dd hh:mm";
@@ -246,7 +246,7 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup) {
   guide.getRow(2).height = 32;
   guide.getRow(3).height = 32;
   guide.mergeCells("B5:E5");
-  guide.getCell("B5").value = `导出时间：${exportedAt.toLocaleString("zh-CN")}　｜　备份版本：4`;
+  guide.getCell("B5").value = `导出时间：${exportedAt.toLocaleString("zh-CN")}　｜　备份版本：5`;
   guide.getCell("B5").font = { name: "Microsoft YaHei", size: 10, color: { argb: palette.muted } };
   const cards = [["岗位记录", data.applications.length, palette.brandSoft, palette.brand], ["面试安排", data.interviews.length, palette.blueSoft, palette.blue], ["日程安排", recruitmentEvents.length, palette.purpleSoft, palette.purple], ["面经沉淀", data.experiences.length, palette.amberSoft, palette.amber]] as const;
   cards.forEach(([label, count, fill, color], index) => {
@@ -345,7 +345,7 @@ export async function readWorkspaceWorkbook(file: File): Promise<WorkspaceBackup
     const endsAt = dateFromExcel(row["结束时间"]);
     const statusText = excelText(row["状态"]).trim() as RecruitmentEventStatus;
     if (!applicationIds.has(applicationId) || !eventType || !startsAt || (endsAt && new Date(endsAt).getTime() < new Date(startsAt).getTime())) return null;
-    return { id: safeId(row["日程ID"]), applicationId, eventType, title: excelText(row["标题"]).trim() || EVENT_TYPE_LABELS[eventType], startsAt, endsAt, allDay: ["是", "true", "1"].includes(excelText(row["全天"]).trim().toLocaleLowerCase()), mode: excelText(row["形式"]).trim(), location: excelText(row["地点"]).trim(), eventUrl: excelText(row["日程链接"]).trim(), status: EVENT_STATUSES.includes(statusText) ? statusText : "待进行", note: excelText(row["备注"]).trim(), createdAt: dateFromExcel(row["创建时间"]) || now, updatedAt: dateFromExcel(row["更新时间"]) || now, isOwner: true };
+    return { id: safeId(row["日程ID"]), applicationId, eventType, timingType: excelText(row["时间类型"]).trim() === "截止时间" ? "deadline" : "scheduled", title: excelText(row["标题"]).trim() || EVENT_TYPE_LABELS[eventType], startsAt, endsAt, allDay: ["是", "true", "1"].includes(excelText(row["全天"]).trim().toLocaleLowerCase()), mode: excelText(row["形式"]).trim(), location: excelText(row["地点"]).trim(), eventUrl: excelText(row["日程链接"]).trim(), status: EVENT_STATUSES.includes(statusText) ? statusText : "待进行", note: excelText(row["备注"]).trim(), createdAt: dateFromExcel(row["创建时间"]) || now, updatedAt: dateFromExcel(row["更新时间"]) || now, isOwner: true };
   }).filter((item): item is RecruitmentEvent => Boolean(item));
   if (events.length > 2000) throw new Error("单次最多导入 2000 条日程记录");
 

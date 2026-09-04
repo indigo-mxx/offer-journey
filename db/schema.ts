@@ -88,11 +88,13 @@ export type InterviewExperience = {
 
 export type RecruitmentEventType = "written_test" | "assessment" | "deadline" | "hr_contact" | "other";
 export type RecruitmentEventStatus = "待进行" | "已完成" | "已取消";
+export type RecruitmentEventTimingType = "scheduled" | "deadline";
 
 export type RecruitmentEvent = {
   id: string;
   applicationId: string;
   eventType: RecruitmentEventType;
+  timingType?: RecruitmentEventTimingType;
   title: string;
   startsAt: string;
   endsAt: string;
