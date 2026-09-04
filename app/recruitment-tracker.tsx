@@ -92,7 +92,22 @@ type ListMode = "companyList" | "companyCards" | "position" | "kanban";
 type NoticeTone = "success" | "error" | "warning" | "info";
 
 const LIST_MODE_STORAGE_KEY = "qiuzhao-list-mode";
-const CLOUD_REQUEST_TIMEOUT_MS = 20_000;
+const CLOUD_REQUEST_TIMEOUT_MS = 35_000;
+const CLOUD_RETRY_DELAY_MS = 900;
+const RETRYABLE_CLOUD_ACTIONS = new Set([
+  "saveApplication",
+  "importApplications",
+  "importWorkspace",
+  "updateStatus",
+  "deleteApplication",
+  "saveInterview",
+  "updateInterview",
+  "deleteInterview",
+  "saveExperience",
+  "updateExperience",
+  "deleteExperience",
+]);
+const RETRYABLE_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const LIST_MODE_OPTIONS: Array<{
   value: ListMode;
   icon: string;
@@ -123,7 +138,9 @@ function httpFailureReason(status: number) {
     401: "登录状态已失效，请重新登录",
     403: "当前账号没有操作权限",
     404: "目标记录不存在或已被删除",
+    408: "云端请求超时",
     409: "数据状态发生冲突，请刷新后重试",
+    425: "云端暂时无法处理该请求",
     429: "操作过于频繁，请稍后重试",
     500: "服务器处理异常",
     502: "云端服务暂时不可用",
@@ -131,6 +148,14 @@ function httpFailureReason(status: number) {
     504: "云端响应超时",
   };
   return reasons[status] || `服务器返回 ${status}`;
+}
+
+function isTransientCloudFailure(message: string) {
+  return /fetch failed|network|timeout|timed out|connection|temporar(?:y|ily)|upstream|gateway|连接中断|网络|超时|暂时不可用/i.test(message);
+}
+
+function waitForCloudRetry() {
+  return new Promise<void>((resolve) => window.setTimeout(resolve, CLOUD_RETRY_DELAY_MS));
 }
 
 function ModalPortal({ children }: { children: ReactNode }) {
@@ -991,39 +1016,70 @@ export function RecruitmentTracker({
       const { data } = supabase ? await supabase.auth.getSession() : { data: { session: null } };
       token = data.session?.access_token ?? null;
     }
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), CLOUD_REQUEST_TIMEOUT_MS);
-    try {
-      const response = await fetch("/api/workspace", {
-        method: "POST",
-        headers: token
-          ? { "content-type": "application/json", Authorization: `Bearer ${token}` }
-          : { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-      const responseText = await response.text();
-      let result: { error?: string; message?: string } = {};
-      if (responseText) {
-        try {
-          result = JSON.parse(responseText) as { error?: string; message?: string };
-        } catch {
-          // HTML and proxy errors are summarized by status below instead of shown verbatim.
+    const action = typeof payload.action === "string" ? payload.action : "";
+    const maxAttempts = RETRYABLE_CLOUD_ACTIONS.has(action) ? 2 : 1;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        throw new Error("浏览器当前处于离线状态，数据没有提交到云端");
+      }
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), CLOUD_REQUEST_TIMEOUT_MS);
+      try {
+        const response = await fetch("/api/workspace", {
+          method: "POST",
+          headers: token
+            ? { "content-type": "application/json", Authorization: `Bearer ${token}` }
+            : { "content-type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+          cache: "no-store",
+        });
+        const responseText = await response.text();
+        let result: { ok?: boolean; error?: string; message?: string } | null = null;
+        if (responseText) {
+          try {
+            result = JSON.parse(responseText) as { ok?: boolean; error?: string; message?: string };
+          } catch {
+            // An HTML error page or damaged response is never treated as a successful save.
+          }
         }
+        if (!response.ok) {
+          const reason = result?.error || result?.message || httpFailureReason(response.status);
+          if (attempt < maxAttempts && (RETRYABLE_HTTP_STATUSES.has(response.status) || isTransientCloudFailure(reason))) {
+            await waitForCloudRetry();
+            continue;
+          }
+          const retried = attempt > 1 ? "（已自动重试 1 次）" : "";
+          throw new Error(`${reason}${retried}`);
+        }
+        if (result?.ok !== true) {
+          if (attempt < maxAttempts) {
+            await waitForCloudRetry();
+            continue;
+          }
+          throw new Error(result?.error || result?.message || "云端没有返回有效的保存确认，请刷新数据确认是否已生效");
+        }
+        return;
+      } catch (error) {
+        const timedOut = error instanceof Error && error.name === "AbortError";
+        const networkFailed = error instanceof TypeError;
+        if ((timedOut || networkFailed) && attempt < maxAttempts) {
+          await waitForCloudRetry();
+          continue;
+        }
+        if (timedOut) {
+          const retried = attempt > 1 ? "，已自动重试 1 次" : "";
+          throw new Error(`云端响应超过 ${CLOUD_REQUEST_TIMEOUT_MS / 1000} 秒${retried}；结果暂时无法确认，请刷新后检查`);
+        }
+        if (networkFailed) {
+          const retried = attempt > 1 ? "（已自动重试 1 次）" : "";
+          throw new Error(`网络连接仍不稳定${retried}，数据是否提交成功暂时无法确认，请刷新后检查`);
+        }
+        throw error;
+      } finally {
+        window.clearTimeout(timeout);
       }
-      if (!response.ok) {
-        throw new Error(result.error || result.message || httpFailureReason(response.status));
-      }
-    } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        throw new Error(`请求超过 ${CLOUD_REQUEST_TIMEOUT_MS / 1000} 秒，数据可能尚未同步，请刷新确认后再重试`);
-      }
-      if (error instanceof TypeError) {
-        throw new Error("网络连接不可用，数据没有提交到云端，请检查网络后重试");
-      }
-      throw error;
-    } finally {
-      window.clearTimeout(timeout);
     }
   }, [accessToken]);
 
