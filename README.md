@@ -22,7 +22,7 @@
 
 ## 数据库升级
 
-已有 Supabase 项目升级时，请在 Supabase Dashboard 的 SQL Editor 中按文件编号执行尚未执行的迁移。面试轮次与面经关联需要执行 `supabase/migrations/005_experience_interview_link.sql`；面经好友共享需要继续执行 `supabase/migrations/006_share_interview_experiences.sql`。脚本可重复执行，旧面经默认保持“仅自己”可见。新建项目先执行 `001_initial.sql`，再按编号执行其余迁移。
+已有 Supabase 项目升级时，请在 Supabase Dashboard 的 SQL Editor 中按文件编号执行尚未执行的迁移。面试轮次与面经关联需要执行 `supabase/migrations/005_experience_interview_link.sql`；面经好友共享需要继续执行 `supabase/migrations/006_share_interview_experiences.sql`；日程日历需要执行 `supabase/migrations/007_recruitment_calendar.sql`。脚本可重复执行，007 只新增面试地点/链接字段与日程表，不会删除现有记录。新建项目先执行 `001_initial.sql`，再按编号执行其余迁移。
 
 ## 正式部署
 

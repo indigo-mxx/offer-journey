@@ -1,5 +1,6 @@
 import {
   index,
+  integer,
   primaryKey,
   sqliteTable,
   text,
@@ -55,6 +56,8 @@ export type Interview = {
   endedAt: string;
   round: string;
   format: string;
+  location?: string;
+  eventUrl?: string;
   interviewer: string;
   result: string;
   summary: string;
@@ -81,6 +84,27 @@ export type InterviewExperience = {
   isOwner?: boolean;
   createdAt?: string;
   updatedAt: string;
+};
+
+export type RecruitmentEventType = "written_test" | "assessment" | "deadline" | "hr_contact" | "other";
+export type RecruitmentEventStatus = "待进行" | "已完成" | "已取消";
+
+export type RecruitmentEvent = {
+  id: string;
+  applicationId: string;
+  eventType: RecruitmentEventType;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  allDay: boolean;
+  mode: string;
+  location: string;
+  eventUrl: string;
+  status: RecruitmentEventStatus;
+  note: string;
+  createdAt?: string;
+  updatedAt: string;
+  isOwner?: boolean;
 };
 
 export type GroupInfo = {
@@ -177,5 +201,30 @@ export const applications = sqliteTable(
     index("applications_owner_email_idx").on(table.ownerEmail),
     index("applications_group_id_idx").on(table.groupId),
     index("applications_updated_at_idx").on(table.updatedAt),
+  ],
+);
+
+export const recruitmentEvents = sqliteTable(
+  "recruitment_events",
+  {
+    id: text("id").primaryKey(),
+    ownerEmail: text("owner_email").notNull(),
+    applicationId: text("application_id").notNull(),
+    eventType: text("event_type", { enum: ["written_test", "assessment", "deadline", "hr_contact", "other"] }).notNull(),
+    title: text("title").notNull(),
+    startsAt: text("starts_at").notNull(),
+    endsAt: text("ends_at").notNull().default(""),
+    allDay: integer("all_day", { mode: "boolean" }).notNull().default(false),
+    mode: text("mode").notNull().default(""),
+    location: text("location").notNull().default(""),
+    eventUrl: text("event_url").notNull().default(""),
+    status: text("status", { enum: ["待进行", "已完成", "已取消"] }).notNull().default("待进行"),
+    note: text("note").notNull().default(""),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("recruitment_events_owner_starts_idx").on(table.ownerEmail, table.startsAt),
+    index("recruitment_events_application_starts_idx").on(table.applicationId, table.startsAt),
   ],
 );

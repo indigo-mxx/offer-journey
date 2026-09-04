@@ -21,6 +21,14 @@ function visibility(value: unknown): Visibility {
   return value === "progress" || value === "full" ? value : "private";
 }
 
+function calendarSchemaMissing(error: { code?: string } | null | undefined) {
+  return error?.code === "42P01" || error?.code === "PGRST205";
+}
+
+function calendarSchemaMessage() {
+  return "招聘日历尚未初始化，请先在 Supabase SQL Editor 执行 007_recruitment_calendar.sql";
+}
+
 const FINAL_OUTCOME_PREFIX = "【最终结果】";
 const REJECTION_REASON_PREFIX = "【拒绝原因】";
 
@@ -116,11 +124,12 @@ export async function GET(request: Request) {
   if (!current) return json({ error: "请先登录" }, 401);
   const { supabase, user } = current;
 
-  const [[{ data: rows, error: applicationError }, { data: interviewRows, error: interviewError }, { data: experienceRows, error: experienceError }], groups] = await Promise.all([
+  const [[{ data: rows, error: applicationError }, { data: interviewRows, error: interviewError }, { data: experienceRows, error: experienceError }, { data: eventRows, error: eventError }], groups] = await Promise.all([
     Promise.all([
       supabase.from("applications").select("*").order("updated_at", { ascending: false }),
       supabase.from("interviews").select("*").order("scheduled_at", { ascending: true }),
       supabase.from("interview_experiences").select("*").order("updated_at", { ascending: false }),
+      supabase.from("recruitment_events").select("*").order("starts_at", { ascending: true }),
     ]),
     groupsForUser(supabase, user.id),
   ]);
@@ -129,7 +138,8 @@ export async function GET(request: Request) {
   }
 
   if (experienceError && experienceError.code !== "42P01") return json({ error: experienceError.code === "42703" ? "请先执行 006_share_interview_experiences.sql" : experienceError.message }, 400);
-  const ownerIds = [...new Set([...(rows ?? []).map((row) => row.owner_id), ...(experienceRows ?? []).map((row) => row.owner_id)])];
+  if (eventError && !calendarSchemaMissing(eventError)) return json({ error: eventError.message }, 400);
+  const ownerIds = [...new Set([...(rows ?? []).map((row) => row.owner_id), ...(experienceRows ?? []).map((row) => row.owner_id), ...(eventRows ?? []).map((row) => row.owner_id)])];
   const { data: profiles } = ownerIds.length
     ? await supabase.from("profiles").select("id, email, display_name").in("id", ownerIds)
     : { data: [] };
@@ -171,6 +181,8 @@ export async function GET(request: Request) {
     format: row.format,
     interviewer: row.interviewer,
     result: row.result,
+    location: row.location ?? "",
+    eventUrl: row.event_url ?? "",
     summary: row.summary,
     nextSteps: row.next_steps,
     updatedAt: row.updated_at,
@@ -196,7 +208,28 @@ export async function GET(request: Request) {
     updatedAt: row.updated_at,
   }));
 
-  return json({ user, applications, interviews, experiences, groups });
+  const events = (eventRows ?? []).map((row) => {
+    const isOwner = row.owner_id === user.id;
+    return {
+      id: row.id,
+      applicationId: row.application_id,
+      eventType: row.event_type,
+      title: row.title,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at ?? "",
+      allDay: Boolean(row.all_day),
+      mode: row.mode ?? "",
+      location: row.location ?? "",
+      eventUrl: isOwner ? row.event_url ?? "" : "",
+      status: row.status ?? "待进行",
+      note: isOwner ? row.note ?? "" : "",
+      isOwner,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  });
+
+  return json({ user, applications, interviews, experiences, events, groups, calendarReady: !calendarSchemaMissing(eventError) });
 }
 
 export async function POST(request: Request) {
@@ -248,6 +281,8 @@ export async function POST(request: Request) {
       });
       if (payload.some((item) => !item.company || !item.position)) return json({ error: "公司和岗位不能为空" }, 400);
       if (workspaceImport && textValue(body.mode, 20) === "replace") {
+        const { error: eventDeleteError } = await supabase.from("recruitment_events").delete().eq("owner_id", user.id);
+        if (eventDeleteError && !calendarSchemaMissing(eventDeleteError)) return json({ error: eventDeleteError.message }, 400);
         const { error: experienceDeleteError } = await supabase.from("interview_experiences").delete().eq("owner_id", user.id);
         if (experienceDeleteError && experienceDeleteError.code !== "42P01") return json({ error: experienceDeleteError.message }, 400);
         const { error: interviewDeleteError } = await supabase.from("interviews").delete().eq("owner_id", user.id);
@@ -276,6 +311,8 @@ export async function POST(request: Request) {
             ended_at: textValue(value.endedAt, 60) || null,
             round: textValue(value.round, 40) || "一面",
             format: textValue(value.format, 40) || "视频面试",
+            location: textValue(value.location, 240),
+            event_url: textValue(value.eventUrl, 1000),
             interviewer: textValue(value.interviewer, 120),
             result: textValue(value.result, 40) || "待定",
             summary: textValue(value.summary, 4000),
@@ -287,7 +324,38 @@ export async function POST(request: Request) {
         }
         if (interviewPayload.length) {
           const { error } = await supabase.from("interviews").upsert(interviewPayload, { onConflict: "id" });
-          if (error) return json({ error: error.message }, 400);
+          if (error) return json({ error: error.code === "42703" ? calendarSchemaMessage() : error.message }, 400);
+        }
+        const rawEvents = Array.isArray(body.events) ? body.events : [];
+        if (rawEvents.length > 2000) return json({ error: "单次最多导入 2000 条日程记录" }, 400);
+        const eventPayload = rawEvents.map((item) => {
+          const value = (item ?? {}) as Record<string, unknown>;
+          return {
+            ...(textValue(value.id, 80) ? { id: textValue(value.id, 80) } : {}),
+            owner_id: user.id,
+            application_id: textValue(value.applicationId, 80),
+            event_type: textValue(value.eventType, 40),
+            title: textValue(value.title, 180),
+            starts_at: textValue(value.startsAt, 60),
+            ends_at: textValue(value.endsAt, 60) || null,
+            all_day: value.allDay === true,
+            mode: textValue(value.mode, 80),
+            location: textValue(value.location, 240),
+            event_url: textValue(value.eventUrl, 1000),
+            status: textValue(value.status, 20) || "待进行",
+            note: textValue(value.note, 3000),
+          };
+        });
+        const eventTypes = new Set(["written_test", "assessment", "deadline", "hr_contact", "other"]);
+        const eventStatuses = new Set(["待进行", "已完成", "已取消"]);
+        if (eventPayload.some((item) =>
+          !allowedApplicationIds.has(item.application_id) || !eventTypes.has(item.event_type) || !eventStatuses.has(item.status) ||
+          !item.title || !item.starts_at || Number.isNaN(Date.parse(item.starts_at)) ||
+          (item.ends_at && (Number.isNaN(Date.parse(item.ends_at)) || Date.parse(item.ends_at) < Date.parse(item.starts_at))),
+        )) return json({ error: "日程记录格式不正确或没有匹配到本账号的岗位" }, 400);
+        if (eventPayload.length) {
+          const { error } = await supabase.from("recruitment_events").upsert(eventPayload, { onConflict: "id" });
+          if (error) return json({ error: calendarSchemaMissing(error) ? calendarSchemaMessage() : error.message }, 400);
         }
         if (!Array.isArray(body.experiences) || body.experiences.length > 1000) {
           return json({ error: "面经记录格式不正确或数量过多" }, 400);
@@ -385,6 +453,8 @@ export async function POST(request: Request) {
         ended_at: textValue(value.endedAt, 60) || null,
         round: textValue(value.round, 40) || "一面",
         format: textValue(value.format, 40) || "视频面试",
+        location: textValue(value.location, 240),
+        event_url: textValue(value.eventUrl, 1000),
         interviewer: textValue(value.interviewer, 120),
         result: textValue(value.result, 40) || "待进行",
         summary: textValue(value.summary, 4000),
@@ -392,10 +462,50 @@ export async function POST(request: Request) {
       };
       if (!interview.application_id || !interview.scheduled_at) return json({ error: "请选择岗位并填写面试时间" }, 400);
       const { error } = await supabase.from("interviews").upsert(interview, { onConflict: "id" });
-      if (error) return json({ error: error.message }, 400);
+      if (error) return json({ error: error.code === "42703" ? calendarSchemaMessage() : error.message }, 400);
     } else if (action === "deleteInterview") {
       const { error } = await supabase.from("interviews").delete().eq("id", textValue(body.id, 80)).eq("owner_id", user.id);
       if (error) return json({ error: error.message }, 400);
+    } else if (action === "saveEvent" || action === "updateEvent") {
+      const value = (body.event ?? {}) as Record<string, unknown>;
+      const applicationId = textValue(value.applicationId, 80);
+      const { data: ownedApplication, error: applicationLookupError } = await supabase
+        .from("applications")
+        .select("id")
+        .eq("id", applicationId)
+        .eq("owner_id", user.id)
+        .maybeSingle();
+      if (applicationLookupError) return json({ error: applicationLookupError.message }, 400);
+      if (!ownedApplication) return json({ error: "关联岗位不存在或无权修改" }, 404);
+      const eventType = textValue(value.eventType, 40);
+      const status = textValue(value.status, 20) || "待进行";
+      const startsAt = textValue(value.startsAt, 60);
+      const endsAt = textValue(value.endsAt, 60);
+      if (!["written_test", "assessment", "deadline", "hr_contact", "other"].includes(eventType)) return json({ error: "请选择有效的日程类型" }, 400);
+      if (!["待进行", "已完成", "已取消"].includes(status)) return json({ error: "请选择有效的日程状态" }, 400);
+      if (!startsAt || Number.isNaN(Date.parse(startsAt))) return json({ error: "请填写有效的开始时间" }, 400);
+      if (endsAt && (Number.isNaN(Date.parse(endsAt)) || Date.parse(endsAt) < Date.parse(startsAt))) return json({ error: "结束时间不能早于开始时间" }, 400);
+      const event = {
+        ...(textValue(value.id, 80) ? { id: textValue(value.id, 80) } : {}),
+        owner_id: user.id,
+        application_id: applicationId,
+        event_type: eventType,
+        title: textValue(value.title, 180),
+        starts_at: startsAt,
+        ends_at: endsAt || null,
+        all_day: value.allDay === true,
+        mode: textValue(value.mode, 80),
+        location: textValue(value.location, 240),
+        event_url: textValue(value.eventUrl, 1000),
+        status,
+        note: textValue(value.note, 3000),
+      };
+      if (!event.title) return json({ error: "请填写日程标题" }, 400);
+      const { error } = await supabase.from("recruitment_events").upsert(event, { onConflict: "id" });
+      if (error) return json({ error: calendarSchemaMissing(error) ? calendarSchemaMessage() : error.message }, 400);
+    } else if (action === "deleteEvent") {
+      const { error } = await supabase.from("recruitment_events").delete().eq("id", textValue(body.id, 80)).eq("owner_id", user.id);
+      if (error) return json({ error: calendarSchemaMissing(error) ? calendarSchemaMessage() : error.message }, 400);
     } else if (action === "saveExperience" || action === "updateExperience") {
       const value = (body.experience ?? {}) as Record<string, unknown>;
       const userGroups = await groupsForUser(supabase, user.id);

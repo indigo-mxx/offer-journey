@@ -7,7 +7,9 @@ import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { autocompleteScore, matchesFieldsSearch, matchesLiteralSearch, matchesTextSearch, matchingAutocompleteOptions } from "@/lib/search";
 import { createWorkspaceWorkbook, readWorkspaceWorkbook } from "@/lib/workbook-backup";
 import type { WorkspaceBackup } from "@/lib/workbook-backup";
-import type { Application, Interview, InterviewExperience, GroupInfo, ApplicationStatus, Visibility } from "@/db/schema";
+import type { Application, Interview, InterviewExperience, RecruitmentEvent, RecruitmentEventStatus, RecruitmentEventType, GroupInfo, ApplicationStatus, Visibility } from "@/db/schema";
+import { RecruitmentCalendar, UpcomingScheduleCard, calendarKindLabel } from "./recruitment-calendar";
+import type { CalendarItemKind, RecruitmentCalendarItem } from "./recruitment-calendar";
 import type { ChatGPTUser } from "./chatgpt-auth";
 
 // ──────────────────────────────────────────────── types
@@ -77,8 +79,26 @@ interface ImportPreview {
   applications: Application[];
   interviews: Interview[];
   experiences: InterviewExperience[];
+  events: RecruitmentEvent[];
   ignoredInterviews: number;
   ignoredExperiences: number;
+  ignoredEvents: number;
+}
+
+interface CalendarEventForm {
+  kind: CalendarItemKind;
+  applicationId: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  allDay: boolean;
+  round: string;
+  mode: string;
+  location: string;
+  eventUrl: string;
+  status: string;
+  note: string;
+  syncStatus: boolean;
 }
 
 interface RecoverySnapshot extends WorkspaceBackup {
@@ -89,9 +109,11 @@ interface RecoverySnapshot extends WorkspaceBackup {
 }
 
 type ListMode = "companyList" | "companyCards" | "position" | "kanban";
+type WorkspaceView = "calendar" | "mine" | "friends" | "sharing" | "dashboard" | "experiences";
 type NoticeTone = "success" | "error" | "warning" | "info";
 
 const LIST_MODE_STORAGE_KEY = "qiuzhao-list-mode";
+const WORKSPACE_VIEW_STORAGE_KEY = "qiuzhao-workspace-view";
 const CLOUD_REQUEST_TIMEOUT_MS = 35_000;
 const CLOUD_RETRY_DELAY_MS = 900;
 const RETRYABLE_CLOUD_ACTIONS = new Set([
@@ -106,6 +128,9 @@ const RETRYABLE_CLOUD_ACTIONS = new Set([
   "saveExperience",
   "updateExperience",
   "deleteExperience",
+  "saveEvent",
+  "updateEvent",
+  "deleteEvent",
 ]);
 const RETRYABLE_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const LIST_MODE_OPTIONS: Array<{
@@ -276,6 +301,27 @@ const EMPTY_EXPERIENCE: ExperienceForm = {
 const INTERVIEW_ROUNDS = ["技术一面", "技术二面", "技术三面", "交叉面", "主管面", "HR面", "群面", "VP面", "其他"];
 const INTERVIEW_FORMATS = ["视频面试", "电话面试", "线下", "笔试", "其他"];
 const INTERVIEW_RESULTS = ["待定", "通过", "未通过", "未参加"];
+const RECRUITMENT_EVENT_TYPES: RecruitmentEventType[] = ["written_test", "assessment", "deadline", "hr_contact", "other"];
+const RECRUITMENT_EVENT_STATUSES: RecruitmentEventStatus[] = ["待进行", "已完成", "已取消"];
+const CALENDAR_EVENT_MODES = ["线上", "线下", "电话", "邮件", "其他"];
+
+function emptyCalendarEventForm(date = new Date()): CalendarEventForm {
+  return {
+    kind: "written_test",
+    applicationId: "",
+    title: "",
+    startsAt: calendarStartValue(date),
+    endsAt: "",
+    allDay: false,
+    round: "技术一面",
+    mode: "线上",
+    location: "",
+    eventUrl: "",
+    status: "待进行",
+    note: "",
+    syncStatus: true,
+  };
+}
 
 // ──────────────────────────────────────────────── helpers
 function formatDate(value: string) {
@@ -313,6 +359,17 @@ function storedDateTimeValue(value: string) {
   if (!value) return "";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toISOString();
+}
+
+function calendarStartValue(value: Date) {
+  const date = new Date(value);
+  if (date.getHours() === 0 && date.getMinutes() === 0) date.setHours(9, 0, 0, 0);
+  else {
+    date.setSeconds(0, 0);
+    date.setMinutes(Math.ceil(date.getMinutes() / 30) * 30);
+  }
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return localDate.toISOString().slice(0, 16);
 }
 
 type InterviewStage = "一面" | "二面" | "三面" | "终面" | "HR面" | "其他";
@@ -432,6 +489,9 @@ function safeInterviews(value: unknown): value is Interview[] {
 function safeExperiences(value: unknown): value is InterviewExperience[] {
   return Array.isArray(value) && value.every((item) => item && typeof item === "object" && typeof item.id === "string" && typeof item.title === "string" && typeof item.content === "string");
 }
+function safeRecruitmentEvents(value: unknown): value is RecruitmentEvent[] {
+  return Array.isArray(value) && value.every((item) => item && typeof item === "object" && typeof item.id === "string" && typeof item.applicationId === "string" && typeof item.eventType === "string" && typeof item.startsAt === "string");
+}
 
 
 function normalizeLocal(items: Application[]) {
@@ -445,7 +505,21 @@ function normalizeLocal(items: Application[]) {
 }
 
 function normalizeInterviews(items: Interview[]) {
-  return items.map((item) => ({ ...item, endedAt: item.endedAt ?? "" }));
+  return items.map((item) => ({ ...item, endedAt: item.endedAt ?? "", location: item.location ?? "", eventUrl: item.eventUrl ?? "" }));
+}
+
+function normalizeRecruitmentEvents(items: RecruitmentEvent[]): RecruitmentEvent[] {
+  return items.map((item) => ({
+    ...item,
+    endsAt: item.endsAt ?? "",
+    allDay: Boolean(item.allDay),
+    mode: item.mode ?? "",
+    location: item.location ?? "",
+    eventUrl: item.eventUrl ?? "",
+    status: RECRUITMENT_EVENT_STATUSES.includes(item.status) ? item.status : "待进行",
+    note: item.note ?? "",
+    isOwner: item.isOwner ?? true,
+  }));
 }
 
 function normalizeExperiences(items: InterviewExperience[]): InterviewExperience[] {
@@ -494,16 +568,18 @@ async function loadRecoverySnapshots(ownerKey: string) {
 }
 
 async function saveRecoverySnapshot(ownerKey: string, data: WorkspaceBackup) {
-  if (!data.applications.length && !data.interviews.length && !data.experiences.length) return loadRecoverySnapshots(ownerKey);
+  const events = Array.isArray(data.events) ? data.events : [];
+  if (!data.applications.length && !data.interviews.length && !data.experiences.length && !events.length) return loadRecoverySnapshots(ownerKey);
   const fingerprint = [
     ...data.applications.map((item) => `a:${item.id}:${item.updatedAt}`),
     ...data.interviews.map((item) => `i:${item.id}:${item.updatedAt}`),
     ...data.experiences.map((item) => `e:${item.id}:${item.updatedAt}`),
+    ...events.map((item) => `c:${item.id}:${item.updatedAt}`),
   ].sort().join("|");
   const existingSnapshots = await loadRecoverySnapshots(ownerKey);
   if (existingSnapshots[0]?.fingerprint === fingerprint) return existingSnapshots;
   const savedAt = new Date().toISOString();
-  const snapshot: RecoverySnapshot = { id: `${ownerKey}:${savedAt}`, ownerKey, savedAt, fingerprint, ...data };
+  const snapshot: RecoverySnapshot = { id: `${ownerKey}:${savedAt}`, ownerKey, savedAt, fingerprint, ...data, events };
   const database = await openRecoveryDatabase();
   await new Promise<void>((resolve, reject) => {
     const transaction = database.transaction(RECOVERY_STORE_NAME, "readwrite");
@@ -911,7 +987,7 @@ export function RecruitmentTracker({
   const [ready, setReady] = useState(false);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [showProcessingHint, setShowProcessingHint] = useState(false);
-  const [view, setView] = useState<"mine" | "friends" | "sharing" | "dashboard" | "experiences">("mine");
+  const [view, setView] = useState<WorkspaceView>("calendar");
   const [dashboardRange, setDashboardRange] = useState<DashboardRange>("all");
   const [listMode, setListMode] = useState<ListMode>("companyList");
   const [sortKey, setSortKey] = useState<SortKey>("appliedAt");
@@ -967,12 +1043,17 @@ export function RecruitmentTracker({
     rejectionReason: string;
   } | null>(null);
   const [interviews, setInterviews] = useState<Interview[]>([]);
+  const [events, setEvents] = useState<RecruitmentEvent[]>([]);
+  const [calendarReady, setCalendarReady] = useState(!user);
   const [notice, setNotice] = useState("");
   const [experiences, setExperiences] = useState<InterviewExperience[]>([]);
   const [experienceQuery, setExperienceQuery] = useState("");
   const [experienceApplicationFilter, setExperienceApplicationFilter] = useState("");
   const [experienceScope, setExperienceScope] = useState<"all" | "mine" | "friends">("mine");
   const [isExperienceOpen, setIsExperienceOpen] = useState(false);
+  const [isCalendarEventOpen, setIsCalendarEventOpen] = useState(false);
+  const [editingCalendarItem, setEditingCalendarItem] = useState<RecruitmentCalendarItem | null>(null);
+  const [calendarEventForm, setCalendarEventForm] = useState<CalendarEventForm>(() => emptyCalendarEventForm());
   const [editingExperienceId, setEditingExperienceId] = useState<string | null>(null);
   const [experienceForm, setExperienceForm] = useState(EMPTY_EXPERIENCE);
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
@@ -1112,6 +1193,15 @@ export function RecruitmentTracker({
     }
   }, []);
 
+  const changeWorkspaceView = useCallback((nextView: WorkspaceView) => {
+    setView(nextView);
+    try {
+      localStorage.setItem(WORKSPACE_VIEW_STORAGE_KEY, nextView);
+    } catch {
+      // The calendar remains the first-visit default when storage is unavailable.
+    }
+  }, []);
+
   const loadCloud = useCallback(async () => {
     let token = accessToken;
     if (!token) {
@@ -1147,6 +1237,8 @@ export function RecruitmentTracker({
       interviews?: unknown;
       groups?: unknown;
       experiences?: unknown;
+      events?: unknown;
+      calendarReady?: unknown;
       error?: string;
       message?: string;
     } = {};
@@ -1162,6 +1254,8 @@ export function RecruitmentTracker({
     if (!safeInterviews(result.interviews)) throw new Error("面试数据解析失败");
     const experienceData = result.experiences ?? [];
     if (!safeExperiences(experienceData)) throw new Error("面经数据解析失败");
+    const eventData = result.events ?? [];
+    if (!safeRecruitmentEvents(eventData)) throw new Error("日程数据解析失败");
     const groupsData = (Array.isArray(result.groups) ? result.groups : []) as GroupInfo[];
     const normalizedApplications = result.applications.map((item) => ({
         ...item,
@@ -1172,16 +1266,19 @@ export function RecruitmentTracker({
       }));
     const normalizedInterviews = normalizeInterviews(result.interviews);
     const normalizedExperiences = normalizeExperiences(experienceData);
+    const normalizedEvents = normalizeRecruitmentEvents(eventData);
     if (workspaceCacheKey) {
       try {
-        const cached = JSON.parse(localStorage.getItem(workspaceCacheKey) ?? "null") as { applications?: unknown; interviews?: unknown; experiences?: unknown } | null;
+        const cached = JSON.parse(localStorage.getItem(workspaceCacheKey) ?? "null") as { applications?: unknown; interviews?: unknown; experiences?: unknown; events?: unknown } | null;
         const cachedExperiences = cached?.experiences ?? [];
-        if (cached && safeApplications(cached.applications) && safeInterviews(cached.interviews) && safeExperiences(cachedExperiences)) {
+        const cachedEvents = cached?.events ?? [];
+        if (cached && safeApplications(cached.applications) && safeInterviews(cached.interviews) && safeExperiences(cachedExperiences) && safeRecruitmentEvents(cachedEvents)) {
           const cachedOwnerIds = new Set(cached.applications.filter((item) => item.isOwner !== false).map((item) => item.id));
           void saveRecoverySnapshot(recoveryOwnerKey, {
             applications: cached.applications.filter((item) => item.isOwner !== false),
             interviews: cached.interviews.filter((item) => cachedOwnerIds.has(item.applicationId)),
             experiences: cachedExperiences.filter((item) => item.isOwner !== false && (!item.applicationId || cachedOwnerIds.has(item.applicationId))),
+            events: cachedEvents.filter((item) => item.isOwner !== false && cachedOwnerIds.has(item.applicationId)),
           }).then(setRecoverySnapshots).catch(() => {});
         }
       } catch {
@@ -1191,10 +1288,12 @@ export function RecruitmentTracker({
     setApplications(normalizedApplications);
     setInterviews(normalizedInterviews);
     setExperiences(normalizedExperiences);
+    setEvents(normalizedEvents);
+    setCalendarReady(result.calendarReady !== false);
     setGroups(groupsData);
     if (workspaceCacheKey) {
       try {
-        localStorage.setItem(workspaceCacheKey, JSON.stringify({ applications: normalizedApplications, interviews: normalizedInterviews, experiences: normalizedExperiences, groups: groupsData }));
+        localStorage.setItem(workspaceCacheKey, JSON.stringify({ applications: normalizedApplications, interviews: normalizedInterviews, experiences: normalizedExperiences, events: normalizedEvents, groups: groupsData }));
       } catch {
         // Storage is an optional fast-start cache.
       }
@@ -1215,7 +1314,7 @@ export function RecruitmentTracker({
       if (workspaceCacheKey) {
         const cached = localStorage.getItem(workspaceCacheKey);
         if (cached) {
-          const parsed = JSON.parse(cached) as { applications?: unknown; interviews?: unknown; experiences?: unknown; groups?: unknown };
+          const parsed = JSON.parse(cached) as { applications?: unknown; interviews?: unknown; experiences?: unknown; events?: unknown; groups?: unknown };
           if (safeApplications(parsed.applications)) {
             const cachedApplications = parsed.applications.map((item) => ({
               ...item,
@@ -1229,6 +1328,7 @@ export function RecruitmentTracker({
           }
           if (safeInterviews(parsed.interviews)) setInterviews(normalizeInterviews(parsed.interviews));
           if (safeExperiences(parsed.experiences)) setExperiences(normalizeExperiences(parsed.experiences));
+          if (safeRecruitmentEvents(parsed.events)) setEvents(normalizeRecruitmentEvents(parsed.events));
           if (Array.isArray(parsed.groups)) setGroups(parsed.groups as GroupInfo[]);
           return;
         }
@@ -1236,6 +1336,7 @@ export function RecruitmentTracker({
       const raw = localStorage.getItem("applications");
       const interviewsRaw = localStorage.getItem("interviews");
       const experiencesRaw = localStorage.getItem("interview-experiences");
+      const eventsRaw = localStorage.getItem("recruitment-events");
       if (raw) {
         const parsed = JSON.parse(raw) as unknown;
         if (safeApplications(parsed)) {
@@ -1250,6 +1351,10 @@ export function RecruitmentTracker({
       if (experiencesRaw) {
         const parsed = JSON.parse(experiencesRaw) as unknown;
         if (safeExperiences(parsed)) setExperiences(normalizeExperiences(parsed));
+      }
+      if (eventsRaw) {
+        const parsed = JSON.parse(eventsRaw) as unknown;
+        if (safeRecruitmentEvents(parsed)) setEvents(normalizeRecruitmentEvents(parsed));
       }
     } catch {
       // ignore
@@ -1290,7 +1395,27 @@ export function RecruitmentTracker({
     [],
   );
 
+  const saveEventsLocal = useCallback(
+    (items: RecruitmentEvent[]) => {
+      try {
+        localStorage.setItem("recruitment-events", JSON.stringify(items));
+      } catch {
+        setNotice("日程未保存到本地缓存，请立即导出 Excel 备份");
+      }
+    },
+    [],
+  );
+
   // ────────────────────────────────── lifecycle
+  useEffect(() => {
+    try {
+      const savedView = localStorage.getItem(WORKSPACE_VIEW_STORAGE_KEY);
+      if (["calendar", "mine", "friends", "sharing", "dashboard", "experiences"].includes(savedView ?? "")) setView(savedView as WorkspaceView);
+    } catch {
+      // Keep calendar as the first-visit default.
+    }
+  }, []);
+
   useEffect(() => {
     try {
       const savedMode = localStorage.getItem(LIST_MODE_STORAGE_KEY);
@@ -1332,6 +1457,11 @@ export function RecruitmentTracker({
     saveExperiencesLocal(experiences);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [experiences]);
+  useEffect(() => {
+    if (user) return;
+    saveEventsLocal(events);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [events]);
 
 
   useEffect(() => {
@@ -1376,6 +1506,51 @@ export function RecruitmentTracker({
     () => applications.filter((item) => item.isOwner === false),
     [applications],
   );
+
+  const calendarItems = useMemo<RecruitmentCalendarItem[]>(() => {
+    const applicationMap = new Map(ownApplications.map((item) => [item.id, item]));
+    const interviewItems = interviews.flatMap((item) => {
+      const application = applicationMap.get(item.applicationId);
+      if (!application) return [];
+      return [{
+        source: "interview" as const,
+        id: item.id,
+        applicationId: item.applicationId,
+        kind: "interview" as const,
+        title: item.round || "面试",
+        company: application.company,
+        position: application.position,
+        startsAt: item.scheduledAt,
+        endsAt: item.endedAt ?? "",
+        allDay: false,
+        mode: item.format ?? "",
+        location: item.location ?? "",
+        eventUrl: item.eventUrl ?? "",
+        status: item.result || "待定",
+      }];
+    });
+    const otherItems = events.flatMap((item) => {
+      const application = applicationMap.get(item.applicationId);
+      if (!application || item.isOwner === false) return [];
+      return [{
+        source: "event" as const,
+        id: item.id,
+        applicationId: item.applicationId,
+        kind: item.eventType,
+        title: item.title || calendarKindLabel(item.eventType),
+        company: application.company,
+        position: application.position,
+        startsAt: item.startsAt,
+        endsAt: item.endsAt ?? "",
+        allDay: item.allDay,
+        mode: item.mode,
+        location: item.location,
+        eventUrl: item.eventUrl,
+        status: item.status,
+      }];
+    });
+    return [...interviewItems, ...otherItems].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  }, [events, interviews, ownApplications]);
 
   const filteredExperiences = useMemo(() => {
     const keyword = experienceQuery.trim();
@@ -1582,13 +1757,14 @@ export function RecruitmentTracker({
     const interviewFollowUpApplicationIds = new Set<string>();
     const reminders: Array<{
       id: string;
-      kind: "upcoming" | "experience" | "result" | "stale";
+      kind: "upcoming" | "experience" | "result" | "event" | "stale";
       label: string;
       title: string;
       detail: string;
       priority: number;
       application: Application;
       interview?: Interview;
+      calendarItem?: RecruitmentCalendarItem;
     }> = [];
 
     for (const interview of interviews) {
@@ -1606,12 +1782,13 @@ export function RecruitmentTracker({
         reminders.push({
           id: `upcoming-${interview.id}`,
           kind: "upcoming",
-          label: "即将面试",
+          label: "待面试",
           title: `${application.company} · ${interview.round || "面试"}`,
           detail: `${formatDateTime(interview.scheduledAt)} · ${application.position}`,
           priority: scheduledAt,
           application,
           interview,
+          calendarItem: calendarItems.find((item) => item.source === "interview" && item.id === interview.id),
         });
       } else if (daysSinceFollowUp >= 0 && daysSinceFollowUp <= 30) {
         const hasLinkedExperience = experiences.some((experience) =>
@@ -1650,6 +1827,46 @@ export function RecruitmentTracker({
     }
 
     for (const application of ownApplications) {
+      if (!INTERVIEW_STATUSES.includes(application.status)) continue;
+      const currentStage = interviewStage(application.status);
+      const hasCurrentInterview = interviews.some((interview) =>
+        interview.applicationId === application.id && interviewStage(interview.round) === currentStage,
+      );
+      if (hasCurrentInterview) continue;
+      interviewFollowUpApplicationIds.add(application.id);
+      reminders.push({
+        id: `missing-interview-${application.id}-${currentStage}`,
+        kind: "upcoming",
+        label: "待补面试安排",
+        title: `${application.company} · ${application.status}`,
+        detail: `${application.position} · 补充本轮面试日期和形式`,
+        priority: now + 250_000_000,
+        application,
+      });
+    }
+
+    for (const calendarItem of calendarItems.filter((item) => item.source === "event" && item.status !== "已取消" && item.status !== "已完成")) {
+      const application = appById.get(calendarItem.applicationId);
+      if (!application) continue;
+      const startsAt = new Date(calendarItem.startsAt).getTime();
+      if (!Number.isFinite(startsAt)) continue;
+      const daysAway = (startsAt - now) / 86_400_000;
+      if (daysAway >= -30 && daysAway <= 14) {
+        upcomingApplicationIds.add(application.id);
+        reminders.push({
+          id: `calendar-${calendarItem.id}`,
+          kind: "event",
+          label: daysAway < 0 ? "日程已过期" : `即将${calendarKindLabel(calendarItem.kind)}`,
+          title: `${application.company} · ${calendarItem.title}`,
+          detail: `${formatDateTime(calendarItem.startsAt)} · ${application.position}`,
+          priority: daysAway < 0 ? now - startsAt : startsAt,
+          application,
+          calendarItem,
+        });
+      }
+    }
+
+    for (const application of ownApplications) {
       if ([...CLOSED_STATUSES, "Offer"].includes(application.status) || upcomingApplicationIds.has(application.id) || interviewFollowUpApplicationIds.has(application.id)) continue;
       const lastTouched = new Date(application.updatedAt || `${application.appliedAt}T00:00:00`).getTime();
       const staleDays = Math.floor((now - lastTouched) / 86_400_000);
@@ -1667,7 +1884,7 @@ export function RecruitmentTracker({
     }
 
     return reminders.sort((a, b) => a.priority - b.priority).slice(0, 6);
-  }, [ownApplications, interviews, experiences]);
+  }, [calendarItems, ownApplications, interviews, experiences]);
 
   const toggleSort = useCallback((key: SortKey) => {
     if (sortKey === key) {
@@ -1738,6 +1955,7 @@ export function RecruitmentTracker({
       }
       setApplications((prev) => prev.filter((entry) => entry.id !== item.id));
       setInterviews((prev) => prev.filter((entry) => entry.applicationId !== item.id));
+      setEvents((prev) => prev.filter((entry) => entry.applicationId !== item.id));
       setNotice("投递记录已删除");
     },
     [user, runCloudMutation],
@@ -1870,6 +2088,41 @@ export function RecruitmentTracker({
     );
   };
 
+  const renderScheduleStrip = (item: Application, compact = false) => {
+    const now = Date.now();
+    const related = calendarItems.filter((entry) => entry.applicationId === item.id && entry.status !== "已取消");
+    const upcoming = related.filter((entry) => new Date(entry.startsAt).getTime() >= now);
+    const visible = (upcoming.length ? upcoming : related.slice().sort((a, b) => b.startsAt.localeCompare(a.startsAt))).slice(0, compact ? 2 : 3);
+    if (!visible.length && view !== "mine") return null;
+    return (
+      <div className={`schedule-chip-strip ${compact ? "compact" : ""}`} aria-label={`${item.company} ${item.position} 的日程`}>
+        {visible.map((entry) => (
+          <button type="button" className={`schedule-chip event-${entry.kind}`} key={`${entry.source}-${entry.id}`} onClick={() => openCalendarEdit(entry)}>
+            <strong>{calendarKindLabel(entry.kind)} · {formatDateTime(entry.startsAt)}</strong>
+            <span>{entry.title}</span>
+          </button>
+        ))}
+        {view === "mine" && (
+          <button type="button" className="schedule-chip add" onClick={() => openCalendarCreate(new Date(), item.id, INTERVIEW_STATUSES.includes(item.status) ? "interview" : "written_test")}>
+            <strong>＋ 添加日程</strong><span>笔试 / 测评 / 面试</span>
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  const renderCompanySchedule = (companyApplications: Application[]) => {
+    const ids = new Set(companyApplications.map((item) => item.id));
+    const now = Date.now();
+    const next = calendarItems.find((entry) => ids.has(entry.applicationId) && entry.status !== "已取消" && new Date(entry.startsAt).getTime() >= now);
+    if (!next) return null;
+    return (
+      <button type="button" className={`company-next-schedule event-${next.kind}`} onClick={() => openCalendarEdit(next)}>
+        <strong>下一项 · {calendarKindLabel(next.kind)}</strong><span>{formatDateTime(next.startsAt)} · {next.position}</span>
+      </button>
+    );
+  };
+
   const toggleApplicationSelection = useCallback((id: string) => {
     setSelectedApplicationIds((current) => current.includes(id)
       ? current.filter((itemId) => itemId !== id)
@@ -1954,13 +2207,14 @@ export function RecruitmentTracker({
       applications: ownApplications,
       interviews: interviews.filter((item) => ownIds.has(item.applicationId)),
       experiences: experiences.filter((item) => item.isOwner !== false && (!item.applicationId || ownIds.has(item.applicationId))),
+      events: events.filter((item) => item.isOwner !== false && ownIds.has(item.applicationId)),
     };
-    if (!snapshot.applications.length && !snapshot.interviews.length && !snapshot.experiences.length) return;
+    if (!snapshot.applications.length && !snapshot.interviews.length && !snapshot.experiences.length && !snapshot.events.length) return;
     const timer = window.setTimeout(() => {
       saveRecoverySnapshot(recoveryOwnerKey, snapshot).then(setRecoverySnapshots).catch(() => {});
     }, 1200);
     return () => window.clearTimeout(timer);
-  }, [experiences, interviews, ownApplications, ready, recoveryOwnerKey]);
+  }, [events, experiences, interviews, ownApplications, ready, recoveryOwnerKey]);
 
   const updateInterview = useCallback(
     async (id: string, changes: Partial<Interview>) => {
@@ -2048,6 +2302,193 @@ export function RecruitmentTracker({
     },
     [user, runCloudMutation],
   );
+
+  const openCalendarCreate = useCallback((date = new Date(), applicationId = "", kind: CalendarItemKind = "written_test") => {
+    const form = emptyCalendarEventForm(date);
+    setCalendarEventForm({
+      ...form,
+      applicationId,
+      kind,
+      round: kind === "interview" ? "技术一面" : form.round,
+      mode: kind === "interview" ? "视频面试" : form.mode,
+      status: kind === "interview" ? "待定" : "待进行",
+      syncStatus: kind === "interview" || kind === "written_test",
+    });
+    setEditingCalendarItem(null);
+    setIsCalendarEventOpen(true);
+  }, []);
+
+  const openCalendarEdit = useCallback((calendarItem: RecruitmentCalendarItem) => {
+    if (calendarItem.source === "interview") {
+      const item = interviews.find((entry) => entry.id === calendarItem.id);
+      if (!item) {
+        setNotice("打开日程失败：面试记录不存在，请刷新后重试");
+        return;
+      }
+      setCalendarEventForm({
+        kind: "interview",
+        applicationId: item.applicationId,
+        title: item.round || "面试",
+        startsAt: dateTimeLocalValue(item.scheduledAt),
+        endsAt: dateTimeLocalValue(item.endedAt ?? ""),
+        allDay: false,
+        round: item.round || "技术一面",
+        mode: item.format || "视频面试",
+        location: item.location ?? "",
+        eventUrl: item.eventUrl ?? "",
+        status: item.result || "待定",
+        note: item.summary || "",
+        syncStatus: false,
+      });
+    } else {
+      const item = events.find((entry) => entry.id === calendarItem.id);
+      if (!item) {
+        setNotice("打开日程失败：日程记录不存在，请刷新后重试");
+        return;
+      }
+      setCalendarEventForm({
+        kind: item.eventType,
+        applicationId: item.applicationId,
+        title: item.title,
+        startsAt: dateTimeLocalValue(item.startsAt),
+        endsAt: dateTimeLocalValue(item.endsAt),
+        allDay: item.allDay,
+        round: "技术一面",
+        mode: item.mode,
+        location: item.location,
+        eventUrl: item.eventUrl,
+        status: item.status,
+        note: item.note,
+        syncStatus: false,
+      });
+    }
+    setEditingCalendarItem(calendarItem);
+    setIsCalendarEventOpen(true);
+  }, [events, interviews]);
+
+  const closeCalendarEvent = useCallback(() => {
+    setIsCalendarEventOpen(false);
+    setEditingCalendarItem(null);
+  }, []);
+
+  const submitCalendarEvent = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const application = ownApplications.find((item) => item.id === calendarEventForm.applicationId);
+    if (!application) {
+      setNotice("请选择需要关联的公司和岗位");
+      return;
+    }
+    const startInput = calendarEventForm.allDay ? `${calendarEventForm.startsAt.slice(0, 10)}T00:00:00` : calendarEventForm.startsAt;
+    const endInput = calendarEventForm.allDay && calendarEventForm.endsAt ? `${calendarEventForm.endsAt.slice(0, 10)}T23:59:59` : calendarEventForm.endsAt;
+    const startsAt = storedDateTimeValue(startInput);
+    const endsAt = storedDateTimeValue(endInput);
+    if (!startsAt) {
+      setNotice("请填写日程开始时间");
+      return;
+    }
+    if (endsAt && new Date(endsAt).getTime() < new Date(startsAt).getTime()) {
+      setNotice("结束时间不能早于开始时间");
+      return;
+    }
+    const duplicate = calendarItems.some((item) =>
+      item.applicationId === application.id && item.kind === calendarEventForm.kind && item.startsAt === startsAt &&
+      !(editingCalendarItem && item.source === editingCalendarItem.source && item.id === editingCalendarItem.id),
+    );
+    if (duplicate) {
+      setNotice("同一岗位在这个时间已经有同类型日程，请先编辑现有记录");
+      return;
+    }
+    const now = new Date().toISOString();
+    let scheduleSaved = false;
+    if (calendarEventForm.kind === "interview") {
+      const current = editingCalendarItem?.source === "interview" ? interviews.find((item) => item.id === editingCalendarItem.id) : null;
+      const item: Interview = {
+        id: current?.id ?? crypto.randomUUID(),
+        applicationId: application.id,
+        scheduledAt: startsAt,
+        endedAt: endsAt,
+        round: calendarEventForm.round || "技术一面",
+        format: calendarEventForm.mode || "视频面试",
+        location: calendarEventForm.location.trim(),
+        eventUrl: calendarEventForm.eventUrl.trim(),
+        result: calendarEventForm.status || "待定",
+        interviewer: current?.interviewer ?? "",
+        summary: calendarEventForm.note.trim(),
+        nextSteps: current?.nextSteps ?? "",
+        createdAt: current?.createdAt ?? now,
+        updatedAt: now,
+      };
+      if (user) {
+        scheduleSaved = await runCloudMutation(current ? "保存面试日程修改中" : "保存面试日程中", { action: current ? "updateInterview" : "saveInterview", interview: item });
+        if (!scheduleSaved) return;
+      } else scheduleSaved = true;
+      setInterviews((items) => current ? items.map((entry) => entry.id === item.id ? item : entry) : [...items, item]);
+    } else {
+      if (!RECRUITMENT_EVENT_TYPES.includes(calendarEventForm.kind)) {
+        setNotice("请选择有效的日程类型");
+        return;
+      }
+      const current = editingCalendarItem?.source === "event" ? events.find((item) => item.id === editingCalendarItem.id) : null;
+      const item: RecruitmentEvent = {
+        id: current?.id ?? crypto.randomUUID(),
+        applicationId: application.id,
+        eventType: calendarEventForm.kind,
+        title: calendarEventForm.title.trim() || `${application.company} · ${calendarKindLabel(calendarEventForm.kind)}`,
+        startsAt,
+        endsAt,
+        allDay: calendarEventForm.allDay,
+        mode: calendarEventForm.mode.trim(),
+        location: calendarEventForm.location.trim(),
+        eventUrl: calendarEventForm.eventUrl.trim(),
+        status: RECRUITMENT_EVENT_STATUSES.includes(calendarEventForm.status as RecruitmentEventStatus) ? calendarEventForm.status as RecruitmentEventStatus : "待进行",
+        note: calendarEventForm.note.trim(),
+        createdAt: current?.createdAt ?? now,
+        updatedAt: now,
+        isOwner: true,
+      };
+      if (user) {
+        scheduleSaved = await runCloudMutation(current ? "保存日程修改中" : "保存日程中", { action: current ? "updateEvent" : "saveEvent", event: item });
+        if (!scheduleSaved) return;
+      } else scheduleSaved = true;
+      setEvents((items) => current ? items.map((entry) => entry.id === item.id ? item : entry) : [...items, item]);
+    }
+
+    let targetStatus: ApplicationStatus | "" = "";
+    if (calendarEventForm.kind === "written_test") targetStatus = "笔试";
+    if (calendarEventForm.kind === "interview") {
+      const stage = interviewStage(calendarEventForm.round);
+      if (stage !== "其他") targetStatus = stage;
+    }
+    let progressSynced = true;
+    if (scheduleSaved && calendarEventForm.syncStatus && targetStatus && ![...CLOSED_STATUSES, "Offer"].includes(application.status)) {
+      const currentIndex = STATUSES.indexOf(application.status);
+      const targetIndex = STATUSES.indexOf(targetStatus);
+      if (targetIndex > currentIndex) progressSynced = await updateApplication(application.id, { status: targetStatus, finalOutcome: "", rejectionReason: "" });
+    }
+    closeCalendarEvent();
+    setNotice(progressSynced ? `${calendarKindLabel(calendarEventForm.kind)}日程已保存` : `${calendarKindLabel(calendarEventForm.kind)}日程已保存，但岗位进度同步失败，请稍后重试`);
+  }, [calendarEventForm, calendarItems, closeCalendarEvent, editingCalendarItem, events, interviews, ownApplications, runCloudMutation, updateApplication, user]);
+
+  const removeCalendarEvent = useCallback(async () => {
+    if (!editingCalendarItem || !confirm(`确定删除这条${calendarKindLabel(editingCalendarItem.kind)}日程吗？`)) return;
+    if (editingCalendarItem.source === "interview") {
+      const item = interviews.find((entry) => entry.id === editingCalendarItem.id);
+      if (!item) return;
+      const removed = await removeInterview(item, { silent: true });
+      if (!removed) return;
+      setExperiences((items) => items.map((entry) => entry.interviewId === item.id ? { ...entry, interviewId: "" } : entry));
+    } else {
+      const item = events.find((entry) => entry.id === editingCalendarItem.id);
+      if (!item) return;
+      if (user) {
+        const removed = await runCloudMutation("删除日程中", { action: "deleteEvent", id: item.id });
+        if (!removed) return;
+      }
+      setEvents((items) => items.filter((entry) => entry.id !== item.id));
+    }
+    closeCalendarEvent();
+    setNotice("日程已删除");
+  }, [closeCalendarEvent, editingCalendarItem, events, interviews, removeInterview, runCloudMutation, user]);
 
   const addExperience = useCallback(async (item: InterviewExperience) => {
     if (user) {
@@ -2216,6 +2657,7 @@ export function RecruitmentTracker({
         applications: ownApplications,
         interviews: interviews.filter((item) => ownIds.has(item.applicationId)),
         experiences: experiences.filter((item) => item.isOwner !== false && (!item.applicationId || ownIds.has(item.applicationId))),
+        events: events.filter((item) => item.isOwner !== false && ownIds.has(item.applicationId)),
       };
       const blob = await createWorkspaceWorkbook(backup);
       const url = URL.createObjectURL(blob);
@@ -2231,7 +2673,7 @@ export function RecruitmentTracker({
     } finally {
       setPendingAction(null);
     }
-  }, [experiences, interviews, ownApplications, recoveryOwnerKey]);
+  }, [events, experiences, interviews, ownApplications, recoveryOwnerKey]);
 
   const importData = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -2248,7 +2690,7 @@ export function RecruitmentTracker({
           setNotice("备份文件不能超过 20MB");
           return;
         }
-        let data: { applications?: unknown; interviews?: unknown; experiences?: unknown };
+        let data: { applications?: unknown; interviews?: unknown; experiences?: unknown; events?: unknown };
         if (extension === "xlsx") {
           data = await readWorkspaceWorkbook(file);
         } else {
@@ -2257,7 +2699,7 @@ export function RecruitmentTracker({
           data = Array.isArray(parsed)
             ? { applications: parsed }
             : parsed && typeof parsed === "object"
-              ? parsed as { applications?: unknown; interviews?: unknown; experiences?: unknown }
+              ? parsed as { applications?: unknown; interviews?: unknown; experiences?: unknown; events?: unknown }
               : {};
         }
         if (!safeApplications(data.applications) || data.applications.length > 500) {
@@ -2279,13 +2721,20 @@ export function RecruitmentTracker({
             }))
           : [];
         const ignoredExperiences = Array.isArray(data.experiences) ? data.experiences.length - normalizedExperiences.length : 0;
+        const eventData = data.events ?? [];
+        const normalizedEvents = safeRecruitmentEvents(eventData)
+          ? normalizeRecruitmentEvents(eventData).filter((item) => applicationIds.has(item.applicationId))
+          : [];
+        const ignoredEvents = Array.isArray(data.events) ? data.events.length - normalizedEvents.length : 0;
         setImportPreview({
           fileName: file.name,
           applications: normalizedApplications,
           interviews: normalizedInterviews,
           experiences: normalizedExperiences,
+          events: normalizedEvents,
           ignoredInterviews,
           ignoredExperiences,
+          ignoredEvents,
         });
         setImportMode("merge");
       } catch (error) {
@@ -2304,8 +2753,10 @@ export function RecruitmentTracker({
       applications: normalizeLocal(snapshot.applications),
       interviews: normalizeInterviews(snapshot.interviews),
       experiences: normalizeExperiences(snapshot.experiences),
+      events: normalizeRecruitmentEvents(snapshot.events ?? []),
       ignoredInterviews: 0,
       ignoredExperiences: 0,
+      ignoredEvents: 0,
     });
     setImportMode("merge");
   }, []);
@@ -2368,9 +2819,26 @@ export function RecruitmentTracker({
       }))
       .filter((item) => importMode === "replace" || !existingExperienceKeys.has(experienceKey(item)));
 
-    if (importMode === "merge" && !accepted.length && !acceptedInterviews.length && !acceptedExperiences.length) {
+    const existingEventKeys = new Set(
+      events
+        .filter((item) => item.isOwner !== false)
+        .map((item) => `${item.applicationId}|${item.eventType}|${item.startsAt}`),
+    );
+    const acceptedEvents = importPreview.events
+      .map((source) => ({
+        ...source,
+        id: importMode === "merge" ? crypto.randomUUID() : source.id,
+        applicationId: idMap.get(source.applicationId) ?? "",
+        createdAt: source.createdAt || now,
+        updatedAt: now,
+        isOwner: true,
+      }))
+      .filter((item) => Boolean(item.applicationId))
+      .filter((item) => importMode === "replace" || !existingEventKeys.has(`${item.applicationId}|${item.eventType}|${item.startsAt}`));
+
+    if (importMode === "merge" && !accepted.length && !acceptedInterviews.length && !acceptedExperiences.length && !acceptedEvents.length) {
       setImportPreview(null);
-      setNotice("没有可导入的新记录，重复的岗位、面试与面经已自动跳过");
+      setNotice("没有可导入的新记录，重复的岗位、面试、日程与面经已自动跳过");
       return;
     }
     if (user) {
@@ -2380,6 +2848,7 @@ export function RecruitmentTracker({
         applications: accepted,
         interviews: acceptedInterviews,
         experiences: acceptedExperiences,
+        events: acceptedEvents,
       });
       if (!saved) return;
     }
@@ -2387,20 +2856,24 @@ export function RecruitmentTracker({
       setApplications((current) => [...current.filter((item) => item.isOwner === false), ...accepted]);
       setInterviews(acceptedInterviews);
       setExperiences((current) => [...acceptedExperiences, ...current.filter((item) => item.isOwner === false)]);
+      setEvents((current) => [...acceptedEvents, ...current.filter((item) => item.isOwner === false)]);
       saveLocal(accepted);
       saveInterviewsLocal(acceptedInterviews);
       saveExperiencesLocal(acceptedExperiences);
+      saveEventsLocal(acceptedEvents);
     } else {
       setApplications((current) => [...current, ...accepted]);
       setInterviews((current) => [...current, ...acceptedInterviews]);
       setExperiences((current) => [...acceptedExperiences, ...current]);
+      setEvents((current) => [...current, ...acceptedEvents]);
       saveLocal([...ownApplications, ...accepted]);
       saveInterviewsLocal([...interviews, ...acceptedInterviews]);
       saveExperiencesLocal([...acceptedExperiences, ...experiences]);
+      saveEventsLocal([...events, ...acceptedEvents]);
     }
     setImportPreview(null);
-    setNotice(`导入完成：${accepted.length} 个岗位、${acceptedInterviews.length} 条面试、${acceptedExperiences.length} 篇面经`);
-  }, [defaultGroupId, experiences, groups, importMode, importPreview, interviews, ownApplications, runCloudMutation, saveExperiencesLocal, saveInterviewsLocal, saveLocal, user]);
+    setNotice(`导入完成：${accepted.length} 个岗位、${acceptedInterviews.length} 条面试、${acceptedEvents.length} 条日程、${acceptedExperiences.length} 篇面经`);
+  }, [defaultGroupId, events, experiences, groups, importMode, importPreview, interviews, ownApplications, runCloudMutation, saveEventsLocal, saveExperiencesLocal, saveInterviewsLocal, saveLocal, user]);
 
   const clearFilters = useCallback(() => {
     setQuery("");
@@ -2769,8 +3242,17 @@ export function RecruitmentTracker({
     () => interviews.filter((item) => companyApplicationIds.has(item.applicationId)),
     [interviews, companyApplicationIds],
   );
+  const companyRecruitmentEvents = useMemo(
+    () => events.filter((item) => companyApplicationIds.has(item.applicationId)),
+    [events, companyApplicationIds],
+  );
+  const companyCalendarItems = useMemo(
+    () => calendarItems.filter((item) => companyApplicationIds.has(item.applicationId)),
+    [calendarItems, companyApplicationIds],
+  );
   const companyTimeline = useMemo(() => {
     const applicationMap = new Map(companyApplications.map((item) => [item.id, item]));
+    const editableCalendarMap = new Map(companyCalendarItems.map((item) => [`${item.source}-${item.id}`, item]));
     const deliveryEvents = companyApplications.map((item) => ({
       id: `application-${item.id}`,
       date: item.appliedAt ? `${item.appliedAt}T00:00:00` : item.createdAt ?? item.updatedAt,
@@ -2779,6 +3261,7 @@ export function RecruitmentTracker({
       detail: `${item.batch} · ${item.base || "地点待定"} · ${item.status}`,
       tone: "delivery",
       interview: undefined as Interview | undefined,
+      calendarItem: undefined as RecruitmentCalendarItem | undefined,
     }));
     const interviewEvents = companyInterviews.map((item) => {
       const application = applicationMap.get(item.applicationId);
@@ -2790,12 +3273,26 @@ export function RecruitmentTracker({
         detail: [item.format, item.result].filter(Boolean).join(" · ") || "等待补充面试信息",
         tone: "interview",
         interview: item,
+        calendarItem: editableCalendarMap.get(`interview-${item.id}`),
       };
     });
-    return [...deliveryEvents, ...interviewEvents]
+    const recruitmentEventItems = companyRecruitmentEvents.map((item) => {
+      const application = applicationMap.get(item.applicationId);
+      return {
+        id: `event-${item.id}`,
+        date: item.startsAt,
+        type: calendarKindLabel(item.eventType),
+        title: application?.position ?? "关联岗位",
+        detail: [item.title, item.mode, item.location, item.status].filter(Boolean).join(" · "),
+        tone: item.eventType,
+        interview: undefined as Interview | undefined,
+        calendarItem: editableCalendarMap.get(`event-${item.id}`),
+      };
+    });
+    return [...deliveryEvents, ...interviewEvents, ...recruitmentEventItems]
       .filter((item) => item.date)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [companyApplications, companyInterviews]);
+  }, [companyApplications, companyCalendarItems, companyInterviews, companyRecruitmentEvents]);
 
   // ────────────────────────────────── render
   return (
@@ -2905,38 +3402,56 @@ export function RecruitmentTracker({
 
       <section className={`workspace workspace-${view}`}>
         <nav className="view-tabs" aria-label="工作台视图">
-          <button className={view === "mine" ? "active" : ""} onClick={() => setView("mine")}>
+          <button className={view === "calendar" ? "active" : ""} onClick={() => changeWorkspaceView("calendar")}>
+            <i className="view-tab-icon" aria-hidden="true">▦</i> 日程日历 <span>{calendarItems.length}</span>
+          </button>
+          <button className={view === "mine" ? "active" : ""} onClick={() => changeWorkspaceView("mine")}>
             <i className="view-tab-icon" aria-hidden="true">⌂</i> 我的投递 <span>{ownApplications.length}</span>
           </button>
           <button
             className={view === "dashboard" ? "active" : ""}
-            onClick={() => { setView("dashboard"); setSelectedApplicationIds([]); }}
+            onClick={() => { changeWorkspaceView("dashboard"); setSelectedApplicationIds([]); }}
           >
             <i className="view-tab-icon" aria-hidden="true">{"\u25eb"}</i> {"\u6570\u636e\u770b\u677f"}
           </button>
           <button
             className={view === "experiences" ? "active" : ""}
-            onClick={() => { setView("experiences"); setSelectedApplicationIds([]); }}
+            onClick={() => { changeWorkspaceView("experiences"); setSelectedApplicationIds([]); }}
           >
             <i className="view-tab-icon" aria-hidden="true">{"\u2726"}</i> {"\u9762\u7ecf\u5e93"} <span>{experiences.length}</span>
           </button>
           <button
             className={view === "friends" ? "active" : ""}
-            onClick={() => { setView("friends"); setSelectedApplicationIds([]); }}
+            onClick={() => { changeWorkspaceView("friends"); setSelectedApplicationIds([]); }}
             disabled={!user}
           >
             <i className="view-tab-icon" aria-hidden="true">◎</i> 好友进度 <span>{friendApplications.length}</span>
           </button>
           <button
             className={view === "sharing" ? "active" : ""}
-            onClick={() => { setView("sharing"); setSelectedApplicationIds([]); }}
+            onClick={() => { changeWorkspaceView("sharing"); setSelectedApplicationIds([]); }}
             disabled={!user}
           >
             <i className="view-tab-icon" aria-hidden="true">↗</i> 共享管理
           </button>
         </nav>
 
-        {view === "experiences" ? (
+        {view === "calendar" ? (
+          <>
+            {user && !calendarReady && (
+              <div className="migration-banner calendar-migration" role="status">
+                <div><strong>日历数据库等待初始化</strong><p>现有岗位仍可查看；新增日程前请在 Supabase 执行 007_recruitment_calendar.sql。</p></div>
+              </div>
+            )}
+            <RecruitmentCalendar
+              items={calendarItems}
+              applications={ownApplications}
+              busy={busy}
+              onCreate={(date) => ownApplications.length ? openCalendarCreate(date) : openCreate()}
+              onEdit={openCalendarEdit}
+            />
+          </>
+        ) : view === "experiences" ? (
           <section className="experience-library" aria-label={"\u9762\u7ecf\u5e93"}>
             <div className="experience-library-head">
               <div>
@@ -3172,6 +3687,8 @@ export function RecruitmentTracker({
               </div>}
             </div>
 
+            {view === "mine" && <UpcomingScheduleCard items={calendarItems} onOpenCalendar={() => changeWorkspaceView("calendar")} onEdit={openCalendarEdit} />}
+
             {filtered.length > 0 && !interviewWorkspaceActive && (
               <section className="list-insights list-insights-top" aria-label="当前投递统计">
                 <div className="list-insights-copy">
@@ -3294,6 +3811,7 @@ export function RecruitmentTracker({
                                 <div className="interview-stage-current">
                                   <span>当前进度</span>{renderStatusControl(item, true)}
                                 </div>
+                                {renderScheduleStrip(item, true)}
                                 {renderExperienceLink(item)}
                                 <footer>
                                   <PositionLinkAction application={item} compact />
@@ -3379,6 +3897,7 @@ export function RecruitmentTracker({
                                 {group.statuses.length > 3 && <span className="cell-muted">+{group.statuses.length - 3}</span>}
                                 {group.conclusions.slice(0, 2).map((conclusion) => <span key={conclusion} className="company-conclusion">{conclusion}</span>)}
                               </div>
+                              {renderCompanySchedule(group.applications)}
                             </td>
                             <td data-label="公开状态">
                               {group.visibilities.length === 1 ? (
@@ -3486,6 +4005,7 @@ export function RecruitmentTracker({
                                 {group.statuses.length > 3 && <span className="status-more">+{group.statuses.length - 3}</span>}
                                 {group.conclusions.slice(0, 1).map((conclusion) => <span key={conclusion} className="company-conclusion">{conclusion}</span>)}
                               </div>
+                              {renderCompanySchedule(group.applications)}
                             </div>
 
                             <footer className="company-card-foot">
@@ -3545,6 +4065,7 @@ export function RecruitmentTracker({
                                 <span>{item.base || "地点待定"}</span>
                                 <span>{formatDate(item.appliedAt)}</span>
                               </div>
+                              {renderScheduleStrip(item, true)}
                               {(INTERVIEW_STATUSES.includes(item.status) || experiences.some((experience) => experience.applicationId === item.id)) && renderExperienceLink(item, true)}
                               <div className="kanban-card-foot">
                                 {renderStatusControl(item, true)}
@@ -3615,6 +4136,7 @@ export function RecruitmentTracker({
                           <td data-label="面试进度"><div className="status-result-cell">{renderStatusControl(item)}
                             {item.finalOutcome && <small>最终：{item.finalOutcome}</small>}
                             {item.rejectionReason && <small>原因：{item.rejectionReason}</small>}
+                            {renderScheduleStrip(item, true)}
                             {(INTERVIEW_STATUSES.includes(item.status) || experiences.some((experience) => experience.applicationId === item.id)) && renderExperienceLink(item, true)}
                           </div></td>
                           <td data-label="公开状态"><span className={`privacy-tag ${item.visibility}`}>{visibilityLabel(item.visibility)}</span></td>
@@ -3658,9 +4180,15 @@ export function RecruitmentTracker({
                       <small>{reminder.detail}</small>
                       <button
                         type="button"
-                        onClick={() => reminder.interview ? openExperienceByInterview(reminder.interview) : openEdit(reminder.application)}
+                        onClick={() => reminder.calendarItem
+                          ? openCalendarEdit(reminder.calendarItem)
+                          : reminder.id.startsWith("missing-interview-")
+                            ? openCalendarCreate(new Date(), reminder.application.id, "interview")
+                            : reminder.interview
+                              ? openExperienceByInterview(reminder.interview)
+                              : openEdit(reminder.application)}
                       >
-                        {reminder.kind === "upcoming" ? "查看安排" : reminder.kind === "experience" ? "补充面经" : reminder.kind === "result" ? "补充结果" : "更新进度"} →
+                        {reminder.id.startsWith("missing-interview-") ? "补充安排" : reminder.kind === "upcoming" ? "查看安排" : reminder.kind === "experience" ? "补充面经" : reminder.kind === "result" ? "补充结果" : "更新进度"} →
                       </button>
                     </article>
                   ))}
@@ -3679,13 +4207,14 @@ export function RecruitmentTracker({
                   <div>
                     <p className="modal-kicker">IMPORT BACKUP</p>
                     <h2 id="import-title">确认导入备份</h2>
-                    <p className="modal-subtitle">已读取 {importPreview.fileName}。确认后将同时恢复岗位、面试和面经关联。</p>
+                    <p className="modal-subtitle">已读取 {importPreview.fileName}。确认后将同时恢复岗位、面试、日程和面经关联。</p>
                   </div>
                   <button type="button" className="close-button" onClick={() => setImportPreview(null)} disabled={busy} aria-label="关闭">×</button>
                 </div>
                 <div className="import-summary-grid">
                   <div><strong>{importPreview.applications.length}</strong><span>岗位记录</span></div>
                   <div><strong>{importPreview.interviews.length}</strong><span>面试记录</span></div>
+                  <div><strong>{importPreview.events.length}</strong><span>日程记录</span></div>
                   <div><strong>{importPreview.experiences.length}</strong><span>面经记录</span></div>
                   <div><strong>{importDuplicateCount}</strong><span>可能重复</span></div>
                 </div>
@@ -3696,13 +4225,14 @@ export function RecruitmentTracker({
                   </label>
                   <label className={importMode === "replace" ? "active warning" : ""}>
                     <input type="radio" name="import-mode" value="replace" checked={importMode === "replace"} onChange={() => setImportMode("replace")} />
-                    <span><strong>替换我的全部记录</strong><small>用备份内容覆盖当前账号下的岗位、面试和面经；好友共享记录不受影响。</small></span>
+                    <span><strong>替换我的全部记录</strong><small>用备份内容覆盖当前账号下的岗位、面试、日程和面经；好友共享记录不受影响。</small></span>
                   </label>
                 </div>
                 <div className="import-notes">
                   <span>共享小组不会随备份迁移；找不到原小组的记录会安全地转为“仅自己可见”。</span>
                   {importPreview.ignoredInterviews > 0 && <span>{importPreview.ignoredInterviews} 条未关联岗位的面试记录不会导入。</span>}
                   {importPreview.ignoredExperiences > 0 && <span>{importPreview.ignoredExperiences} 篇格式不完整的面经不会导入。</span>}
+                  {importPreview.ignoredEvents > 0 && <span>{importPreview.ignoredEvents} 条未关联岗位或格式不完整的日程不会导入。</span>}
                   {importMode === "merge" && importDuplicateCount > 0 && <span>{importDuplicateCount} 条可能重复的岗位将被跳过。</span>}
                 </div>
                 <div className="modal-actions import-actions">
@@ -4272,6 +4802,132 @@ export function RecruitmentTracker({
           </ModalPortal>
         )}
 
+        {/* ────────────────────────────────── calendar event modal */}
+        {isCalendarEventOpen && (
+          <ModalPortal>
+            <div className="modal-overlay modal-overlay-elevated" onClick={closeCalendarEvent}>
+              <div className="modal calendar-event-modal" role="dialog" aria-modal="true" aria-labelledby="calendar-event-title" onClick={(event) => event.stopPropagation()}>
+                <header className="modal-head">
+                  <div>
+                    <span className="section-kicker">SCHEDULE EDITOR</span>
+                    <h2 id="calendar-event-title">{editingCalendarItem ? "编辑日程" : "新增日程"}</h2>
+                    <p>保存后会同步到日历、岗位卡片、公司时间线和待跟进提醒。</p>
+                  </div>
+                  <button className="icon-button" type="button" onClick={closeCalendarEvent} aria-label="关闭日程编辑">×</button>
+                </header>
+                <form onSubmit={(event) => void submitCalendarEvent(event)}>
+                  <div className="calendar-event-form-grid">
+                    <label>
+                      <span>事项类型 *</span>
+                      <DropdownSelect
+                        value={calendarEventForm.kind}
+                        onChange={(kind) => setCalendarEventForm((current) => ({
+                          ...current,
+                          kind: kind as CalendarItemKind,
+                          mode: kind === "interview" ? "视频面试" : "线上",
+                          status: kind === "interview" ? "待定" : "待进行",
+                          allDay: kind === "deadline",
+                          syncStatus: kind === "interview" || kind === "written_test",
+                        }))}
+                        options={[
+                          { value: "interview", label: "面试" },
+                          { value: "written_test", label: "笔试" },
+                          { value: "assessment", label: "测评" },
+                          { value: "deadline", label: "截止事项" },
+                          { value: "hr_contact", label: "HR 沟通" },
+                          { value: "other", label: "其他" },
+                        ]}
+                        disabled={Boolean(editingCalendarItem)}
+                        ariaLabel="选择日程类型"
+                      />
+                    </label>
+                    <label>
+                      <span>关联公司 / 岗位 *</span>
+                      <DropdownSelect
+                        value={calendarEventForm.applicationId}
+                        onChange={(applicationId) => setCalendarEventForm((current) => ({ ...current, applicationId }))}
+                        options={ownApplications.map((item) => ({ value: item.id, label: `${item.company} · ${item.position}` }))}
+                        placeholder="选择岗位"
+                        ariaLabel="选择日程关联岗位"
+                      />
+                    </label>
+
+                    {calendarEventForm.kind === "interview" ? (
+                      <label>
+                        <span>面试轮次 *</span>
+                        <DropdownSelect value={calendarEventForm.round} onChange={(round) => setCalendarEventForm((current) => ({ ...current, round }))} options={INTERVIEW_ROUNDS.map((round) => ({ value: round, label: round }))} ariaLabel="选择面试轮次" />
+                      </label>
+                    ) : (
+                      <label className="calendar-event-title-field">
+                        <span>标题</span>
+                        <input value={calendarEventForm.title} onChange={(event) => setCalendarEventForm((current) => ({ ...current, title: event.target.value }))} placeholder={`例如：${calendarKindLabel(calendarEventForm.kind)}安排`} maxLength={180} />
+                      </label>
+                    )}
+
+                    {calendarEventForm.kind !== "interview" && (
+                      <label className="calendar-all-day-toggle">
+                        <input type="checkbox" checked={calendarEventForm.allDay} onChange={(event) => setCalendarEventForm((current) => ({ ...current, allDay: event.target.checked }))} />
+                        <span>全天事项</span>
+                      </label>
+                    )}
+
+                    <label>
+                      <span>开始{calendarEventForm.allDay ? "日期" : "时间"} *</span>
+                      <input
+                        type={calendarEventForm.allDay ? "date" : "datetime-local"}
+                        value={calendarEventForm.allDay ? calendarEventForm.startsAt.slice(0, 10) : calendarEventForm.startsAt}
+                        onChange={(event) => setCalendarEventForm((current) => ({ ...current, startsAt: calendarEventForm.allDay ? `${event.target.value}T09:00` : event.target.value }))}
+                        required
+                      />
+                    </label>
+                    <label>
+                      <span>结束{calendarEventForm.allDay ? "日期" : "时间"}</span>
+                      <input
+                        type={calendarEventForm.allDay ? "date" : "datetime-local"}
+                        value={calendarEventForm.allDay ? calendarEventForm.endsAt.slice(0, 10) : calendarEventForm.endsAt}
+                        onChange={(event) => setCalendarEventForm((current) => ({ ...current, endsAt: calendarEventForm.allDay && event.target.value ? `${event.target.value}T18:00` : event.target.value }))}
+                      />
+                    </label>
+                    <label>
+                      <span>{calendarEventForm.kind === "interview" ? "面试形式" : "进行形式"}</span>
+                      <DropdownSelect value={calendarEventForm.mode} onChange={(mode) => setCalendarEventForm((current) => ({ ...current, mode }))} options={(calendarEventForm.kind === "interview" ? INTERVIEW_FORMATS : CALENDAR_EVENT_MODES).map((mode) => ({ value: mode, label: mode }))} ariaLabel="选择日程形式" />
+                    </label>
+                    <label>
+                      <span>状态</span>
+                      <DropdownSelect value={calendarEventForm.status} onChange={(status) => setCalendarEventForm((current) => ({ ...current, status }))} options={(calendarEventForm.kind === "interview" ? INTERVIEW_RESULTS : RECRUITMENT_EVENT_STATUSES).map((status) => ({ value: status, label: status }))} ariaLabel="选择日程状态" />
+                    </label>
+                    <label>
+                      <span>地点</span>
+                      <input value={calendarEventForm.location} onChange={(event) => setCalendarEventForm((current) => ({ ...current, location: event.target.value }))} placeholder="例如：线上 / 上海会议室" maxLength={240} />
+                    </label>
+                    <label>
+                      <span>考试 / 会议链接</span>
+                      <input type="url" value={calendarEventForm.eventUrl} onChange={(event) => setCalendarEventForm((current) => ({ ...current, eventUrl: event.target.value }))} placeholder="https://…" maxLength={1000} />
+                    </label>
+                    <label className="calendar-event-note">
+                      <span>备注</span>
+                      <textarea value={calendarEventForm.note} onChange={(event) => setCalendarEventForm((current) => ({ ...current, note: event.target.value }))} rows={3} maxLength={3000} placeholder="准备事项、考试说明或需要携带的材料" />
+                    </label>
+                    {(calendarEventForm.kind === "interview" || calendarEventForm.kind === "written_test") && (
+                      <label className="calendar-progress-toggle">
+                        <input type="checkbox" checked={calendarEventForm.syncStatus} onChange={(event) => setCalendarEventForm((current) => ({ ...current, syncStatus: event.target.checked }))} />
+                        <span><strong>同步岗位进度</strong><small>只向前推进，不会覆盖 Offer、已拒绝或已结束状态</small></span>
+                      </label>
+                    )}
+                  </div>
+                  <footer className="modal-actions calendar-event-actions">
+                    <div>
+                      {editingCalendarItem && <button type="button" className="danger-button" onClick={() => void removeCalendarEvent()} disabled={busy}>删除日程</button>}
+                      {externalHttpUrl(calendarEventForm.eventUrl) && <a className="secondary-button button-link" href={externalHttpUrl(calendarEventForm.eventUrl)} target="_blank" rel="noopener noreferrer">打开链接 ↗</a>}
+                    </div>
+                    <div><button type="button" className="secondary-button" onClick={closeCalendarEvent} disabled={busy}>取消</button><button type="submit" className="primary-button" disabled={busy || ownApplications.length === 0}>{busy ? "保存中…" : "保存日程"}</button></div>
+                  </footer>
+                </form>
+              </div>
+            </div>
+          </ModalPortal>
+        )}
+
         {/* ────────────────────────────────── company modal */}
         {selectedCompany && (
           <ModalPortal>
@@ -4296,13 +4952,13 @@ export function RecruitmentTracker({
               <div className="company-summary">
                 <span><b>{companyApplications.length}</b>岗位总数</span>
                 <span><b>{companyApplications.filter((item) => ![...CLOSED_STATUSES, "Offer"].includes(item.status)).length}</b>进行中</span>
-                <span><b>{companyInterviews.length}</b>面试记录</span>
+                <span><b>{companyInterviews.length + companyRecruitmentEvents.length}</b>日程安排</span>
                 <span><b>{companyApplications.filter((item) => item.visibility !== "private").length}</b>已共享</span>
               </div>
               {companyTimeline.length > 0 && (
                 <details className="company-timeline">
                   <summary>
-                    <span>投递与面试时间线</span>
+                    <span>投递与日程时间线</span>
                     <small>{companyTimeline.length} 个节点 · 点击展开</small>
                   </summary>
                   <div className="company-timeline-list">
@@ -4312,6 +4968,7 @@ export function RecruitmentTracker({
                         <i aria-hidden="true" />
                         <div>
                           <span>{event.type}</span><strong>{event.title}</strong><small>{event.detail}</small>
+                          {view === "mine" && event.calendarItem && <button type="button" onClick={() => { closeCompany(); openCalendarEdit(event.calendarItem!); }}>编辑日程</button>}
                           {view === "mine" && event.interview && <button type="button" onClick={() => { closeCompany(); openExperienceByInterview(event.interview!); }}>编辑面经</button>}
                         </div>
                       </article>
@@ -4404,6 +5061,7 @@ export function RecruitmentTracker({
                         {companyInterviews.filter((interview) => interview.applicationId === item.id).length > 0 && (
                           <small>{companyInterviews.filter((interview) => interview.applicationId === item.id).length} 场面试记录</small>
                         )}
+                        {renderScheduleStrip(item, true)}
                         {(INTERVIEW_STATUSES.includes(item.status) || experiences.some((experience) => experience.applicationId === item.id)) && renderExperienceLink(item, true)}
                       </div></td>
                       {view === "friends" && <td data-label="岗位链接"><PositionLinkAction application={item} /></td>}
