@@ -1552,6 +1552,14 @@ export function RecruitmentTracker({
     () => applications.filter((item) => item.isOwner !== false),
     [applications],
   );
+  const schedulableApplications = useMemo(
+    () => ownApplications.filter((item) => !CLOSED_STATUSES.includes(item.status)),
+    [ownApplications],
+  );
+  const calendarApplicationOptions = useMemo(
+    () => ownApplications.filter((item) => !CLOSED_STATUSES.includes(item.status) || item.id === editingCalendarItem?.applicationId),
+    [editingCalendarItem?.applicationId, ownApplications],
+  );
 
   const dashboardApplications = useMemo(() => {
     if (dashboardRange === "all") return ownApplications;
@@ -2364,7 +2372,7 @@ export function RecruitmentTracker({
             <span>{entry.title}</span>
           </button>
         ))}
-        {view === "mine" && (
+        {view === "mine" && !CLOSED_STATUSES.includes(item.status) && (
           <button type="button" className="schedule-chip add" onClick={() => openCalendarCreate(new Date(), item.id, INTERVIEW_STATUSES.includes(item.status) ? "interview" : "written_test")}>
             <strong>＋ 添加日程</strong><span>笔试 / 测评 / 面试</span>
           </button>
@@ -2568,6 +2576,10 @@ export function RecruitmentTracker({
   const openCalendarCreate = useCallback((date = new Date(), applicationId = "", kind: CalendarItemKind = "written_test") => {
     const form = emptyCalendarEventForm(date);
     const application = ownApplications.find((item) => item.id === applicationId);
+    if (application && CLOSED_STATUSES.includes(application.status)) {
+      setNotice("该岗位流程已经终止，不能再添加新日程");
+      return;
+    }
     setCalendarEventForm({
       ...form,
       applicationId,
@@ -3785,7 +3797,7 @@ export function RecruitmentTracker({
               scope={calendarScope}
               friendCount={friendCalendarOwnerCount}
               onScopeChange={setCalendarScope}
-              onCreate={(date) => ownApplications.length ? openCalendarCreate(date) : openCreate()}
+              onCreate={(date) => schedulableApplications.length ? openCalendarCreate(date) : ownApplications.length ? setNotice("当前没有可添加日程的进行中岗位") : openCreate()}
               onEdit={openCalendarEdit}
             />
             <section className="calendar-todo-panel" aria-label="招聘待做事项">
@@ -5296,7 +5308,7 @@ export function RecruitmentTracker({
                       <DropdownSelect
                         value={calendarEventForm.applicationId}
                         onChange={(applicationId) => setCalendarEventForm((current) => ({ ...current, applicationId }))}
-                        options={ownApplications.map((item) => ({ value: item.id, label: `${item.company} · ${item.position}` }))}
+                        options={calendarApplicationOptions.map((item) => ({ value: item.id, label: `${item.company} · ${item.position}` }))}
                         placeholder="选择岗位"
                         ariaLabel="选择日程关联岗位"
                       />
@@ -5404,7 +5416,7 @@ export function RecruitmentTracker({
                         </button>
                       )}
                     </div>
-                    <div><button type="button" className="secondary-button" onClick={closeCalendarEvent} disabled={busy}>取消</button><button type="submit" className="primary-button" disabled={busy || ownApplications.length === 0}>{busy ? "保存中…" : calendarEventForm.phase === "scheduled" ? "保存约定日程" : "保存完成记录"}</button></div>
+                    <div><button type="button" className="secondary-button" onClick={closeCalendarEvent} disabled={busy}>取消</button><button type="submit" className="primary-button" disabled={busy || calendarApplicationOptions.length === 0}>{busy ? "保存中…" : calendarEventForm.phase === "scheduled" ? "保存约定日程" : "保存完成记录"}</button></div>
                   </footer>
                 </form>
               </div>
