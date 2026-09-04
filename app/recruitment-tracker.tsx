@@ -109,8 +109,28 @@ const LIST_MODE_OPTIONS: Array<{
 function noticeToneFor(message: string): NoticeTone {
   if (/失败|错误|超时|无法|未保存|不可用/.test(message)) return "error";
   if (/请|不能|暂时|没有可|未登录/.test(message)) return "warning";
-  if (/已保存|保存成功|已更新|更新完成|已删除|已加入|已创建|已退出|导出|导入完成|已复制/.test(message)) return "success";
+  if (/成功|已保存|已更新|更新完成|已删除|已加入|已创建|已退出|导出|导入完成|已复制/.test(message)) return "success";
   return "info";
+}
+
+function databaseActionName(label: string) {
+  return label.replace(/^正在/, "").replace(/中$/, "").trim() || "数据库操作";
+}
+
+function httpFailureReason(status: number) {
+  const reasons: Record<number, string> = {
+    400: "提交的数据不符合要求",
+    401: "登录状态已失效，请重新登录",
+    403: "当前账号没有操作权限",
+    404: "目标记录不存在或已被删除",
+    409: "数据状态发生冲突，请刷新后重试",
+    429: "操作过于频繁，请稍后重试",
+    500: "服务器处理异常",
+    502: "云端服务暂时不可用",
+    503: "云端服务暂时不可用",
+    504: "云端响应超时",
+  };
+  return reasons[status] || `服务器返回 ${status}`;
 }
 
 function ModalPortal({ children }: { children: ReactNode }) {
@@ -982,14 +1002,24 @@ export function RecruitmentTracker({
         body: JSON.stringify(payload),
         signal: controller.signal,
       });
-      const result = await response.json().catch(() => ({})) as { error?: string };
-      if (!response.ok) throw new Error(result.error || `保存失败（${response.status}）`);
+      const responseText = await response.text();
+      let result: { error?: string; message?: string } = {};
+      if (responseText) {
+        try {
+          result = JSON.parse(responseText) as { error?: string; message?: string };
+        } catch {
+          // HTML and proxy errors are summarized by status below instead of shown verbatim.
+        }
+      }
+      if (!response.ok) {
+        throw new Error(result.error || result.message || httpFailureReason(response.status));
+      }
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
-        throw new Error("请求超时，数据可能尚未同步，请刷新确认后再重试");
+        throw new Error(`请求超过 ${CLOUD_REQUEST_TIMEOUT_MS / 1000} 秒，数据可能尚未同步，请刷新确认后再重试`);
       }
       if (error instanceof TypeError) {
-        throw new Error("网络连接失败，数据尚未保存，请检查网络后重试");
+        throw new Error("网络连接不可用，数据没有提交到云端，请检查网络后重试");
       }
       throw error;
     } finally {
@@ -1006,10 +1036,11 @@ export function RecruitmentTracker({
     setPendingAction(label);
     try {
       await cloudAction(payload);
+      setNotice(`${databaseActionName(label)}成功`);
       return true;
     } catch (error) {
       const detail = error instanceof Error ? error.message : "请稍后重试";
-      setNotice(/失败|错误|超时|无法|未保存/.test(detail) ? detail : `操作失败：${detail}`);
+      setNotice(`${databaseActionName(label)}失败：${detail}`);
       return false;
     } finally {
       if (!keepPending) setPendingAction(null);
@@ -1033,23 +1064,48 @@ export function RecruitmentTracker({
       token = data.session?.access_token ?? null;
     }
     if (!token) throw new Error("未登录");
-    const response = await fetch("/api/workspace", {
-      method: "GET",
-      headers: {
-        "content-type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    const result = (await response.json()) as {
-      applications: unknown;
-      interviews: unknown;
-      groups: unknown;
-      experiences: unknown;
-    };
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), CLOUD_REQUEST_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch("/api/workspace", {
+        method: "GET",
+        headers: {
+          "content-type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error(`云端同步超过 ${CLOUD_REQUEST_TIMEOUT_MS / 1000} 秒`);
+      }
+      if (error instanceof TypeError) throw new Error("网络连接不可用");
+      throw error;
+    } finally {
+      window.clearTimeout(timeout);
+    }
+    const responseText = await response.text();
+    let result: {
+      applications?: unknown;
+      interviews?: unknown;
+      groups?: unknown;
+      experiences?: unknown;
+      error?: string;
+      message?: string;
+    } = {};
+    if (responseText) {
+      try {
+        result = JSON.parse(responseText) as typeof result;
+      } catch {
+        throw new Error(response.ok ? "云端返回了无法识别的数据" : httpFailureReason(response.status));
+      }
+    }
+    if (!response.ok) throw new Error(result.error || result.message || httpFailureReason(response.status));
     if (!safeApplications(result.applications)) throw new Error("投递数据解析失败");
     if (!safeInterviews(result.interviews)) throw new Error("面试数据解析失败");
     const experienceData = result.experiences ?? [];
-    if (!safeExperiences(experienceData)) throw new Error("Experience data parsing failed");
+    if (!safeExperiences(experienceData)) throw new Error("面经数据解析失败");
     const groupsData = (Array.isArray(result.groups) ? result.groups : []) as GroupInfo[];
     const normalizedApplications = result.applications.map((item) => ({
         ...item,
@@ -1193,9 +1249,12 @@ export function RecruitmentTracker({
   useEffect(() => {
     loadLocal();
     if (user) {
-      loadCloud().catch(() => {
-        setNotice("暂时无法同步云端，已显示本机缓存");
-      });
+      loadCloud()
+        .then(() => setNotice("云端数据同步成功"))
+        .catch((error) => {
+          const detail = error instanceof Error ? error.message : "未知错误";
+          setNotice(`云端数据同步失败：${detail}；已显示本机缓存`);
+        });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1598,7 +1657,10 @@ export function RecruitmentTracker({
   const updateApplication = useCallback(
     async (id: string, changes: Partial<Application>) => {
       const current = applications.find((item) => item.id === id);
-      if (!current) return false;
+      if (!current) {
+        setNotice("保存修改失败：岗位记录不存在或已被删除，请刷新后重试");
+        return false;
+      }
       const next = { ...current, ...changes, updatedAt: new Date().toISOString() };
       if (user) {
         const saved = await runCloudMutation("保存修改中", { action: "saveApplication", application: next });
@@ -1628,7 +1690,10 @@ export function RecruitmentTracker({
   const updateStatus = useCallback(
     async (id: string, status: ApplicationStatus) => {
       const current = applications.find((item) => item.id === id);
-      if (!current) return;
+      if (!current) {
+        setNotice("更新面试进度失败：岗位记录不存在或已被删除，请刷新后重试");
+        return;
+      }
       if (user) {
         const saved = await runCloudMutation("更新面试进度中", {
           action: "updateStatus",
@@ -1844,7 +1909,10 @@ export function RecruitmentTracker({
   const updateInterview = useCallback(
     async (id: string, changes: Partial<Interview>) => {
       const current = interviews.find((item) => item.id === id);
-      if (!current) return false;
+      if (!current) {
+        setNotice("保存面试修改失败：面试记录不存在或已被删除，请刷新后重试");
+        return false;
+      }
       const next = { ...current, ...changes, updatedAt: new Date().toISOString() };
       if (user) {
         const saved = await runCloudMutation("保存面试修改中", { action: "updateInterview", interview: next });
@@ -1937,7 +2005,10 @@ export function RecruitmentTracker({
 
   const updateExperience = useCallback(async (id: string, changes: Partial<InterviewExperience>) => {
     const current = experiences.find((item) => item.id === id);
-    if (!current) return false;
+    if (!current) {
+      setNotice("保存面经修改失败：面经记录不存在或已被删除，请刷新后重试");
+      return false;
+    }
     const next = { ...current, ...changes, updatedAt: new Date().toISOString() };
     if (user) {
       const saved = await runCloudMutation("保存面经修改中", { action: "updateExperience", experience: next });
