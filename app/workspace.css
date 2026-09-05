@@ -766,3 +766,84 @@ body {
   .calendar-hero::after { animation: none; }
   .calendar-day.today .calendar-day-select::after { animation: none; opacity: .45; }
 }
+
+/* Deep gallery shell and canvas pointer light. */
+html, body { background: #101914; }
+body {
+  background-image:
+    radial-gradient(circle at 16% -8%, rgba(65, 119, 92, .32), transparent 34rem),
+    radial-gradient(circle at 88% 13%, rgba(143, 78, 54, .2), transparent 29rem),
+    linear-gradient(145deg, #13231c 0%, #0d1713 54%, #17241e 100%);
+  color: var(--ink);
+}
+.app-shell::before { display: none; }
+.pointer-ambience {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+}
+.topbar {
+  border-bottom-color: rgba(235, 220, 190, .16);
+  background: rgba(13, 25, 20, .72);
+  box-shadow: 0 1px 0 rgba(255, 244, 218, .045), 0 12px 35px rgba(0, 0, 0, .12);
+}
+.brand { color: #f2eadb; }
+.brand strong { color: #f2eadb; }
+.brand small { color: #95a79e; }
+.brand-mark {
+  background: #173e31;
+  color: #fff4dc;
+  box-shadow: inset 0 -3px 0 #ce825d, 0 0 0 1px rgba(240, 211, 158, .12);
+}
+.workspace-intro h1 { color: #f3ecde; text-shadow: 0 2px 18px rgba(0, 0, 0, .2); }
+.workspace-intro p { color: #95a79e; }
+.workspace-intro .primary-button, .topbar .primary-button {
+  border-color: rgba(239, 205, 145, .16);
+  background: #23634f;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .25), 0 0 22px rgba(86, 158, 122, .1);
+}
+.stats-grid { position: relative; z-index: 1; }
+.stat-card, .stat-card.highlight {
+  border-color: rgba(231, 218, 192, .14);
+  background: rgba(25, 40, 33, .82);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .2), inset 0 1px rgba(255, 247, 230, .035);
+  backdrop-filter: blur(12px);
+}
+.stat-card:last-child { border-right-color: rgba(231, 218, 192, .14); }
+.stat-card small, .stat-card.highlight small { color: #aab5ae; }
+.stat-card strong, .stat-card.highlight strong { color: #f4ecdd; }
+.stat-card.highlight strong { color: #8dd0ad; }
+.stat-card:hover, .stat-card.is-selected, .stat-card.highlight.is-selected {
+  border-color: rgba(222, 184, 115, .44);
+  background: rgba(31, 51, 42, .94);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, .26), inset 0 -2px #d18a61, 0 0 26px rgba(204, 137, 83, .075);
+}
+.stat-card::after { border-color: rgba(222, 184, 115, .13); }
+.workspace {
+  position: relative;
+  z-index: 1;
+  border-color: rgba(230, 211, 177, .24);
+  box-shadow: 0 34px 78px rgba(0, 0, 0, .34), 0 0 0 1px rgba(255, 248, 228, .025), 0 0 70px rgba(58, 122, 92, .07);
+}
+.view-tabs { background: #eae3d7; }
+.calendar-hero { background: #f2ebdf; }
+.calendar-hero::after {
+  border-color: rgba(173, 105, 72, .19);
+  box-shadow: 0 0 0 28px rgba(189, 103, 72, .035), 0 0 0 58px rgba(31, 91, 73, .028);
+}
+.calendar-day.today .calendar-day-select {
+  box-shadow: 0 4px 13px rgba(189, 103, 72, .3), 0 0 20px rgba(207, 126, 83, .16);
+}
+
+@media (max-width: 720px), (hover: none), (pointer: coarse) {
+  .pointer-ambience { display: none; }
+  .topbar { background: rgba(13, 25, 20, .88); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pointer-ambience { display: none; }
+}
