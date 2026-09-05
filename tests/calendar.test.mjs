@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { addDays, calendarDays, itemsInRange, localDateKey, scheduleLink } from "../lib/calendar.ts";
+import { addDays, calendarDays, calendarTimingDefaults, itemsInRange, localDateKey, scheduleLink, supportsCalendarTimingChoice } from "../lib/calendar.ts";
 
 test("month grids cover complete Monday-to-Sunday weeks, including adjacent months", () => {
   const days = calendarDays(new Date(2026, 8, 5), "month");
@@ -57,4 +57,13 @@ test("day arithmetic preserves local date and hour", () => {
 test("calendar detail links allow only web URLs", () => {
   assert.equal(scheduleLink("https://example.com/meeting"), "https://example.com/meeting");
   for (const value of ["javascript:alert(1)", "data:text/html,hello", "file:///C:/private", "", "not a url"]) assert.equal(scheduleLink(value), "");
+});
+
+test("assessments default to a deadline while written tests default to a scheduled time", () => {
+  assert.equal(supportsCalendarTimingChoice("assessment"), true);
+  assert.equal(supportsCalendarTimingChoice("written_test"), true);
+  assert.equal(supportsCalendarTimingChoice("interview"), false);
+  assert.deepEqual(calendarTimingDefaults("assessment"), { timingType: "deadline", allDay: true });
+  assert.deepEqual(calendarTimingDefaults("written_test"), { timingType: "scheduled", allDay: false });
+  assert.deepEqual(calendarTimingDefaults("deadline"), { timingType: "scheduled", allDay: true });
 });

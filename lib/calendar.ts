@@ -39,3 +39,15 @@ export function scheduleLink(value: string) {
     return "";
   }
 }
+
+export type CalendarTimingType = "scheduled" | "deadline";
+
+export function supportsCalendarTimingChoice(kind: string) {
+  return kind === "written_test" || kind === "assessment";
+}
+
+export function calendarTimingDefaults(kind: string): { timingType: CalendarTimingType; allDay: boolean } {
+  if (kind === "assessment") return { timingType: "deadline", allDay: true };
+  if (kind === "deadline") return { timingType: "scheduled", allDay: true };
+  return { timingType: "scheduled", allDay: false };
+}

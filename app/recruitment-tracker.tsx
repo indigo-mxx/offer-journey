@@ -7,6 +7,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { autocompleteScore, matchesFieldsSearch, matchesLiteralSearch, matchesTextSearch, matchingAutocompleteOptions } from "@/lib/search";
 import { createWorkspaceWorkbook, readWorkspaceWorkbook } from "@/lib/workbook-backup";
 import type { WorkspaceBackup } from "@/lib/workbook-backup";
+import { calendarTimingDefaults, supportsCalendarTimingChoice } from "@/lib/calendar";
 import type { Application, Interview, InterviewExperience, RecruitmentEvent, RecruitmentEventStatus, RecruitmentEventType, GroupInfo, ApplicationStatus, Visibility } from "@/db/schema";
 import { RecruitmentCalendar, UpcomingScheduleCard, calendarKindLabel } from "./recruitment-calendar";
 import type { CalendarItemKind, RecruitmentCalendarItem } from "./recruitment-calendar";
@@ -2011,8 +2012,8 @@ export function RecruitmentTracker({
         reminders.push({
           id: `calendar-${calendarItem.id}`,
           kind: "event",
-          label: calendarItem.kind === "written_test" && calendarItem.timingType === "deadline"
-            ? (daysAway < 0 ? "笔试截止时间已过" : "笔试即将截止")
+          label: supportsCalendarTimingChoice(calendarItem.kind) && calendarItem.timingType === "deadline"
+            ? (daysAway < 0 ? `${calendarKindLabel(calendarItem.kind)}截止时间已过` : `${calendarKindLabel(calendarItem.kind)}即将截止`)
             : daysAway < 0 ? "日程已过期" : `即将${calendarKindLabel(calendarItem.kind)}`,
           title: `${application.company} · ${calendarItem.title}`,
           detail: `${formatDateTime(calendarItem.startsAt)} · ${application.position}`,
@@ -2144,8 +2145,8 @@ export function RecruitmentTracker({
         id: `todo-event-${event.id}`,
         dismissKey: `todo-event-${event.id}@${event.updatedAt}`,
         tone: overdue ? "overdue" : "upcoming",
-        label: event.eventType === "written_test" && event.timingType === "deadline"
-          ? (overdue ? "笔试截止时间已过" : "笔试待截止")
+        label: supportsCalendarTimingChoice(event.eventType) && event.timingType === "deadline"
+          ? (overdue ? `${calendarKindLabel(event.eventType)}截止时间已过` : `${calendarKindLabel(event.eventType)}待截止`)
           : overdue ? `${calendarKindLabel(event.eventType)}已到期` : `待${calendarKindLabel(event.eventType)}`,
         title: `${application.company} · ${event.title}`,
         detail: `${application.position}${event.timingType === "deadline" ? " · 截止前完成" : event.mode ? ` · ${event.mode}` : ""}`,
@@ -2580,6 +2581,7 @@ export function RecruitmentTracker({
 
   const openCalendarCreate = useCallback((date = new Date(), applicationId = "", kind: CalendarItemKind = "written_test") => {
     const form = emptyCalendarEventForm(date);
+    const timingDefaults = calendarTimingDefaults(kind);
     const application = ownApplications.find((item) => item.id === applicationId);
     if (application && CLOSED_STATUSES.includes(application.status)) {
       setNotice("该岗位流程已经终止，不能再添加新日程");
@@ -2589,7 +2591,7 @@ export function RecruitmentTracker({
       ...form,
       applicationId,
       kind,
-      timingType: "scheduled",
+      ...timingDefaults,
       round: kind === "interview" ? defaultRoundForStage(interviewStage(application?.status ?? "")) : form.round,
       mode: kind === "interview" ? "视频面试" : form.mode,
       status: kind === "interview" ? "未开始" : "待进行",
@@ -2711,7 +2713,7 @@ export function RecruitmentTracker({
     const startsAt = storedDateTimeValue(startInput);
     const endsAt = storedDateTimeValue(endInput);
     if (!startsAt) {
-      setNotice("请填写日程开始时间");
+      setNotice(calendarEventForm.timingType === "deadline" ? "请填写截止时间" : "请填写日程开始时间");
       return;
     }
     if (endsAt && new Date(endsAt).getTime() < new Date(startsAt).getTime()) {
@@ -2772,7 +2774,7 @@ export function RecruitmentTracker({
         id: current?.id ?? crypto.randomUUID(),
         applicationId: application.id,
         eventType: calendarEventForm.kind,
-        timingType: calendarEventForm.kind === "written_test" ? calendarEventForm.timingType : "scheduled",
+        timingType: supportsCalendarTimingChoice(calendarEventForm.kind) ? calendarEventForm.timingType : "scheduled",
         title: calendarEventForm.title.trim() || `${application.company} · ${calendarKindLabel(calendarEventForm.kind)}`,
         startsAt,
         endsAt,
@@ -5278,12 +5280,11 @@ export function RecruitmentTracker({
                         onChange={(kind) => setCalendarEventForm((current) => ({
                           ...current,
                           kind: kind as CalendarItemKind,
-                          timingType: kind === "written_test" ? current.timingType : "scheduled",
+                          ...calendarTimingDefaults(kind),
                           title: current.kind === "interview" && kind !== "interview" ? "" : current.title,
                           round: kind === "interview" && current.kind !== "interview" ? defaultRoundForStage(interviewStage(ownApplications.find((item) => item.id === current.applicationId)?.status ?? "")) : current.round,
                           mode: kind === "interview" ? "视频面试" : "线上",
                           status: kind === "interview" ? (current.phase === "scheduled" ? "未开始" : "待定") : (current.phase === "completed" ? "已完成" : "待进行"),
-                          allDay: kind === "deadline",
                           syncStatus: kind === "interview" || kind === "written_test",
                         }))}
                         options={[
@@ -5320,12 +5321,12 @@ export function RecruitmentTracker({
                       </label>
                     )}
 
-                    {calendarEventForm.kind === "written_test" && (
-                      <div className="calendar-written-test-timing" role="group" aria-label="选择笔试时间类型">
-                        <span>笔试时间类型 *</span>
+                    {supportsCalendarTimingChoice(calendarEventForm.kind) && (
+                      <div className="calendar-written-test-timing" role="group" aria-label={`选择${calendarKindLabel(calendarEventForm.kind)}时间类型`}>
+                        <span>{calendarKindLabel(calendarEventForm.kind)}时间类型 *</span>
                         <div>
                           <button type="button" className={calendarEventForm.timingType === "scheduled" ? "active" : ""} onClick={() => setCalendarEventForm((current) => ({ ...current, timingType: "scheduled", allDay: false }))}>
-                            <strong>指定时间</strong><small>有明确的开考时间</small>
+                            <strong>指定时间</strong><small>有明确的开始时间</small>
                           </button>
                           <button type="button" className={calendarEventForm.timingType === "deadline" ? "active" : ""} onClick={() => setCalendarEventForm((current) => ({ ...current, timingType: "deadline", allDay: true, endsAt: "" }))}>
                             <strong>截止时间</strong><small>在此之前自行完成</small>
@@ -5337,12 +5338,12 @@ export function RecruitmentTracker({
                     {calendarEventForm.kind !== "interview" && (
                       <label className="calendar-all-day-toggle">
                         <input type="checkbox" checked={calendarEventForm.allDay} onChange={(event) => setCalendarEventForm((current) => ({ ...current, allDay: event.target.checked }))} />
-                        <span>{calendarEventForm.kind === "written_test" && calendarEventForm.timingType === "deadline" ? "只记录截止日期，不指定具体时刻" : "全天事项"}</span>
+                        <span>{supportsCalendarTimingChoice(calendarEventForm.kind) && calendarEventForm.timingType === "deadline" ? "只记录截止日期，不指定具体时刻" : "全天事项"}</span>
                       </label>
                     )}
 
                     <label>
-                      <span>{calendarEventForm.kind === "written_test" && calendarEventForm.timingType === "deadline" ? "截止" : "开始"}{calendarEventForm.allDay ? "日期" : "时间"} *</span>
+                      <span>{supportsCalendarTimingChoice(calendarEventForm.kind) && calendarEventForm.timingType === "deadline" ? "截止" : "开始"}{calendarEventForm.allDay ? "日期" : "时间"} *</span>
                       <input
                         type={calendarEventForm.allDay ? "date" : "datetime-local"}
                         value={calendarEventForm.allDay ? calendarEventForm.startsAt.slice(0, 10) : calendarEventForm.startsAt}
