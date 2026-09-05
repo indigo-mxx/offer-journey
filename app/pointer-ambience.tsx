@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 
+import { ENCOURAGEMENT_LINES } from "./encouragement-lines";
+
 type Particle = {
   x: number;
   y: number;
@@ -19,6 +21,19 @@ type Particle = {
 };
 
 type Ripple = { x: number; y: number; radius: number; life: number; maxLife: number };
+
+type FloatingText = {
+  text: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  fontSize: number;
+  color: [number, number, number];
+  rotation: number;
+};
 
 const PALETTE: Array<[number, number, number]> = [
   [224, 178, 101],
@@ -44,6 +59,7 @@ export function PointerAmbience({ enabled }: { enabled: boolean }) {
 
     const particles: Particle[] = [];
     const ripples: Ripple[] = [];
+    const floatingTexts: FloatingText[] = [];
     let width = 0;
     let height = 0;
     let dpr = 1;
@@ -55,6 +71,8 @@ export function PointerAmbience({ enabled }: { enabled: boolean }) {
     let travelled = 0;
     let frame = 0;
     let pointerFrame = 0;
+    let lastTextBurstAt = 0;
+    let lastPhraseIndex = -1;
 
     const resize = () => {
       width = window.innerWidth;
@@ -94,6 +112,29 @@ export function PointerAmbience({ enabled }: { enabled: boolean }) {
 
     const wake = () => {
       if (!frame) frame = window.requestAnimationFrame(draw);
+    };
+
+    const addTextBurst = (x: number, y: number) => {
+      const now = performance.now();
+      if (now - lastTextBurstAt < 90) return;
+      lastTextBurstAt = now;
+      let phraseIndex = Math.floor(Math.random() * ENCOURAGEMENT_LINES.length);
+      if (phraseIndex === lastPhraseIndex) phraseIndex = (phraseIndex + 1) % ENCOURAGEMENT_LINES.length;
+      lastPhraseIndex = phraseIndex;
+      const maxLife = 70 + Math.random() * 18;
+      floatingTexts.push({
+        text: ENCOURAGEMENT_LINES[phraseIndex],
+        x: x + (Math.random() - .5) * 24,
+        y: y - 9,
+        vx: (Math.random() - .5) * .7,
+        vy: -.72 - Math.random() * .48,
+        life: maxLife,
+        maxLife,
+        fontSize: 11.5 + Math.random() * 2,
+        color: Math.random() < .58 ? PALETTE[0] : PALETTE[2],
+        rotation: (Math.random() - .5) * .08,
+      });
+      if (floatingTexts.length > 6) floatingTexts.splice(0, floatingTexts.length - 6);
     };
 
     const renderPointerInput = () => {
@@ -141,8 +182,9 @@ export function PointerAmbience({ enabled }: { enabled: boolean }) {
       hasPointerSample = true;
       glowElement.style.transform = `translate3d(${targetX}px, ${targetY}px, 0)`;
       glowElement.style.opacity = "1";
-      for (let index = 0; index < 22; index += 1) addParticle(event.clientX, event.clientY, 0, 0, true);
+      for (let index = 0; index < 18; index += 1) addParticle(event.clientX, event.clientY, 0, 0, true);
       ripples.push({ x: event.clientX, y: event.clientY, radius: 6, life: 34, maxLife: 34 });
+      addTextBurst(event.clientX, event.clientY);
       wake();
     };
 
@@ -215,7 +257,37 @@ export function PointerAmbience({ enabled }: { enabled: boolean }) {
       }
       ctx.globalCompositeOperation = "source-over";
 
-      if (particles.length || ripples.length) {
+      for (let index = floatingTexts.length - 1; index >= 0; index -= 1) {
+        const floatingText = floatingTexts[index];
+        floatingText.life -= 1;
+        if (floatingText.life <= 0) { floatingTexts.splice(index, 1); continue; }
+        floatingText.x += floatingText.vx;
+        floatingText.y += floatingText.vy;
+        floatingText.vx *= .985;
+        floatingText.vy *= .987;
+        const remaining = floatingText.life / floatingText.maxLife;
+        const age = 1 - remaining;
+        const alpha = Math.min(1, age * 8) * Math.min(1, remaining * 3.5) * .94;
+        const scale = .88 + Math.min(age, .45) * .32;
+        const [red, green, blue] = floatingText.color;
+        ctx.save();
+        ctx.translate(floatingText.x, floatingText.y);
+        ctx.rotate(floatingText.rotation);
+        ctx.scale(scale, scale);
+        ctx.globalAlpha = alpha;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = `600 ${floatingText.fontSize}px "Microsoft YaHei", "PingFang SC", sans-serif`;
+        ctx.lineJoin = "round";
+        ctx.lineWidth = 2.6;
+        ctx.strokeStyle = "rgba(13, 31, 23, .55)";
+        ctx.strokeText(floatingText.text, 0, 0);
+        ctx.fillStyle = `rgb(${red}, ${green}, ${blue})`;
+        ctx.fillText(floatingText.text, 0, 0);
+        ctx.restore();
+      }
+
+      if (particles.length || ripples.length || floatingTexts.length) {
         frame = window.requestAnimationFrame(draw);
       }
     }
