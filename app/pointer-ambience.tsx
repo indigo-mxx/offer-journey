@@ -24,12 +24,14 @@ const PALETTE: Array<[number, number, number]> = [
 
 export function PointerAmbience({ enabled }: { enabled: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const glowRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
+    const glowElement = glowRef.current;
     const finePointer = window.matchMedia("(hover: hover) and (pointer: fine)");
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    if (!canvas || !enabled || !finePointer.matches || reducedMotion.matches || window.innerWidth <= 720) return;
+    if (!canvas || !glowElement || !enabled || !finePointer.matches || reducedMotion.matches || window.innerWidth <= 720) return;
 
     const context = canvas.getContext("2d");
     if (!context) return;
@@ -46,14 +48,13 @@ export function PointerAmbience({ enabled }: { enabled: boolean }) {
     let previousY = targetY;
     let hasPointerSample = false;
     let travelled = 0;
-    let glowOpacity = 0;
-    let pointerPresent = false;
     let frame = 0;
+    let pointerFrame = 0;
 
     const resize = () => {
       width = window.innerWidth;
       height = window.innerHeight;
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      dpr = Math.min(window.devicePixelRatio || 1, 1.5);
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
       canvas.style.width = `${width}px`;
@@ -64,8 +65,8 @@ export function PointerAmbience({ enabled }: { enabled: boolean }) {
     const addParticle = (x: number, y: number, speedX: number, speedY: number, burst = false) => {
       const angle = Math.random() * Math.PI * 2;
       const scatter = burst ? 1.2 + Math.random() * 2.8 : .3 + Math.random() * 1.15;
-      const inherited = burst ? 0 : .055;
-      const maxLife = burst ? 56 + Math.random() * 40 : 42 + Math.random() * 38;
+      const inherited = burst ? 0 : .025;
+      const maxLife = burst ? 44 + Math.random() * 28 : 30 + Math.random() * 28;
       particles.push({
         x: x + (Math.random() - .5) * 8,
         y: y + (Math.random() - .5) * 8,
@@ -73,21 +74,20 @@ export function PointerAmbience({ enabled }: { enabled: boolean }) {
         vy: Math.sin(angle) * scatter + speedY * inherited - (burst ? .3 : .08),
         life: maxLife,
         maxLife,
-        size: burst ? 1.8 + Math.random() * 3.1 : 1 + Math.random() * 2.35,
+        size: burst ? 1.7 + Math.random() * 2.7 : 1 + Math.random() * 1.9,
         color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
       });
-      if (particles.length > 180) particles.splice(0, particles.length - 180);
+      if (particles.length > 100) particles.splice(0, particles.length - 100);
     };
 
     const wake = () => {
       if (!frame) frame = window.requestAnimationFrame(draw);
     };
 
-    const onPointerMove = (event: PointerEvent) => {
-      if (event.pointerType && event.pointerType !== "mouse") return;
-      targetX = event.clientX;
-      targetY = event.clientY;
-      pointerPresent = true;
+    const renderPointerInput = () => {
+      pointerFrame = 0;
+      glowElement.style.transform = `translate3d(${targetX}px, ${targetY}px, 0)`;
+      glowElement.style.opacity = "1";
       if (!hasPointerSample) {
         previousX = targetX;
         previousY = targetY;
@@ -97,8 +97,8 @@ export function PointerAmbience({ enabled }: { enabled: boolean }) {
       const dy = targetY - previousY;
       const distance = Math.hypot(dx, dy);
       travelled += distance;
-      if (distance > 2) {
-        const count = Math.min(9, Math.max(2, Math.round(distance / 7)));
+      if (distance > 4) {
+        const count = Math.min(5, Math.max(1, Math.round(distance / 13)));
         for (let index = 1; index <= count; index += 1) {
           const progress = index / count;
           addParticle(previousX + dx * progress, previousY + dy * progress, dx / count, dy / count);
@@ -113,6 +113,13 @@ export function PointerAmbience({ enabled }: { enabled: boolean }) {
       wake();
     };
 
+    const onPointerMove = (event: PointerEvent) => {
+      if (event.pointerType && event.pointerType !== "mouse") return;
+      targetX = event.clientX;
+      targetY = event.clientY;
+      if (!pointerFrame) pointerFrame = window.requestAnimationFrame(renderPointerInput);
+    };
+
     const onPointerDown = (event: PointerEvent) => {
       if (event.pointerType && event.pointerType !== "mouse") return;
       targetX = event.clientX;
@@ -120,29 +127,18 @@ export function PointerAmbience({ enabled }: { enabled: boolean }) {
       previousX = targetX;
       previousY = targetY;
       hasPointerSample = true;
-      pointerPresent = true;
-      for (let index = 0; index < 32; index += 1) addParticle(event.clientX, event.clientY, 0, 0, true);
+      glowElement.style.transform = `translate3d(${targetX}px, ${targetY}px, 0)`;
+      glowElement.style.opacity = "1";
+      for (let index = 0; index < 22; index += 1) addParticle(event.clientX, event.clientY, 0, 0, true);
       ripples.push({ x: event.clientX, y: event.clientY, radius: 7, life: 48, maxLife: 48 });
       wake();
     };
 
-    const onPointerLeave = () => { pointerPresent = false; wake(); };
+    const onPointerLeave = () => { glowElement.style.opacity = "0"; };
 
     function draw() {
       frame = 0;
       ctx.clearRect(0, 0, width, height);
-      glowOpacity += ((pointerPresent ? 1 : 0) - glowOpacity) * .24;
-
-      if (glowOpacity > .01) {
-        const glow = ctx.createRadialGradient(targetX, targetY, 0, targetX, targetY, 190);
-        glow.addColorStop(0, `rgba(250, 215, 145, ${.34 * glowOpacity})`);
-        glow.addColorStop(.18, `rgba(220, 157, 88, ${.2 * glowOpacity})`);
-        glow.addColorStop(.52, `rgba(75, 137, 107, ${.11 * glowOpacity})`);
-        glow.addColorStop(1, "rgba(30, 76, 58, 0)");
-        ctx.fillStyle = glow;
-        ctx.fillRect(targetX - 190, targetY - 190, 380, 380);
-      }
-
       ctx.globalCompositeOperation = "lighter";
       for (let index = particles.length - 1; index >= 0; index -= 1) {
         const particle = particles[index];
@@ -157,12 +153,9 @@ export function PointerAmbience({ enabled }: { enabled: boolean }) {
         const [red, green, blue] = particle.color;
         ctx.beginPath();
         ctx.fillStyle = `rgba(${red}, ${green}, ${blue}, ${alpha})`;
-        ctx.shadowColor = `rgba(${red}, ${green}, ${blue}, ${alpha * .8})`;
-        ctx.shadowBlur = 12;
         ctx.arc(particle.x, particle.y, particle.size * (.55 + progress * .65), 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.shadowBlur = 0;
 
       for (let index = ripples.length - 1; index >= 0; index -= 1) {
         const ripple = ripples[index];
@@ -178,7 +171,7 @@ export function PointerAmbience({ enabled }: { enabled: boolean }) {
       }
       ctx.globalCompositeOperation = "source-over";
 
-      if (particles.length || ripples.length || glowOpacity > .01 || pointerPresent) {
+      if (particles.length || ripples.length) {
         frame = window.requestAnimationFrame(draw);
       }
     }
@@ -190,7 +183,9 @@ export function PointerAmbience({ enabled }: { enabled: boolean }) {
     document.documentElement.addEventListener("mouseleave", onPointerLeave);
     return () => {
       if (frame) window.cancelAnimationFrame(frame);
+      if (pointerFrame) window.cancelAnimationFrame(pointerFrame);
       ctx.clearRect(0, 0, width, height);
+      glowElement.style.opacity = "0";
       window.removeEventListener("resize", resize);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerdown", onPointerDown);
@@ -198,5 +193,5 @@ export function PointerAmbience({ enabled }: { enabled: boolean }) {
     };
   }, [enabled]);
 
-  return <canvas ref={canvasRef} className="pointer-ambience" aria-hidden="true" />;
+  return <><div ref={glowRef} className="pointer-glow" aria-hidden="true" /><canvas ref={canvasRef} className="pointer-ambience" aria-hidden="true" /></>;
 }

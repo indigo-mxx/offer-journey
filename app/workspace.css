@@ -786,6 +786,21 @@ body {
   height: 100vh;
   pointer-events: none;
 }
+.pointer-glow {
+  position: fixed;
+  top: -180px;
+  left: -180px;
+  z-index: 14;
+  width: 360px;
+  height: 360px;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(circle, rgba(250, 215, 145, .32) 0%, rgba(220, 157, 88, .17) 21%, rgba(75, 137, 107, .085) 50%, transparent 72%);
+  transform: translate3d(50vw, 30vh, 0);
+  transition: opacity 180ms ease;
+  will-change: transform, opacity;
+}
 .topbar {
   border-bottom-color: rgba(235, 220, 190, .16);
   background: rgba(13, 25, 20, .72);
@@ -869,11 +884,11 @@ body {
 }
 
 @media (max-width: 720px), (hover: none), (pointer: coarse) {
-  .pointer-ambience { display: none; }
+  .pointer-ambience, .pointer-glow { display: none; }
   .topbar { background: rgba(13, 25, 20, .88); }
   .effects-toggle { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pointer-ambience { display: none; }
+  .pointer-ambience, .pointer-glow { display: none; }
 }
