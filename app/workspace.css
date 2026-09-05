@@ -791,6 +791,35 @@ body {
   background: rgba(13, 25, 20, .72);
   box-shadow: 0 1px 0 rgba(255, 244, 218, .045), 0 12px 35px rgba(0, 0, 0, .12);
 }
+.effects-toggle {
+  position: relative;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid rgba(231, 218, 192, .17);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .045);
+  color: #93a49b;
+  font-size: 12px;
+  transition: color 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 180ms ease, transform 160ms ease;
+}
+.effects-toggle span { color: #72847b; font-size: 13px; transition: color 160ms ease, transform 260ms cubic-bezier(.18, .9, .25, 1.25), text-shadow 180ms ease; }
+.effects-toggle b { font-weight: 650; }
+.effects-toggle:hover { border-color: rgba(226, 184, 109, .34); color: #e8dcc7; transform: translateY(-1px); }
+.effects-toggle.active {
+  border-color: rgba(225, 180, 99, .38);
+  background: rgba(210, 142, 79, .1);
+  color: #f0e4cf;
+  box-shadow: inset 0 0 14px rgba(222, 169, 86, .055), 0 0 18px rgba(207, 143, 75, .075);
+}
+.effects-toggle.active span {
+  color: #efbd69;
+  text-shadow: 0 0 9px rgba(239, 180, 91, .7);
+  transform: rotate(18deg) scale(1.08);
+}
+.effects-toggle:active { transform: translateY(1px) scale(.97); }
 .brand { color: #f2eadb; }
 .brand strong { color: #f2eadb; }
 .brand small { color: #95a79e; }
@@ -842,6 +871,7 @@ body {
 @media (max-width: 720px), (hover: none), (pointer: coarse) {
   .pointer-ambience { display: none; }
   .topbar { background: rgba(13, 25, 20, .88); }
+  .effects-toggle { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

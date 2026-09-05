@@ -22,14 +22,14 @@ const PALETTE: Array<[number, number, number]> = [
   [241, 213, 157],
 ];
 
-export function PointerAmbience() {
+export function PointerAmbience({ enabled }: { enabled: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     const finePointer = window.matchMedia("(hover: hover) and (pointer: fine)");
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    if (!canvas || !finePointer.matches || reducedMotion.matches || window.innerWidth <= 720) return;
+    if (!canvas || !enabled || !finePointer.matches || reducedMotion.matches || window.innerWidth <= 720) return;
 
     const context = canvas.getContext("2d");
     if (!context) return;
@@ -42,10 +42,9 @@ export function PointerAmbience() {
     let dpr = 1;
     let targetX = window.innerWidth / 2;
     let targetY = window.innerHeight / 3;
-    let glowX = targetX;
-    let glowY = targetY;
     let previousX = targetX;
     let previousY = targetY;
+    let hasPointerSample = false;
     let travelled = 0;
     let glowOpacity = 0;
     let pointerPresent = false;
@@ -89,13 +88,21 @@ export function PointerAmbience() {
       targetX = event.clientX;
       targetY = event.clientY;
       pointerPresent = true;
+      if (!hasPointerSample) {
+        previousX = targetX;
+        previousY = targetY;
+        hasPointerSample = true;
+      }
       const dx = targetX - previousX;
       const dy = targetY - previousY;
       const distance = Math.hypot(dx, dy);
       travelled += distance;
       if (distance > 2) {
-        const count = Math.min(6, Math.max(2, Math.round(distance / 8)));
-        for (let index = 0; index < count; index += 1) addParticle(targetX, targetY, dx, dy);
+        const count = Math.min(9, Math.max(2, Math.round(distance / 7)));
+        for (let index = 1; index <= count; index += 1) {
+          const progress = index / count;
+          addParticle(previousX + dx * progress, previousY + dy * progress, dx / count, dy / count);
+        }
       }
       if (travelled > 92) {
         ripples.push({ x: targetX, y: targetY, radius: 5, life: 34, maxLife: 34 });
@@ -108,6 +115,12 @@ export function PointerAmbience() {
 
     const onPointerDown = (event: PointerEvent) => {
       if (event.pointerType && event.pointerType !== "mouse") return;
+      targetX = event.clientX;
+      targetY = event.clientY;
+      previousX = targetX;
+      previousY = targetY;
+      hasPointerSample = true;
+      pointerPresent = true;
       for (let index = 0; index < 32; index += 1) addParticle(event.clientX, event.clientY, 0, 0, true);
       ripples.push({ x: event.clientX, y: event.clientY, radius: 7, life: 48, maxLife: 48 });
       wake();
@@ -118,18 +131,16 @@ export function PointerAmbience() {
     function draw() {
       frame = 0;
       ctx.clearRect(0, 0, width, height);
-      glowX += (targetX - glowX) * .2;
-      glowY += (targetY - glowY) * .2;
-      glowOpacity += ((pointerPresent ? 1 : 0) - glowOpacity) * .11;
+      glowOpacity += ((pointerPresent ? 1 : 0) - glowOpacity) * .24;
 
       if (glowOpacity > .01) {
-        const glow = ctx.createRadialGradient(glowX, glowY, 0, glowX, glowY, 190);
+        const glow = ctx.createRadialGradient(targetX, targetY, 0, targetX, targetY, 190);
         glow.addColorStop(0, `rgba(250, 215, 145, ${.34 * glowOpacity})`);
         glow.addColorStop(.18, `rgba(220, 157, 88, ${.2 * glowOpacity})`);
         glow.addColorStop(.52, `rgba(75, 137, 107, ${.11 * glowOpacity})`);
         glow.addColorStop(1, "rgba(30, 76, 58, 0)");
         ctx.fillStyle = glow;
-        ctx.fillRect(glowX - 190, glowY - 190, 380, 380);
+        ctx.fillRect(targetX - 190, targetY - 190, 380, 380);
       }
 
       ctx.globalCompositeOperation = "lighter";
@@ -179,12 +190,13 @@ export function PointerAmbience() {
     document.documentElement.addEventListener("mouseleave", onPointerLeave);
     return () => {
       if (frame) window.cancelAnimationFrame(frame);
+      ctx.clearRect(0, 0, width, height);
       window.removeEventListener("resize", resize);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerdown", onPointerDown);
       document.documentElement.removeEventListener("mouseleave", onPointerLeave);
     };
-  }, []);
+  }, [enabled]);
 
   return <canvas ref={canvasRef} className="pointer-ambience" aria-hidden="true" />;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, useSyncExternalStore } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
@@ -325,6 +325,25 @@ const RECRUITMENT_EVENT_TYPES: RecruitmentEventType[] = ["written_test", "assess
 const RECRUITMENT_EVENT_STATUSES: RecruitmentEventStatus[] = ["待进行", "已完成", "已取消"];
 const CALENDAR_EVENT_MODES = ["线上", "线下", "电话", "邮件", "其他"];
 const TODO_DISMISSALS_STORAGE_PREFIX = "dismissed-calendar-todos:";
+const PARTICLE_EFFECT_STORAGE_KEY = "offer-journey:particle-effects";
+const PARTICLE_EFFECT_CHANGE_EVENT = "offer-journey:particle-effects-change";
+
+function subscribeToParticlePreference(listener: () => void) {
+  const notify = () => listener();
+  window.addEventListener("storage", notify);
+  window.addEventListener(PARTICLE_EFFECT_CHANGE_EVENT, notify);
+  return () => {
+    window.removeEventListener("storage", notify);
+    window.removeEventListener(PARTICLE_EFFECT_CHANGE_EVENT, notify);
+  };
+}
+
+function particlePreferenceSnapshot() {
+  try { return window.localStorage.getItem(PARTICLE_EFFECT_STORAGE_KEY) !== "off"; }
+  catch { return true; }
+}
+
+const particlePreferenceServerSnapshot = () => true;
 
 function emptyCalendarEventForm(date = new Date()): CalendarEventForm {
   return {
@@ -1029,6 +1048,11 @@ export function RecruitmentTracker({
   signOutPath,
   onSignOut,
 }: Props) {
+  const particleEffectsEnabled = useSyncExternalStore(
+    subscribeToParticlePreference,
+    particlePreferenceSnapshot,
+    particlePreferenceServerSnapshot,
+  );
   const [applications, setApplications] = useState<Application[]>([]);
   const [groups, setGroups] = useState<GroupInfo[]>([]);
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
@@ -3684,7 +3708,7 @@ export function RecruitmentTracker({
   // ────────────────────────────────── render
   return (
     <div className={`app-shell workspace-active-${view}`}>
-      <PointerAmbience />
+      <PointerAmbience enabled={particleEffectsEnabled} />
       <datalist id="rejection-reason-options">
         {REJECTION_REASON_OPTIONS.map((option) => <option key={option} value={option} />)}
       </datalist>
@@ -3708,6 +3732,23 @@ export function RecruitmentTracker({
           </span>
         </a>
         <div className="top-actions">
+          <button
+            type="button"
+            className={`effects-toggle${particleEffectsEnabled ? " active" : ""}`}
+            aria-pressed={particleEffectsEnabled}
+            aria-label={`${particleEffectsEnabled ? "关闭" : "开启"}鼠标粒子特效`}
+            title={`${particleEffectsEnabled ? "关闭" : "开启"}鼠标粒子特效`}
+            onClick={() => {
+              try {
+                window.localStorage.setItem(PARTICLE_EFFECT_STORAGE_KEY, particleEffectsEnabled ? "off" : "on");
+                window.dispatchEvent(new Event(PARTICLE_EFFECT_CHANGE_EVENT));
+              } catch {
+                setNotice("浏览器未允许保存特效偏好");
+              }
+            }}
+          >
+            <span aria-hidden="true">✦</span><b>特效</b>
+          </button>
           {user ? (
             <div className="account-menu">
               <a className="account-avatar" href="/account" title="账户中心">
