@@ -5,12 +5,17 @@ import { useEffect, useRef } from "react";
 type Particle = {
   x: number;
   y: number;
+  previousX: number;
+  previousY: number;
   vx: number;
   vy: number;
   life: number;
   maxLife: number;
   size: number;
   color: [number, number, number];
+  rotation: number;
+  rotationSpeed: number;
+  shape: "orb" | "spark";
 };
 
 type Ripple = { x: number; y: number; radius: number; life: number; maxLife: number };
@@ -67,15 +72,22 @@ export function PointerAmbience({ enabled }: { enabled: boolean }) {
       const scatter = burst ? 1.2 + Math.random() * 2.8 : .3 + Math.random() * 1.15;
       const inherited = burst ? 0 : .025;
       const maxLife = burst ? 44 + Math.random() * 28 : 30 + Math.random() * 28;
+      const particleX = x + (Math.random() - .5) * 8;
+      const particleY = y + (Math.random() - .5) * 8;
       particles.push({
-        x: x + (Math.random() - .5) * 8,
-        y: y + (Math.random() - .5) * 8,
+        x: particleX,
+        y: particleY,
+        previousX: particleX,
+        previousY: particleY,
         vx: Math.cos(angle) * scatter + speedX * inherited,
         vy: Math.sin(angle) * scatter + speedY * inherited - (burst ? .3 : .08),
         life: maxLife,
         maxLife,
         size: burst ? 1.7 + Math.random() * 2.7 : 1 + Math.random() * 1.9,
         color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+        rotation: Math.random() * Math.PI,
+        rotationSpeed: (Math.random() - .5) * .14,
+        shape: Math.random() < (burst ? .36 : .18) ? "spark" : "orb",
       });
       if (particles.length > 100) particles.splice(0, particles.length - 100);
     };
@@ -105,7 +117,7 @@ export function PointerAmbience({ enabled }: { enabled: boolean }) {
         }
       }
       if (travelled > 92) {
-        ripples.push({ x: targetX, y: targetY, radius: 5, life: 34, maxLife: 34 });
+        ripples.push({ x: targetX, y: targetY, radius: 4, life: 26, maxLife: 26 });
         travelled = 0;
       }
       previousX = targetX;
@@ -130,7 +142,7 @@ export function PointerAmbience({ enabled }: { enabled: boolean }) {
       glowElement.style.transform = `translate3d(${targetX}px, ${targetY}px, 0)`;
       glowElement.style.opacity = "1";
       for (let index = 0; index < 22; index += 1) addParticle(event.clientX, event.clientY, 0, 0, true);
-      ripples.push({ x: event.clientX, y: event.clientY, radius: 7, life: 48, maxLife: 48 });
+      ripples.push({ x: event.clientX, y: event.clientY, radius: 6, life: 34, maxLife: 34 });
       wake();
     };
 
@@ -144,16 +156,48 @@ export function PointerAmbience({ enabled }: { enabled: boolean }) {
         const particle = particles[index];
         particle.life -= 1;
         if (particle.life <= 0) { particles.splice(index, 1); continue; }
+        particle.previousX = particle.x;
+        particle.previousY = particle.y;
         particle.x += particle.vx;
         particle.y += particle.vy;
         particle.vx *= .965;
         particle.vy = particle.vy * .965 + .008;
+        particle.rotation += particle.rotationSpeed;
         const progress = particle.life / particle.maxLife;
-        const alpha = Math.sin(progress * Math.PI) * .9;
+        const shimmer = .76 + Math.sin(particle.life * .58) * .24;
+        const alpha = Math.sin(progress * Math.PI) * .9 * shimmer;
         const [red, green, blue] = particle.color;
+        const radius = particle.size * (.55 + progress * .65);
+
+        ctx.beginPath();
+        ctx.strokeStyle = `rgba(${red}, ${green}, ${blue}, ${alpha * .42})`;
+        ctx.lineWidth = Math.max(.55, radius * .52);
+        ctx.lineCap = "round";
+        ctx.moveTo(particle.previousX - particle.vx * 1.8, particle.previousY - particle.vy * 1.8);
+        ctx.lineTo(particle.x, particle.y);
+        ctx.stroke();
+
         ctx.beginPath();
         ctx.fillStyle = `rgba(${red}, ${green}, ${blue}, ${alpha})`;
-        ctx.arc(particle.x, particle.y, particle.size * (.55 + progress * .65), 0, Math.PI * 2);
+        if (particle.shape === "spark") {
+          const outer = radius * 1.65;
+          const inner = radius * .42;
+          const point = (distance: number, angle: number) => ({
+            x: particle.x + Math.cos(angle) * distance,
+            y: particle.y + Math.sin(angle) * distance,
+          });
+          const points = [
+            point(outer, particle.rotation - Math.PI / 2), point(inner, particle.rotation - Math.PI / 4),
+            point(outer, particle.rotation), point(inner, particle.rotation + Math.PI / 4),
+            point(outer, particle.rotation + Math.PI / 2), point(inner, particle.rotation + Math.PI * .75),
+            point(outer, particle.rotation + Math.PI), point(inner, particle.rotation + Math.PI * 1.25),
+          ];
+          ctx.moveTo(points[0].x, points[0].y);
+          for (let pointIndex = 1; pointIndex < points.length; pointIndex += 1) ctx.lineTo(points[pointIndex].x, points[pointIndex].y);
+          ctx.closePath();
+        } else {
+          ctx.arc(particle.x, particle.y, radius, 0, Math.PI * 2);
+        }
         ctx.fill();
       }
 
@@ -162,10 +206,10 @@ export function PointerAmbience({ enabled }: { enabled: boolean }) {
         ripple.life -= 1;
         if (ripple.life <= 0) { ripples.splice(index, 1); continue; }
         const progress = 1 - ripple.life / ripple.maxLife;
-        ripple.radius += 1.55;
+        ripple.radius += .95;
         ctx.beginPath();
         ctx.strokeStyle = `rgba(232, 185, 105, ${(1 - progress) * .52})`;
-        ctx.lineWidth = 1.55;
+        ctx.lineWidth = 1.25;
         ctx.arc(ripple.x, ripple.y, ripple.radius, 0, Math.PI * 2);
         ctx.stroke();
       }
