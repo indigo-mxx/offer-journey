@@ -849,6 +849,25 @@ body {
 .brand { color: #f2eadb; }
 .brand strong { color: #f2eadb; }
 .brand small { color: #95a79e; }
+.topbar .account-menu {
+  border-color: rgba(236, 216, 178, .2);
+  background: rgba(255, 252, 240, .055);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .035), 0 7px 20px rgba(0, 0, 0, .1);
+}
+.topbar .account-copy strong {
+  color: #fff8e9;
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: .015em;
+  text-shadow: 0 0 13px rgba(242, 193, 112, .22);
+}
+.topbar .account-copy small { color: #b8c5bd; }
+.topbar .account-avatar {
+  background: rgba(214, 157, 87, .14);
+  color: #f5c97c;
+  box-shadow: inset 0 0 0 1px rgba(238, 196, 123, .2), 0 0 15px rgba(211, 142, 74, .08);
+}
+.topbar .account-avatar:hover { background: #b96846; color: #fffaf0; }
 .brand-mark {
   background: #173e31;
   color: #fff4dc;

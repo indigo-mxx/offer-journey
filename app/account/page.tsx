@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { getSupabaseBrowserClient } from "../../lib/supabase-browser";
 import "../globals.css";
@@ -97,10 +98,10 @@ export default function AccountPage() {
   return (
     <main className="auth-shell">
       <section className="account-card">
-        <a className="brand" href="/" aria-label="返回秋招同行录">
+        <Link className="brand" href="/" aria-label="返回秋招同行录">
           <span className="brand-mark">秋</span>
           <span><strong>MXX · 秋招同行录</strong><small>个人中心</small></span>
-        </a>
+        </Link>
         <div className="auth-copy">
           <p className="eyebrow">ACCOUNT SETTINGS</p>
           <h1>个人中心</h1>
@@ -122,7 +123,7 @@ export default function AccountPage() {
         <form className="auth-form account-form" onSubmit={(e) => { e.preventDefault(); void saveUsername(); }}>
           <h2>设置用户名</h2>
           <p className="form-hint">
-            用户名可用于登录，3~20 个字符，仅支持字母、数字和下划线。设置后可用「用户名 + 密码」登录。
+            此名称会显示在工作台右上角，也可用于登录。3~20 个字符，仅支持字母、数字和下划线。
           </p>
           <label>
             <span>用户名</span>
@@ -170,7 +171,7 @@ export default function AccountPage() {
         </form>
 
         {message && <p className="auth-message">{message}</p>}
-        <p className="auth-back"><a href="/">返回工作台</a></p>
+        <p className="auth-back"><Link href="/">返回工作台</Link></p>
       </section>
     </main>
   );

@@ -8,6 +8,7 @@ export function SupabaseShell() {
   const supabase = getSupabaseBrowserClient();
   const [session, setSession] = useState<Awaited<ReturnType<NonNullable<typeof supabase>["auth"]["getSession"]>>["data"]["session"]>(null);
   const [ready, setReady] = useState(!supabase);
+  const [profileName, setProfileName] = useState<{ userId: string; username: string } | null>(null);
 
   useEffect(() => {
     if (!supabase) return;
@@ -28,12 +29,24 @@ export function SupabaseShell() {
   }, [supabase]);
 
   const authUser = session?.user;
-  const displayName = authUser?.user_metadata?.full_name || authUser?.email?.split("@")[0] || "同学";
+  const authUserId = authUser?.id;
+
+  useEffect(() => {
+    let active = true;
+    if (!supabase || !authUserId) return;
+    void supabase.from("profiles").select("username").eq("id", authUserId).maybeSingle().then(({ data }) => {
+      if (active) setProfileName({ userId: authUserId, username: typeof data?.username === "string" ? data.username : "" });
+    });
+    return () => { active = false; };
+  }, [authUserId, supabase]);
+
+  const username = profileName && profileName.userId === authUserId ? profileName.username : "";
+  const displayName = username || authUser?.user_metadata?.full_name || authUser?.email?.split("@")[0] || "同学";
 
   useEffect(() => {
     if (!ready) return;
-    document.title = `秋招同行录 · ${authUser ? displayName : "未登录"}`;
-  }, [authUser?.id, displayName, ready]);
+    document.title = `秋招同行录 · ${authUserId ? displayName : "未登录"}`;
+  }, [authUserId, displayName, ready]);
 
   if (!ready) {
     return <main className="loading-state">正在连接云端账户…</main>;
