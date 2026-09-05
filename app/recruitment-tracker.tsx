@@ -157,10 +157,9 @@ const LIST_MODE_OPTIONS: Array<{
   icon: string;
   label: string;
   description: string;
-  badge?: string;
 }> = [
-  { value: "companyList", icon: "▤", label: "公司清单", description: "一家公司一行，快速总览", badge: "默认" },
-  { value: "companyCards", icon: "▦", label: "公司卡片", description: "更丰富的档案式浏览", badge: "沉浸" },
+  { value: "companyList", icon: "▤", label: "公司清单", description: "按公司汇总投递记录" },
+  { value: "companyCards", icon: "▦", label: "公司卡片", description: "查看公司资料与岗位进度" },
   { value: "position", icon: "≡", label: "岗位明细", description: "逐条查看每个投递岗位" },
   { value: "kanban", icon: "◫", label: "进度看板", description: "按求职阶段推进流程" },
 ];
@@ -831,7 +830,14 @@ function DropdownSelect({
         <span className={selected ? "" : "placeholder"}>{selected?.label ?? placeholder}</span><i aria-hidden="true">⌄</i>
       </button>
       {open && createPortal(
-        <div className="select-popover portal-popover" ref={popoverRef} style={popoverStyle} role="listbox" aria-label={ariaLabel}>
+        <div className="select-popover portal-popover" ref={popoverRef} style={popoverStyle} role="listbox" aria-label={ariaLabel} onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            setOpen(false);
+            rootRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+          }
+        }}>
           <label className="select-search"><span>⌕</span><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="输入关键词筛选" /></label>
           <div className="select-options">
             {filteredOptions.length ? filteredOptions.map((option) => (
@@ -942,7 +948,6 @@ function DashboardPanel({
     <section className="analytics-dashboard" aria-label="投递数据看板">
       <header className="dashboard-head">
         <div>
-          <p className="section-kicker">APPLICATION ANALYTICS</p>
           <h2>投递数据看板</h2>
           <p>从投递节奏、流程推进和目标覆盖三个角度，查看当前求职进展。</p>
         </div>
@@ -2656,6 +2661,38 @@ export function RecruitmentTracker({
     setEditingCalendarItem(null);
   }, []);
 
+  useEffect(() => {
+    if (!isCalendarEventOpen) return;
+    const dialog = document.querySelector<HTMLElement>(".calendar-event-modal");
+    if (!dialog) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    (dialog.querySelector<HTMLElement>('input:not([type="checkbox"]), textarea') ?? dialog.querySelector<HTMLElement>("button"))?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeCalendarEvent();
+      } else if (event.key === "Tab") {
+        // Custom selects render their options in a portal beside the dialog.
+        const popover = dialog.querySelector(".select-field.is-open") ? document.querySelector(".select-popover") : null;
+        const selector = 'button:not(:disabled), input:not(:disabled):not([type="hidden"]), textarea:not(:disabled), a[href], [tabindex="0"]';
+        const focusable = [...dialog.querySelectorAll<HTMLElement>(selector), ...(popover?.querySelectorAll<HTMLElement>(selector) ?? [])].filter((element) => element.getClientRects().length > 0);
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+    };
+  }, [isCalendarEventOpen, closeCalendarEvent]);
+
   const submitCalendarEvent = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const application = ownApplications.find((item) => item.id === calendarEventForm.applicationId);
@@ -3643,7 +3680,7 @@ export function RecruitmentTracker({
 
   // ────────────────────────────────── render
   return (
-    <div className="app-shell">
+    <div className={`app-shell workspace-active-${view}`}>
       <datalist id="rejection-reason-options">
         {REJECTION_REASON_OPTIONS.map((option) => <option key={option} value={option} />)}
       </datalist>
@@ -3653,7 +3690,7 @@ export function RecruitmentTracker({
             <span className="processing-spinner" aria-hidden="true" />
             <div>
               <strong>{pendingAction}</strong>
-              <small>正在安全同步，请稍候</small>
+              <small>正在同步，请稍候</small>
             </div>
           </div>
         </div>
@@ -3663,7 +3700,7 @@ export function RecruitmentTracker({
           <span className="brand-mark">秋</span>
           <span>
             <strong>秋招同行录</strong>
-            <small>投递进度 · 面试记录 · 小组共享</small>
+            <small>求职记录</small>
           </span>
         </a>
         <div className="top-actions">
@@ -3691,41 +3728,9 @@ export function RecruitmentTracker({
         </div>
       </header>
 
-      <section className="hero">
-        <div className="hero-main">
-          <p className="eyebrow"><span /> MXX CAREER STUDIO</p>
-          <h1>让每一次投递，<br /><em>都有清晰的下一步。</em></h1>
-          <p className="hero-copy">
-            从公司与岗位，到面试时间线和最终 Offer，把秋招里容易散落的信息整理成一张清晰、可靠的行动地图。
-          </p>
-          <div className="hero-actions">
-            <button className="primary-button hero-primary-action" onClick={() => { setView("mine"); openCreate(); }}>
-              <span>＋</span> 记录新公司
-            </button>
-            <button className="hero-text-action" onClick={() => setView("dashboard")}>查看数据看板 <span>↗</span></button>
-          </div>
-          <div className="hero-signals" aria-label="产品能力">
-            <span><i />公司与多岗位</span>
-            <span><i />面试时间线</span>
-            <span><i />好友隐私共享</span>
-          </div>
-        </div>
-        <div className="hero-note" aria-label="使用提示">
-          <div className="hero-note-topline">
-            <span className="hero-note-label">SMART WORKFLOW</span>
-            <span className="hero-note-status"><i /> {user ? "云端同步已连接" : "本地模式可直接使用"}</span>
-          </div>
-          <div className="hero-note-content">
-            <span className="hero-note-icon">⌁</span>
-            <div>
-              <strong>一家公司，统一管理多个岗位</strong>
-              <p>公司资料只需填写一次，岗位、面试和进度各自独立，回顾时更加清楚。</p>
-            </div>
-          </div>
-          <div className="hero-note-flow" aria-hidden="true">
-            <span>公司</span><i>→</i><span>岗位</span><i>→</i><span>面试</span><i>→</i><span>Offer</span>
-          </div>
-        </div>
+      <section className="workspace-intro" aria-label="求职工作台">
+        <div><h1>我的求职记录</h1><p>{user ? "已连接云端同步" : "保存在当前浏览器"}</p></div>
+        <button className="primary-button" onClick={() => { changeWorkspaceView("mine"); openCreate(); }}>＋ 新增投递</button>
       </section>
 
       <section className="stats-grid">
@@ -3743,7 +3748,7 @@ export function RecruitmentTracker({
         </button>
         <button type="button" className={["stat-card", "highlight", statFilter === "offer" ? "is-selected" : ""].filter(Boolean).join(" ")} onClick={() => openStatFilter("offer")} aria-pressed={statFilter === "offer"} aria-label={"\u67e5\u770b Offer \u6295\u9012"}>
           <span className="stat-icon green">✓</span>
-          <div><small>Offer</small><strong>{stats.offers}</strong><span>继续加油</span></div>
+          <div><small>Offer</small><strong>{stats.offers}</strong><span>已获得</span></div>
         </button>
       </section>
 
@@ -3803,9 +3808,8 @@ export function RecruitmentTracker({
             <section className="calendar-todo-panel" aria-label="招聘待做事项">
               <header className="calendar-todo-head">
                 <div>
-                  <p className="section-kicker">NEXT ACTIONS</p>
                   <h2>我的待做</h2>
-                  <p>网站会根据岗位进度和日程自动提醒：先定测评或面试，按时参加，结束后补充面经与结果。</p>
+                  <p>待安排的面试、待补充的面经与结果。</p>
                 </div>
                 <span><strong>{calendarTodos.length}</strong> 项待处理</span>
               </header>
@@ -3855,7 +3859,6 @@ export function RecruitmentTracker({
           <section className="experience-library" aria-label={"\u9762\u7ecf\u5e93"}>
             <div className="experience-library-head">
               <div>
-                <p className="section-kicker">INTERVIEW PLAYBOOK</p>
                 <h2>{"\u9762\u7ecf\u5e93"}</h2>
                 <p>{"\u628a\u6bcf\u6b21\u9762\u8bd5\u7684\u9ad8\u9891\u95ee\u9898\u3001\u56de\u7b54\u601d\u8def\u548c\u590d\u76d8\u8981\u70b9\u6c89\u6dc0\u4e0b\u6765\uff0c\u4e0b\u4e00\u6b21\u66f4\u4ece\u5bb9\u3002"}</p>
               </div>
@@ -4004,9 +4007,7 @@ export function RecruitmentTracker({
               </div>
               {!interviewWorkspaceActive && <div className="view-mode-panel">
                 <div className="view-mode-heading">
-                  <span>DISPLAY MODE</span>
-                  <strong>选择显示方式</strong>
-                  <small>点击切换，本机会自动记住你的选择</small>
+                  <strong>显示方式</strong>
                 </div>
                 <div className="view-mode-options" role="group" aria-label="清单显示方式">
                   {LIST_MODE_OPTIONS.map((option) => (
@@ -4015,15 +4016,13 @@ export function RecruitmentTracker({
                       key={option.value}
                       className={`view-mode-button ${listMode === option.value ? "active" : ""}`}
                       aria-pressed={listMode === option.value}
+                      title={option.description}
                       onClick={() => changeListMode(option.value)}
                     >
                       <i className="view-mode-icon" aria-hidden="true">{option.icon}</i>
                       <span className="view-mode-copy">
                         <strong>{option.label}</strong>
-                        <small>{option.description}</small>
                       </span>
-                      {option.badge && <b>{option.badge}</b>}
-                      <span className="view-mode-check" aria-hidden="true">✓</span>
                     </button>
                   ))}
                 </div>
@@ -4092,9 +4091,7 @@ export function RecruitmentTracker({
             {filtered.length > 0 && !interviewWorkspaceActive && (
               <section className="list-insights list-insights-top" aria-label="当前投递统计">
                 <div className="list-insights-copy">
-                  <span>当前清单统计</span>
-                  <h3>投递进展一览</h3>
-                  <p>统计会随上方的筛选条件和查看范围实时变化。</p>
+                  <h3>当前筛选</h3>
                 </div>
                 <div className="insight-rings">
                   {listInsights.map((insight) => (
@@ -4175,11 +4172,10 @@ export function RecruitmentTracker({
             )}
 
             {interviewWorkspaceActive ? (
-              <section className="interview-stage-workspace" aria-label="面试阶段作战台">
+              <section className="interview-stage-workspace" aria-label="面试进度">
                 <header className="interview-stage-hero">
                   <div>
-                    <span className="section-kicker">INTERVIEW CONTROL ROOM</span>
-                    <h2>面试轮次作战台</h2>
+                    <h2>面试进度</h2>
                     <p>岗位按当前轮次分开排列；点「查看面经」进入该岗位全部面经与面试记录。</p>
                   </div>
                   <div className="interview-stage-summary">
@@ -4340,7 +4336,6 @@ export function RecruitmentTracker({
                   <div className="company-gallery">
                     <div className="company-gallery-head">
                       <div>
-                        <span>COMPANY PORTFOLIO</span>
                         <strong>公司档案</strong>
                       </div>
                       <small>点击卡片查看该公司的全部岗位与面试时间线</small>
@@ -4605,7 +4600,6 @@ export function RecruitmentTracker({
               <div className="modal import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title">
                 <div className="modal-head">
                   <div>
-                    <p className="modal-kicker">IMPORT BACKUP</p>
                     <h2 id="import-title">确认导入备份</h2>
                     <p className="modal-subtitle">已读取 {importPreview.fileName}。确认后将同时恢复岗位、面试、日程和面经关联。</p>
                   </div>
@@ -4653,7 +4647,6 @@ export function RecruitmentTracker({
             <div className="modal application-form-modal">
               <div className="modal-head">
                 <div>
-                  <p className="modal-kicker">{editingId ? "EDIT APPLICATION" : "NEW APPLICATION"}</p>
                   <h2>{editingId ? "编辑岗位投递" : "新增公司与岗位"}</h2>
                   <p className="modal-subtitle">先确定公司和岗位，再补充投递信息与共享范围。</p>
                 </div>
@@ -4991,7 +4984,6 @@ export function RecruitmentTracker({
               <div className="modal experience-form-modal" onClick={(event) => event.stopPropagation()}>
                 <div className="modal-head">
                   <div>
-                    <p className="modal-kicker">INTERVIEW PLAYBOOK</p>
                     <h2>{editingExperienceId ? "\u7f16\u8f91\u9762\u7ecf" : "\u8bb0\u5f55\u9762\u7ecf"}</h2>
                     <p className="modal-subtitle">{"\u8bb0\u5f55\u9898\u76ee\u3001\u56de\u7b54\u601d\u8def\u4e0e\u590d\u76d8\u8981\u70b9\uff1b\u4e5f\u53ef\u4ee5\u4e0d\u5173\u8054\u5177\u4f53\u5c97\u4f4d\u3002"}</p>
                   </div>
@@ -5121,7 +5113,6 @@ export function RecruitmentTracker({
               <div className="modal company-edit-modal" onClick={(event) => event.stopPropagation()}>
                 <div className="modal-head">
                   <div>
-                    <p className="modal-kicker">EDIT COMPANY</p>
                     <h2>修改公司信息</h2>
                     <p className="modal-subtitle">公司资料会同步更新到该公司的全部岗位，不会改变各岗位的投递进度。</p>
                   </div>
@@ -5208,7 +5199,6 @@ export function RecruitmentTracker({
               <div className="modal friend-calendar-modal" role="dialog" aria-modal="true" aria-labelledby="friend-calendar-title" onClick={(event) => event.stopPropagation()}>
                 <header className="modal-head">
                   <div>
-                    <span className="section-kicker">SHARED SCHEDULE</span>
                     <h2 id="friend-calendar-title">好友日程</h2>
                     <p>{viewingFriendCalendarItem.ownerName} 通过小组完整共享，内容仅供查看。</p>
                   </div>
@@ -5243,9 +5233,8 @@ export function RecruitmentTracker({
               <div className="modal calendar-event-modal" role="dialog" aria-modal="true" aria-labelledby="calendar-event-title" onClick={(event) => event.stopPropagation()}>
                 <header className="modal-head">
                   <div>
-                    <span className="section-kicker">SCHEDULE EDITOR</span>
                     <h2 id="calendar-event-title">{editingCalendarItem ? "编辑日程" : "新增日程"}</h2>
-                    <p>保存后会同步到日历、岗位卡片、公司时间线和待跟进提醒。</p>
+                    <p>填写时间与安排，结束后可在这里补充结果。</p>
                   </div>
                   <button className="icon-button" type="button" onClick={closeCalendarEvent} aria-label="关闭日程编辑">×</button>
                 </header>
@@ -5431,7 +5420,6 @@ export function RecruitmentTracker({
             <div className="modal modal-wide company-detail-modal" onClick={(e) => e.stopPropagation()}>
               <div className="company-modal-header">
                 <div>
-                  <p className="modal-kicker">COMPANY APPLICATIONS</p>
                   <h2>{selectedCompany}</h2>
                   <p className="modal-subtitle">共 {companyApplications.length} 个岗位，集中查看和更新每次投递。</p>
                 </div>
@@ -5596,7 +5584,7 @@ export function RecruitmentTracker({
 
       {/* ────────────────────────────────── footer */}
       <footer className="app-footer">
-        <p>秋招同行录 — 开源 · 隐私优先 · 小组共享</p>
+        <p>秋招同行录</p>
       </footer>
     </div>
   );

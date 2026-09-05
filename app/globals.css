@@ -1207,20 +1207,20 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 
 /* ──────────────────────────────────────────────── 2026 visual refresh */
 :root {
-  --paper: #eef1ec;
-  --surface: rgba(255, 255, 252, .9);
-  --ink: #14221b;
-  --muted: #68766e;
-  --line: rgba(34, 65, 51, .13);
-  --brand: #0e6049;
-  --brand-dark: #094836;
-  --brand-soft: #e0eee6;
+  --paper: #f6f7f8;
+  --surface: #ffffff;
+  --ink: #242b28;
+  --muted: #626d66;
+  --line: #e2e7e4;
+  --brand: #28654f;
+  --brand-dark: #1c4d3b;
+  --brand-soft: #edf4f0;
   --amber: #c58a42;
   --blue: #557ba5;
   --danger: #b34e45;
   --gold: #b88a4a;
-  --shadow: 0 24px 70px rgba(22, 52, 38, .09), 0 2px 8px rgba(22, 52, 38, .035);
-  --shadow-hover: 0 28px 80px rgba(22, 52, 38, .14), 0 6px 20px rgba(22, 52, 38, .06);
+  --shadow: 0 2px 8px rgba(22, 52, 38, .04);
+  --shadow-hover: 0 4px 14px rgba(22, 52, 38, .07);
 }
 
 html { background: #e9ede7; }
