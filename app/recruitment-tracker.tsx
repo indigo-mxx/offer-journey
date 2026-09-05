@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { autocompleteScore, matchesFieldsSearch, matchesLiteralSearch, matchesTextSearch, matchingAutocompleteOptions } from "@/lib/search";
@@ -3679,8 +3679,13 @@ export function RecruitmentTracker({
   }, [companyApplications, companyCalendarItems, companyInterviews, companyRecruitmentEvents]);
 
   // ────────────────────────────────── render
+  function updateAmbientLight(event: ReactPointerEvent<HTMLDivElement>) {
+    event.currentTarget.style.setProperty("--pointer-x", `${event.clientX}px`);
+    event.currentTarget.style.setProperty("--pointer-y", `${event.clientY}px`);
+  }
+
   return (
-    <div className={`app-shell workspace-active-${view}`}>
+    <div className={`app-shell workspace-active-${view}`} onPointerMove={updateAmbientLight}>
       <datalist id="rejection-reason-options">
         {REJECTION_REASON_OPTIONS.map((option) => <option key={option} value={option} />)}
       </datalist>

@@ -532,3 +532,237 @@ body {
   .calendar-day.today .calendar-day-select > span { background: var(--accent); }
   .company-overview-card { border-radius: 12px 12px 12px 4px; }
 }
+
+/* Motion and light: tactile feedback without competing with the content. */
+.app-shell {
+  --pointer-x: 50vw;
+  --pointer-y: 18rem;
+  position: relative;
+  isolation: isolate;
+}
+.app-shell::before {
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  background:
+    radial-gradient(460px circle at var(--pointer-x) var(--pointer-y), rgba(255, 250, 238, .78), transparent 58%),
+    radial-gradient(310px circle at calc(var(--pointer-x) + 90px) calc(var(--pointer-y) - 60px), rgba(189, 103, 72, .09), transparent 66%);
+  opacity: .95;
+  transition: opacity 240ms ease;
+}
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  backdrop-filter: blur(16px) saturate(1.15);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .52);
+}
+.brand-mark {
+  transition: transform 340ms cubic-bezier(.2, .8, .2, 1), box-shadow 340ms ease;
+}
+.brand-mark::after {
+  position: absolute;
+  width: 25px;
+  height: 52px;
+  top: -9px;
+  left: -28px;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.28), transparent);
+  transform: rotate(18deg);
+  transition: left 520ms cubic-bezier(.2, .8, .2, 1);
+}
+.brand:hover .brand-mark {
+  transform: rotate(-4deg) translateY(-2px);
+  box-shadow: inset 0 -3px 0 var(--accent), 0 8px 18px rgba(21, 63, 52, .18);
+}
+.brand:hover .brand-mark::after { left: 43px; }
+
+.primary-button {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.primary-button::after {
+  position: absolute;
+  z-index: 0;
+  top: -60%;
+  bottom: -60%;
+  left: -42%;
+  width: 34%;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.24), transparent);
+  transform: skewX(-17deg);
+  transition: left 560ms cubic-bezier(.18, .75, .2, 1);
+  pointer-events: none;
+}
+.primary-button:hover::after { left: 112%; }
+.primary-button:active, .secondary-button:active { transform: translateY(1px) scale(.985); }
+
+.workspace-intro > div { animation: soft-reveal 520ms cubic-bezier(.2, .75, .2, 1) backwards; }
+.workspace-intro > .primary-button { animation: soft-reveal 520ms 90ms cubic-bezier(.2, .75, .2, 1) backwards; }
+.stat-card, .stat-card.highlight { animation: tile-arrive 480ms cubic-bezier(.16, .82, .2, 1) backwards; }
+.stat-card:nth-child(2) { animation-delay: 55ms; }
+.stat-card:nth-child(3) { animation-delay: 110ms; }
+.stat-card:nth-child(4) { animation-delay: 165ms; }
+.workspace { animation: surface-arrive 620ms 100ms cubic-bezier(.16, .82, .2, 1) backwards; }
+
+.stat-card::after {
+  position: absolute;
+  right: -38px;
+  bottom: -48px;
+  width: 105px;
+  height: 105px;
+  border: 1px solid rgba(31, 91, 73, .1);
+  border-radius: 50%;
+  content: "";
+  box-shadow: 0 0 0 14px rgba(31, 91, 73, .025), 0 0 0 29px rgba(189, 103, 72, .018);
+  transition: transform 420ms cubic-bezier(.2, .8, .2, 1), opacity 200ms ease;
+}
+.stat-card:hover::after { transform: translate(-9px, -7px) scale(1.08); }
+.stat-card.is-selected::after {
+  right: -34px;
+  bottom: -44px;
+  width: 105px;
+  height: 105px;
+  background: transparent;
+  box-shadow: 0 0 0 14px rgba(31, 91, 73, .035), 0 0 0 29px rgba(189, 103, 72, .025);
+}
+
+.view-tabs button::before {
+  position: absolute;
+  top: 10px;
+  right: 7px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  content: "";
+  background: var(--accent);
+  opacity: 0;
+  transform: translateY(4px) scale(.4);
+  transition: opacity 180ms ease, transform 260ms cubic-bezier(.16, .9, .3, 1.3);
+}
+.view-tabs button.active::before { opacity: .8; transform: translateY(0) scale(1); }
+.view-tabs button:active { transform: scale(.97); }
+.view-mode-button, .quick-status-list button, .calendar-scope-switch button,
+.calendar-view-switch button, .calendar-filters button {
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+
+.company-overview-card { overflow: hidden; }
+.company-overview-card::after {
+  position: absolute;
+  top: -70px;
+  right: -75px;
+  width: 170px;
+  height: 170px;
+  border: 1px solid rgba(31, 91, 73, .08);
+  border-radius: 50%;
+  content: "";
+  background: radial-gradient(circle, rgba(226, 238, 231, .7), rgba(226, 238, 231, 0) 68%);
+  pointer-events: none;
+  transition: transform 520ms cubic-bezier(.18, .8, .2, 1);
+}
+.company-overview-card:hover::after { transform: translate(-15px, 13px) scale(1.12); }
+.company-overview-card > * { position: relative; z-index: 1; }
+.company-card-monogram { transition: transform 260ms cubic-bezier(.18, .9, .25, 1.3), background 180ms ease, box-shadow 180ms ease; }
+.company-overview-card:hover .company-card-monogram { transform: rotate(-5deg) scale(1.07); }
+.company-card-open::after { display: inline-block; transition: transform 180ms ease; }
+.company-card-open:hover::after { transform: translateX(3px); }
+
+.calendar-hero { overflow: hidden; }
+.calendar-hero::after {
+  position: absolute;
+  top: -96px;
+  right: 12%;
+  width: 230px;
+  height: 230px;
+  border: 1px solid rgba(189, 103, 72, .12);
+  border-radius: 50%;
+  content: "";
+  box-shadow: 0 0 0 28px rgba(189, 103, 72, .025), 0 0 0 58px rgba(31, 91, 73, .018);
+  pointer-events: none;
+  animation: orbit-drift 11s ease-in-out infinite alternate;
+}
+.calendar-hero > * { position: relative; z-index: 1; }
+.calendar-day {
+  transition: background 160ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+.calendar-day:hover { position: relative; z-index: 2; background: #fffaf2; box-shadow: inset 0 0 0 1px rgba(189, 103, 72, .22); }
+.calendar-day.selected:hover { background: #eaf3ed; box-shadow: inset 0 0 0 2px rgba(31, 91, 73, .62); }
+.calendar-day.today .calendar-day-select { position: relative; box-shadow: 0 4px 11px rgba(189, 103, 72, .24); }
+.calendar-day.today .calendar-day-select::after {
+  position: absolute;
+  inset: -4px;
+  border: 1px solid rgba(189, 103, 72, .34);
+  border-radius: inherit;
+  content: "";
+  animation: today-breathe 2.8s ease-in-out infinite;
+}
+.calendar-event, .agenda-event, .calendar-panel-event {
+  transition: transform 170ms cubic-bezier(.2, .8, .2, 1), box-shadow 170ms ease, filter 170ms ease;
+}
+.calendar-event:hover { transform: translateY(-1px) scale(1.015); box-shadow: 0 5px 11px rgba(35, 47, 40, .11); filter: saturate(1.05); }
+.agenda-event:hover { transform: translateX(3px); box-shadow: -3px 0 0 rgba(189, 103, 72, .12); }
+.calendar-panel-event:hover { transform: translateX(3px); box-shadow: 0 7px 15px rgba(35, 47, 40, .09); }
+.calendar-panel-list .calendar-panel-event { animation: event-arrive 340ms cubic-bezier(.18, .8, .2, 1) backwards; }
+.calendar-panel-list .calendar-panel-event:nth-child(2) { animation-delay: 45ms; }
+.calendar-panel-list .calendar-panel-event:nth-child(3) { animation-delay: 90ms; }
+.calendar-panel-list .calendar-panel-event:nth-child(4) { animation-delay: 135ms; }
+.calendar-panel-add { transition: transform 180ms cubic-bezier(.18, .9, .25, 1.3), background 150ms ease, color 150ms ease; }
+.calendar-panel-add:hover { transform: rotate(90deg) scale(1.05); }
+
+.modal { animation: modal-spring 300ms cubic-bezier(.18, .88, .25, 1.12); }
+.modal-overlay { animation: veil-in 220ms ease; }
+
+@media (hover: hover) and (pointer: fine) {
+  .view-mode-button:hover, .quick-status-list button:hover,
+  .calendar-filters button:hover, .calendar-view-switch button:hover,
+  .calendar-scope-switch button:hover { transform: translateY(-1px); }
+}
+
+@keyframes soft-reveal {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes tile-arrive {
+  from { opacity: 0; transform: translateY(14px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes surface-arrive {
+  from { opacity: 0; transform: translateY(16px); filter: blur(2px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+@keyframes event-arrive {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes orbit-drift {
+  from { transform: translate3d(-8px, -4px, 0) scale(.96); }
+  to { transform: translate3d(18px, 14px, 0) scale(1.05); }
+}
+@keyframes today-breathe {
+  0%, 100% { opacity: .45; transform: scale(.92); }
+  50% { opacity: 0; transform: scale(1.16); }
+}
+@keyframes modal-spring {
+  from { opacity: 0; transform: translateY(16px) scale(.975); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes veil-in { from { opacity: 0; } to { opacity: 1; } }
+
+@media (max-width: 720px) {
+  .app-shell::before { display: none; }
+  .topbar { backdrop-filter: blur(12px) saturate(1.1); }
+  .calendar-hero::after { right: -105px; opacity: .72; }
+  .calendar-day:hover { box-shadow: none; }
+  .calendar-day.today .calendar-day-select { box-shadow: none; }
+  .calendar-day.today .calendar-day-select::after { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell::before { display: none; }
+  .calendar-hero::after { animation: none; }
+  .calendar-day.today .calendar-day-select::after { animation: none; opacity: .45; }
+}
