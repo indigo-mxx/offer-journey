@@ -877,16 +877,74 @@ body {
 .workspace-intro p { color: #95a79e; }
 .workspace-intro .primary-button, .topbar .primary-button {
   border-color: rgba(239, 205, 145, .16);
-  background: #23634f;
+  background: linear-gradient(135deg, #2d745a, #1c5846 72%);
   box-shadow: 0 10px 28px rgba(0, 0, 0, .25), 0 0 22px rgba(86, 158, 122, .1);
 }
+.workspace-intro {
+  position: relative;
+  isolation: isolate;
+}
+.workspace-intro::after {
+  position: absolute;
+  z-index: -1;
+  right: 4%;
+  bottom: 2px;
+  width: 310px;
+  height: 100px;
+  border-radius: 50%;
+  content: "";
+  background: radial-gradient(ellipse, rgba(176, 105, 68, .11), transparent 68%);
+  filter: blur(12px);
+  pointer-events: none;
+}
+.workspace-create-button {
+  min-height: 52px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 23px 0 10px;
+  border-radius: 12px;
+  color: #fffaf0;
+  font-size: 15px;
+  letter-spacing: .025em;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, .28), 0 0 28px rgba(84, 164, 123, .16), inset 0 1px rgba(255, 255, 255, .13) !important;
+}
+.workspace-create-button > span,
+.workspace-create-button > strong { position: relative; z-index: 1; }
+.workspace-create-button > span {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 230, 187, .25);
+  border-radius: 9px;
+  background: rgba(255, 244, 220, .11);
+  color: #ffd58e;
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1;
+  box-shadow: inset 0 1px rgba(255, 255, 255, .09);
+  transition: transform 220ms cubic-bezier(.18, .9, .25, 1.3), background 180ms ease;
+}
+.workspace-create-button > strong { font-weight: 720; }
+.workspace-create-button:hover {
+  background: linear-gradient(135deg, #368166, #205f4b 72%);
+  box-shadow: 0 17px 36px rgba(0, 0, 0, .32), 0 0 34px rgba(96, 184, 139, .22), inset 0 1px rgba(255, 255, 255, .15) !important;
+  transform: translateY(-2px);
+}
+.workspace-create-button:hover > span { background: rgba(255, 228, 177, .17); transform: rotate(90deg) scale(1.04); }
 .stats-grid { position: relative; z-index: 1; }
 .stat-card, .stat-card.highlight {
   border-color: rgba(231, 218, 192, .14);
-  background: rgba(25, 40, 33, .82);
+  background:
+    radial-gradient(circle at 100% 100%, rgba(185, 113, 73, .055), transparent 45%),
+    rgba(25, 40, 33, .84);
   box-shadow: 0 12px 30px rgba(0, 0, 0, .2), inset 0 1px rgba(255, 247, 230, .035);
   backdrop-filter: blur(12px);
 }
+.stat-card:nth-child(2) { background: radial-gradient(circle at 100% 100%, rgba(87, 128, 153, .11), transparent 47%), rgba(25, 40, 33, .84); }
+.stat-card:nth-child(3) { background: radial-gradient(circle at 100% 100%, rgba(201, 111, 73, .1), transparent 47%), rgba(25, 40, 33, .84); }
+.stat-card:nth-child(4) { background: radial-gradient(circle at 100% 100%, rgba(75, 151, 111, .105), transparent 47%), rgba(25, 40, 33, .84); }
 .stat-card:last-child { border-right-color: rgba(231, 218, 192, .14); }
 .stat-card small, .stat-card.highlight small { color: #aab5ae; }
 .stat-card strong, .stat-card.highlight strong { color: #f4ecdd; }
@@ -901,9 +959,17 @@ body {
   position: relative;
   z-index: 1;
   border-color: rgba(230, 211, 177, .24);
-  box-shadow: 0 34px 78px rgba(0, 0, 0, .34), 0 0 0 1px rgba(255, 248, 228, .025), 0 0 70px rgba(58, 122, 92, .07);
+  background: linear-gradient(145deg, #fffdf8 0%, #f8f4eb 100%);
+  box-shadow: 0 34px 78px rgba(0, 0, 0, .34), 0 0 0 1px rgba(255, 248, 228, .04), 0 0 78px rgba(58, 122, 92, .085);
 }
-.view-tabs { background: #eae3d7; }
+.view-tabs {
+  border-bottom: 1px solid rgba(103, 89, 68, .13);
+  background: linear-gradient(180deg, #eee8dd, #e7dfd1);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .7);
+}
+.view-tabs button { color: #58635c; }
+.view-tabs button:hover:not(:disabled) { color: #244d3f; }
+.view-tabs button.active { color: #173f32; text-shadow: 0 1px rgba(255, 255, 255, .7); }
 .calendar-hero { background: #f2ebdf; }
 .calendar-hero::after {
   border-color: rgba(173, 105, 72, .19);
@@ -988,6 +1054,9 @@ body {
   .calendar-weekday { border-radius: 6px; }
   .calendar-day { border-radius: 8px; }
   .calendar-day:hover { transform: none; }
+  .workspace-intro::after { display: none; }
+  .workspace-create-button { min-height: 48px; gap: 7px; padding: 0 16px 0 8px; border-radius: 10px; font-size: 14px; }
+  .workspace-create-button > span { width: 31px; height: 31px; font-size: 20px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -3775,7 +3775,9 @@ export function RecruitmentTracker({
 
       <section className="workspace-intro" aria-label="求职工作台">
         <div><h1>我的求职记录</h1><p>{user ? "已连接云端同步" : "保存在当前浏览器"}</p></div>
-        <button className="primary-button" onClick={() => { changeWorkspaceView("mine"); openCreate(); }}>＋ 新增投递</button>
+        <button className="primary-button workspace-create-button" onClick={() => { changeWorkspaceView("mine"); openCreate(); }}>
+          <span aria-hidden="true">＋</span><strong>新增投递</strong>
+        </button>
       </section>
 
       <section className="stats-grid">
