@@ -21,6 +21,13 @@ function visibility(value: unknown): Visibility {
   return value === "progress" || value === "full" ? value : "private";
 }
 
+function profileName(profile: { email?: string | null; display_name?: string | null; username?: string | null } | undefined, fallback = "好友") {
+  return profile?.username?.trim()
+    || profile?.display_name?.trim()
+    || profile?.email?.split("@")[0]?.trim()
+    || fallback;
+}
+
 function calendarSchemaMissing(error: { code?: string } | null | undefined) {
   return error?.code === "42P01" || error?.code === "PGRST205";
 }
@@ -94,7 +101,7 @@ async function groupsForUser(supabase: Awaited<ReturnType<typeof getUserFromAcce
   const groupMap = new Map((groupRows ?? []).map((g) => [g.id, g]));
   const memberUserIds = [...new Set((allMembers ?? []).map((m) => m.user_id))];
   const { data: profiles } = memberUserIds.length
-    ? await supabase.from("profiles").select("id, email, display_name").in("id", memberUserIds)
+    ? await supabase.from("profiles").select("id, email, display_name, username").in("id", memberUserIds)
     : { data: [] };
   const profileMap = new Map((profiles ?? []).map((p) => [p.id, p]));
   const membersByGroup = new Map<string, typeof allMembers>();
@@ -111,11 +118,12 @@ async function groupsForUser(supabase: Awaited<ReturnType<typeof getUserFromAcce
       id: group.id,
       name: group.name,
       ownerEmail: profileMap.get(group.owner_id)?.email ?? "",
+      ownerName: profileName(profileMap.get(group.owner_id), "组主"),
       inviteCode: group.invite_code,
       role: membershipMap.get(id) ?? "member",
       members: members.map((member) => ({
         email: profileMap.get(member.user_id)?.email ?? "",
-        display_name: profileMap.get(member.user_id)?.display_name ?? "成员",
+        display_name: profileName(profileMap.get(member.user_id), "成员"),
         role: member.role,
         joined_at: member.joined_at,
       })),
@@ -147,7 +155,7 @@ export async function GET(request: Request) {
   if (dismissalError && !calendarSchemaMissing(dismissalError)) return json({ error: dismissalError.message }, 400);
   const ownerIds = [...new Set([...(rows ?? []).map((row) => row.owner_id), ...(experienceRows ?? []).map((row) => row.owner_id), ...(eventRows ?? []).map((row) => row.owner_id)])];
   const { data: profiles } = ownerIds.length
-    ? await supabase.from("profiles").select("id, email, display_name").in("id", ownerIds)
+    ? await supabase.from("profiles").select("id, email, display_name, username").in("id", ownerIds)
     : { data: [] };
   const profileMap = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
   const applications = (rows ?? []).map((row) => {
@@ -157,7 +165,7 @@ export async function GET(request: Request) {
     return {
       id: row.id,
       ownerEmail: profileMap.get(row.owner_id)?.email ?? "",
-      ownerName: profileMap.get(row.owner_id)?.display_name ?? "朋友",
+      ownerName: profileName(profileMap.get(row.owner_id), "朋友"),
       isOwner,
       groupId: row.group_id,
       visibility: row.visibility,
@@ -196,7 +204,7 @@ export async function GET(request: Request) {
 
   const experiences = (experienceRows ?? []).map((row) => ({
     ownerEmail: profileMap.get(row.owner_id)?.email ?? "",
-    ownerName: profileMap.get(row.owner_id)?.display_name ?? "好友",
+    ownerName: profileName(profileMap.get(row.owner_id), "好友"),
     isOwner: row.owner_id === user.id,
     id: row.id,
     applicationId: row.application_id ?? "",

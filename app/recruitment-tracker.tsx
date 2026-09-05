@@ -688,6 +688,10 @@ function compareApplications(a: Application, b: Application, key: SortKey) {
   return (a[key] || "").localeCompare(b[key] || "", "zh-CN");
 }
 
+function applicationOwnerName(application: Application) {
+  return application.ownerName?.trim() || application.ownerEmail?.split("@")[0]?.trim() || "好友";
+}
+
 // ──────────────────────────────────────────────── components
 function SharingPanel({
   groups,
@@ -732,17 +736,37 @@ function SharingPanel({
         </ul>
       )}
       {selectedGroup && (
-        <div className="current-invite-card">
-          <div>
-            <small>当前小组邀请码</small>
-            <strong>{selectedGroup.inviteCode || "暂未生成"}</strong>
-            <span>分享邀请码或链接，好友加入后才能看到你公开的进度。</span>
+        <>
+          <div className="current-invite-card">
+            <div>
+              <small>当前小组邀请码</small>
+              <strong>{selectedGroup.inviteCode || "暂未生成"}</strong>
+              <span>分享邀请码或链接，好友加入后才能看到你公开的进度。</span>
+            </div>
+            <div className="current-invite-actions">
+              <button onClick={copyInviteCode} disabled={busy || !selectedGroup.inviteCode}>复制邀请码</button>
+              <button onClick={copyShareLink} disabled={busy || !selectedGroup.inviteCode}>复制邀请链接</button>
+            </div>
           </div>
-          <div className="current-invite-actions">
-            <button onClick={copyInviteCode} disabled={busy || !selectedGroup.inviteCode}>复制邀请码</button>
-            <button onClick={copyShareLink} disabled={busy || !selectedGroup.inviteCode}>复制邀请链接</button>
-          </div>
-        </div>
+          <section className="group-member-card" aria-label={`${selectedGroup.name}成员`}>
+            <header>
+              <div><small>同行成员</small><strong>{selectedGroup.name}</strong></div>
+              <span>{selectedGroup.members.length} 人</span>
+            </header>
+            <div className="group-member-list">
+              {selectedGroup.members.map((member) => (
+                <article className="group-member" key={`${member.email}-${member.joined_at}`}>
+                  <span className="group-member-avatar" aria-hidden="true">{member.display_name.trim().slice(0, 1) || "友"}</span>
+                  <div>
+                    <strong>{member.display_name}</strong>
+                    <small>{member.email || "未公开邮箱"}</small>
+                  </div>
+                  <span className={`group-member-role ${member.role}`}>{member.role === "owner" ? "组主" : "成员"}</span>
+                </article>
+              ))}
+            </div>
+          </section>
+        </>
       )}
       <div className="group-actions">
         <input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="小组名称" disabled={busy} />
@@ -1605,6 +1629,10 @@ export function RecruitmentTracker({
     () => applications.filter((item) => item.isOwner === false),
     [applications],
   );
+  const friendOwnerNames = useMemo(
+    () => [...new Set(friendApplications.map(applicationOwnerName))],
+    [friendApplications],
+  );
 
   const calendarItems = useMemo<RecruitmentCalendarItem[]>(() => {
     const applicationMap = new Map(ownApplications.map((item) => [item.id, item]));
@@ -1903,6 +1931,7 @@ export function RecruitmentTracker({
           statuses: [...new Set(apps.map((app) => app.status))],
           conclusions: [...new Set(apps.flatMap((app) => [app.finalOutcome, app.rejectionReason]).filter(Boolean))],
           visibilities: [...new Set(apps.map((app) => app.visibility))],
+          ownerNames: [...new Set(apps.map(applicationOwnerName))],
           sharedCount: apps.filter((app) => app.visibility !== "private").length,
         };
       })
@@ -4133,6 +4162,13 @@ export function RecruitmentTracker({
               </div>}
             </div>
 
+            {view === "friends" && friendOwnerNames.length > 0 && (
+              <div className="friend-owner-strip" aria-label="当前显示的好友">
+                <span>正在查看</span>
+                <div>{friendOwnerNames.map((name) => <strong key={name}>{name}</strong>)}</div>
+              </div>
+            )}
+
             {view === "mine" && <UpcomingScheduleCard items={calendarItems} onOpenCalendar={() => changeWorkspaceView("calendar")} onEdit={openCalendarEdit} />}
 
             {filtered.length > 0 && !interviewWorkspaceActive && (
@@ -4250,6 +4286,7 @@ export function RecruitmentTracker({
                                   <button type="button" onClick={() => openCompany(item.company)}>{item.company}</button>
                                   <span>{item.base || "地点待定"}</span>
                                 </div>
+                                {view === "friends" && <span className="friend-owner-badge">{applicationOwnerName(item)}</span>}
                                 <h3>{item.position}</h3>
                                 <div className="interview-stage-current">
                                   <span>当前进度</span>{renderStatusControl(item, true)}
@@ -4320,6 +4357,7 @@ export function RecruitmentTracker({
                                   {group.companySubtype && <span className="company-subtype-tag">{group.companySubtype}</span>}
                                 </div>
                               )}
+                              {view === "friends" && <div className="friend-owner-badges">{group.ownerNames.map((name) => <span className="friend-owner-badge" key={name}>{name}</span>)}</div>}
                             </td>
                             <td data-label="岗位">
                               <button className="position-count" onClick={() => openCompany(group.company)}>{group.applications.length} 个岗位</button>
@@ -4425,6 +4463,8 @@ export function RecruitmentTracker({
                               </div>
                             </header>
 
+                            {view === "friends" && <div className="friend-owner-badges">{group.ownerNames.map((name) => <span className="friend-owner-badge" key={name}>{name}</span>)}</div>}
+
                             <div className="company-card-tags">
                               {group.industryTags.slice(0, 3).map((tag) => <span key={tag}>{tag}</span>)}
                               {group.industryTags.length > 3 && <span>+{group.industryTags.length - 3}</span>}
@@ -4504,6 +4544,7 @@ export function RecruitmentTracker({
                               </div>
                               <strong className="kanban-position">{item.position}</strong>
                               <div className="kanban-meta">
+                                {view === "friends" && <span className="friend-owner-badge">{applicationOwnerName(item)}</span>}
                                 <span>{item.base || "地点待定"}</span>
                                 <span>{formatDate(item.appliedAt)}</span>
                               </div>
@@ -4570,6 +4611,7 @@ export function RecruitmentTracker({
                             <button className="company-link" onClick={() => openCompany(item.company)}>
                               {item.company}
                             </button>
+                            {view === "friends" && <span className="friend-owner-badge">{applicationOwnerName(item)}</span>}
                           </td>
                           <td data-label="岗位">{item.position}</td>
                           <td className="cell-muted" data-label="地点">{item.base || "—"}</td>
@@ -5581,7 +5623,10 @@ export function RecruitmentTracker({
                           <input type="checkbox" aria-label={`选择 ${item.position}`} checked={selectedApplicationIds.includes(item.id)} onChange={() => toggleApplicationSelection(item.id)} />
                         </td>
                       )}
-                      <td className="company-detail-position" data-label="岗位">{item.position}</td>
+                      <td className="company-detail-position" data-label="岗位">
+                        {item.position}
+                        {view === "friends" && <span className="friend-owner-badge">{applicationOwnerName(item)}</span>}
+                      </td>
                       <td className="cell-muted" data-label="地点">{item.base || "—"}</td>
                       <td data-label="批次"><span className="batch-tag">{item.batch}</span></td>
                       <td className="cell-muted" data-label="投递日期">{formatDate(item.appliedAt)}</td>

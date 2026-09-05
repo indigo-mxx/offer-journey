@@ -1062,3 +1062,63 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .pointer-ambience, .pointer-glow { display: none; }
 }
+
+/* Make shared records feel personal and keep their ownership unmistakable. */
+.friend-owner-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 25px 0;
+  padding: 10px 13px;
+  border: 1px solid rgba(112, 83, 55, .15);
+  border-radius: 10px;
+  background: linear-gradient(100deg, rgba(250, 245, 235, .9), rgba(240, 246, 241, .82));
+}
+.friend-owner-strip > span { flex: none; color: #756554; font-size: 12px; }
+.friend-owner-strip > div, .friend-owner-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.friend-owner-strip strong, .friend-owner-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 23px;
+  padding: 2px 8px;
+  border: 1px solid rgba(29, 94, 70, .14);
+  border-radius: 999px;
+  background: rgba(231, 241, 234, .9);
+  color: #245d48;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.friend-owner-badge::before { width: 5px; height: 5px; margin-right: 5px; border-radius: 50%; background: #b96f4c; content: ""; box-shadow: 0 0 0 3px rgba(185,111,76,.1); }
+.friend-owner-badges { margin-top: 9px; }
+.cell-company .friend-owner-badge, .company-detail-position .friend-owner-badge { margin-top: 7px; }
+.company-detail-position .friend-owner-badge { display: flex; }
+.kanban-meta .friend-owner-badge { color: #245d48; font-size: 9px; }
+
+.group-member-card {
+  margin-top: 12px;
+  padding: 17px 18px;
+  border: 1px solid rgba(70, 91, 77, .14);
+  border-radius: 13px;
+  background: linear-gradient(145deg, rgba(255,254,250,.98), rgba(244,247,242,.94));
+}
+.group-member-card > header { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.group-member-card > header small, .group-member-card > header strong { display: block; }
+.group-member-card > header small { color: #8d7865; font-size: 10px; letter-spacing: .12em; }
+.group-member-card > header strong { margin-top: 3px; color: #274f3d; font-size: 16px; }
+.group-member-card > header > span { padding: 4px 8px; border-radius: 999px; background: #eee8dd; color: #725d49; font-size: 10px; }
+.group-member-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin-top: 13px; }
+.group-member { min-width: 0; display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 10px; border: 1px solid rgba(54, 80, 64, .1); border-radius: 10px; background: rgba(255,255,255,.78); }
+.group-member-avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px 10px 10px 4px; background: #214f3d; color: #fffaf0; font-family: "STSong", "SimSun", serif; font-size: 15px; }
+.group-member > div { min-width: 0; }
+.group-member > div strong, .group-member > div small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.group-member > div strong { color: #243d31; font-size: 13px; }
+.group-member > div small { margin-top: 3px; color: #899089; font-size: 9px; }
+.group-member-role { padding: 3px 6px; border-radius: 999px; background: #eff2ed; color: #718077; font-size: 9px; }
+.group-member-role.owner { background: #f5eadd; color: #98603f; }
+
+@media (max-width: 720px) {
+  .friend-owner-strip { align-items: flex-start; flex-direction: column; gap: 7px; margin-inline: 13px; }
+  .group-member-list { grid-template-columns: 1fr; }
+}

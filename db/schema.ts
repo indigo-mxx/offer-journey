@@ -113,6 +113,7 @@ export type GroupInfo = {
   id: string;
   name: string;
   ownerEmail: string;
+  ownerName?: string;
   inviteCode: string;
   role: "owner" | "member";
   members: Array<{
