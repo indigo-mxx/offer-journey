@@ -276,7 +276,10 @@ export function RecruitmentCalendar({
                       const tabStop = selected || (!days.some((date) => localDateKey(date) === selectedDay) && key === localDateKey(days[0]));
                       return (
                         <article className={"calendar-day" + (outside ? " outside" : "") + (key === todayKey ? " today" : "") + (selected ? " selected" : "")}
-                          role="gridcell" aria-selected={selected} key={key}>
+                          role="gridcell" aria-selected={selected} key={key} onClick={(event) => {
+                            if ((event.target as HTMLElement).closest("button, a, input, textarea, select")) return;
+                            selectDay(day);
+                          }}>
                           <div className="calendar-day-head">
                             <button type="button" className="calendar-day-select" data-date={key} tabIndex={tabStop ? 0 : -1}
                               aria-current={key === todayKey ? "date" : undefined} aria-label={formatAgendaDate(key) + "，" + dayItems.length + "项日程"}
