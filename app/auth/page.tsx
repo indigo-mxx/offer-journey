@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { getSupabaseBrowserClient } from "../../lib/supabase-browser";
 import "../globals.css";
@@ -14,7 +15,7 @@ export default function AuthPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(() => supabase ? "" : "还没有配置 Supabase 环境变量，请先完成项目设置。");
 
   function homePath() {
     const invite = new URLSearchParams(window.location.search).get("invite") || window.localStorage.getItem("pending-invite");
@@ -24,8 +25,7 @@ export default function AuthPage() {
   useEffect(() => {
     const invite = new URLSearchParams(window.location.search).get("invite")?.trim().toUpperCase();
     if (invite) window.localStorage.setItem("pending-invite", invite);
-    if (!supabase) setMessage("还没有配置 Supabase 环境变量，请先完成项目设置。");
-  }, [supabase]);
+  }, []);
 
   async function lookupEmailByUsername(uname: string): Promise<string | null> {
     try {
@@ -96,10 +96,10 @@ export default function AuthPage() {
   return (
     <main className="auth-shell">
       <section className="auth-card">
-        <a className="brand" href="/" aria-label="返回秋招同行录">
+        <Link className="brand" href="/" aria-label="返回秋招同行录">
           <span className="brand-mark">秋</span>
           <span><strong>MXX · 秋招同行录</strong><small>投递与面试进度工作台</small></span>
-        </a>
+        </Link>
         <div className="auth-copy">
           <p className="eyebrow">CLOUD ACCOUNT</p>
           <h1>{mode === "signin" ? "登录你的云端工作台" : "创建一个云端账号"}</h1>
@@ -120,7 +120,7 @@ export default function AuthPage() {
           {loginMode === "email" ? (
             <label><span>邮箱</span><input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" /></label>
           ) : (
-            <label><span>用户名</span><input type="text" required value={username} onChange={(event) => setUsername(event.target.value)} placeholder="例如：mxx_2026" minLength={3} maxLength={20} /></label>
+            <label><span>用户名</span><input type="text" required value={username} onChange={(event) => setUsername(event.target.value)} placeholder="例如：青山同学" minLength={2} maxLength={20} /></label>
           )}
           <label><span>密码</span><input type="password" minLength={6} required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 6 位" /></label>
           <button className="primary-button" disabled={busy || !supabase}>{busy ? "处理中…" : mode === "signin" ? "登录" : "注册并发送验证邮件"}</button>
@@ -130,7 +130,7 @@ export default function AuthPage() {
           {mode === "signin" ? "还没有账号？注册一个" : "已有账号？返回登录"}
         </button>
         {message && <p className="auth-message">{message}</p>}
-        <p className="auth-back"><a href="/">先使用本地模式，不登录也可以记录</a></p>
+        <p className="auth-back"><Link href="/">先使用本地模式，不登录也可以记录</Link></p>
       </section>
     </main>
   );

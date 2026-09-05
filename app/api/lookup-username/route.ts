@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { isValidUsername, normalizeUsername } from "../../../lib/username";
 
 export const dynamic = "force-dynamic";
 
@@ -26,8 +27,8 @@ export async function POST(request: Request) {
     return json({ error: "请求内容无效" }, 400);
   }
 
-  const username = typeof body.username === "string" ? body.username.trim().toLowerCase() : "";
-  if (!username || !/^[a-z0-9_]{3,20}$/.test(username)) {
+  const username = typeof body.username === "string" ? normalizeUsername(body.username) : "";
+  if (!isValidUsername(username)) {
     return json({ error: "用户名格式无效" }, 400);
   }
 

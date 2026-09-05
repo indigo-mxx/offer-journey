@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { getSupabaseBrowserClient } from "../../lib/supabase-browser";
+import { isValidUsername, normalizeUsername, USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH } from "../../lib/username";
 import "../globals.css";
 
 export default function AccountPage() {
@@ -41,14 +42,15 @@ export default function AccountPage() {
 
   function validateUsername(value: string): string {
     if (!value.trim()) return "";
-    if (value.length < 3 || value.length > 20) return "用户名长度需在 3~20 个字符之间";
-    if (!/^[a-zA-Z0-9_]+$/.test(value)) return "用户名只能包含字母、数字和下划线";
+    const length = Array.from(value.trim()).length;
+    if (length < USERNAME_MIN_LENGTH || length > USERNAME_MAX_LENGTH) return `用户名长度需在 ${USERNAME_MIN_LENGTH}~${USERNAME_MAX_LENGTH} 个字符之间`;
+    if (!isValidUsername(value)) return "用户名仅支持中文、英文字母、数字和下划线";
     return "";
   }
 
   async function checkUsernameAvailability(value: string): Promise<boolean> {
     if (!supabase) return false;
-    const { data } = await supabase.rpc("get_email_by_username", { input: value.toLowerCase() });
+    const { data } = await supabase.rpc("get_email_by_username", { input: normalizeUsername(value) });
     // If no email returned, the username is available; if it returns current user's email, it's also ok
     return !data || data === email;
   }
@@ -63,7 +65,8 @@ export default function AccountPage() {
     setMessage("");
     setUsernameError("");
 
-    const available = await checkUsernameAvailability(username);
+    const normalizedUsername = normalizeUsername(username);
+    const available = await checkUsernameAvailability(normalizedUsername);
     if (!available) {
       setUsernameError("该用户名已被使用，请换一个");
       setBusy(false);
@@ -72,13 +75,14 @@ export default function AccountPage() {
 
     const { error } = await supabase
       .from("profiles")
-      .update({ username: username.trim().toLowerCase() })
+      .update({ username: normalizedUsername })
       .eq("id", (await supabase.auth.getUser()).data.user?.id ?? "");
 
     if (error) {
       setMessage(error.message);
     } else {
-      setCurrentUsername(username.trim().toLowerCase());
+      setCurrentUsername(normalizedUsername);
+      setUsername(normalizedUsername);
       setMessage("用户名已保存");
     }
     setBusy(false);
@@ -123,7 +127,7 @@ export default function AccountPage() {
         <form className="auth-form account-form" onSubmit={(e) => { e.preventDefault(); void saveUsername(); }}>
           <h2>设置用户名</h2>
           <p className="form-hint">
-            此名称会显示在工作台右上角，也可用于登录。3~20 个字符，仅支持字母、数字和下划线。
+            此名称会显示在工作台右上角，也可用于登录。2~20 个字符，支持中文、英文字母、数字和下划线。
           </p>
           <label>
             <span>用户名</span>
@@ -133,8 +137,9 @@ export default function AccountPage() {
                 setUsername(event.target.value);
                 setUsernameError(validateUsername(event.target.value));
               }}
-              placeholder="例如：mxx_2026"
-              maxLength={20}
+              placeholder="例如：青山同学"
+              minLength={USERNAME_MIN_LENGTH}
+              maxLength={USERNAME_MAX_LENGTH}
             />
           </label>
           {usernameError && <p className="field-error">{usernameError}</p>}
