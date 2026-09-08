@@ -1132,3 +1132,45 @@ body {
   .friend-owner-strip { align-items: flex-start; flex-direction: column; gap: 7px; margin-inline: 13px; }
   .group-member-list { grid-template-columns: 1fr; }
 }
+
+/* Completion states must win over event-type colors. */
+.calendar-event.pending,
+.agenda-event.pending,
+.calendar-panel-event.pending {
+  filter: saturate(1.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .44), 0 4px 12px rgba(35, 83, 61, .08);
+}
+.calendar-event.pending time::before,
+.agenda-event.pending > i::before,
+.calendar-panel-event.pending > div > span::before {
+  margin-right: 5px;
+  color: currentColor;
+  content: "●";
+  font-size: 7px;
+  vertical-align: 1px;
+}
+.calendar-event.completed,
+.agenda-event.completed,
+.calendar-panel-event.completed {
+  border-color: #c7ccc8;
+  border-left-color: #87928b;
+  background: linear-gradient(115deg, #ecefec, #e3e7e4);
+  color: #68736c;
+  filter: grayscale(.72) saturate(.45);
+  opacity: .7;
+  box-shadow: none;
+}
+.calendar-event.completed:hover,
+.agenda-event.completed:hover,
+.calendar-panel-event.completed:hover { filter: grayscale(.55) saturate(.55); opacity: .82; }
+.calendar-event.completed time::before,
+.agenda-event.completed > i::before,
+.calendar-panel-event.completed > div > span::before {
+  margin-right: 5px;
+  content: "✓";
+  font-weight: 900;
+}
+.calendar-panel-item:has(.calendar-panel-event.completed) .calendar-panel-quick-actions {
+  border-color: #cfd4d0;
+  background: #ecefec;
+}

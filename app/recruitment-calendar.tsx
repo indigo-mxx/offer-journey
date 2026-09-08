@@ -184,8 +184,15 @@ export function RecruitmentCalendar({
     setSelectedEventKey(null);
   };
   const goToday = () => { const today = new Date(); setCursor(today); selectDay(today); };
-  const eventClass = (item: RecruitmentCalendarItem) => " event-" + item.kind +
-    (item.status === "已取消" ? " cancelled" : item.completed || item.status === "已完成" ? " completed" : "");
+  const eventClass = (item: RecruitmentCalendarItem) => {
+    const tracksCompletion = item.kind === "interview" || item.kind === "written_test" || item.kind === "assessment";
+    const state = item.status === "已取消"
+      ? " cancelled"
+      : item.completed || item.status === "已完成"
+        ? " completed"
+        : tracksCompletion ? " pending" : "";
+    return ` event-${item.kind}${state}`;
+  };
   const statusLabel = (item: RecruitmentCalendarItem) => item.completed && item.status !== "已完成" ? `已完成 · ${item.status}` : item.status;
   const createOnDay = (key: string) => onCreate?.(new Date(key + "T09:00:00"));
   const emptyTitle = hasFilters ? "没有符合条件的日程" : scope === "friends" ? "这个月暂无共享日程" : "这个月还没有安排";
