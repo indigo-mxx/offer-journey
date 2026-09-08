@@ -1,4 +1,5 @@
 import { getUserFromAccessToken } from "../../../lib/supabase-server";
+import { supportsCalendarTimingChoice } from "../../../lib/calendar";
 
 export const dynamic = "force-dynamic";
 
@@ -372,7 +373,7 @@ export async function POST(request: Request) {
         const eventTimingTypes = new Set(["scheduled", "deadline"]);
         if (eventPayload.some((item) =>
           !allowedApplicationIds.has(item.application_id) || !eventTypes.has(item.event_type) || !eventStatuses.has(item.status) || !eventTimingTypes.has(item.timing_type) ||
-          (item.timing_type === "deadline" && item.event_type !== "written_test") ||
+          (item.timing_type === "deadline" && !supportsCalendarTimingChoice(item.event_type)) ||
           !item.title || !item.starts_at || Number.isNaN(Date.parse(item.starts_at)) ||
           (item.ends_at && (Number.isNaN(Date.parse(item.ends_at)) || Date.parse(item.ends_at) < Date.parse(item.starts_at))),
         )) return json({ error: "日程记录格式不正确或没有匹配到本账号的岗位" }, 400);
@@ -506,7 +507,7 @@ export async function POST(request: Request) {
       const startsAt = textValue(value.startsAt, 60);
       const endsAt = textValue(value.endsAt, 60);
       if (!["written_test", "assessment", "deadline", "hr_contact", "other"].includes(eventType)) return json({ error: "请选择有效的日程类型" }, 400);
-      if (timingType === "deadline" && eventType !== "written_test") return json({ error: "只有笔试支持截止时间模式" }, 400);
+      if (timingType === "deadline" && !supportsCalendarTimingChoice(eventType)) return json({ error: "只有笔试和测评支持截止时间模式" }, 400);
       if (!["待进行", "已完成", "已取消"].includes(status)) return json({ error: "请选择有效的日程状态" }, 400);
       if (!startsAt || Number.isNaN(Date.parse(startsAt))) return json({ error: "请填写有效的开始时间" }, 400);
       if (endsAt && (Number.isNaN(Date.parse(endsAt)) || Date.parse(endsAt) < Date.parse(startsAt))) return json({ error: "结束时间不能早于开始时间" }, 400);
