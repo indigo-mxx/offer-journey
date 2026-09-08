@@ -196,6 +196,16 @@ button:disabled { cursor: not-allowed; }
 .calendar-panel-event > span { font-size: 14px; overflow-wrap: anywhere; }
 .calendar-panel-event > small { font-size: 12px; overflow-wrap: anywhere; }
 .calendar-panel-event:hover { filter: brightness(.97); }
+.calendar-panel-item { min-width: 0; display: grid; transition: transform 180ms ease, box-shadow 180ms ease; }
+.calendar-panel-item:hover { transform: translateX(3px); box-shadow: 0 7px 15px rgba(35, 47, 40, .09); }
+.calendar-panel-item .calendar-panel-event { border-radius: 4px 4px 0 0; }
+.calendar-panel-item .calendar-panel-event:hover { transform: none; box-shadow: none; }
+.calendar-panel-quick-actions { display: flex; justify-content: flex-end; padding: 7px 8px; border: 1px solid rgba(74, 100, 84, .12); border-top: 0; border-radius: 0 0 7px 7px; background: rgba(255,255,255,.72); }
+.calendar-panel-quick-actions button { min-height: 30px; padding: 0 11px; border-radius: 7px; font-size: 10px; font-weight: 750; }
+.calendar-panel-quick-actions button.complete { border: 1px solid #b9d2c2; background: #edf7f0; color: #316b4d; }
+.calendar-panel-quick-actions button.experience { border: 1px solid #315f4c; background: #315f4c; color: #fff; }
+.calendar-panel-quick-actions button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(35, 76, 57, .12); }
+.calendar-panel-quick-actions button:disabled { cursor: wait; opacity: .55; }
 .calendar-panel-empty { padding: 40px 0; text-align: center; color: var(--muted); }
 .calendar-panel-empty > span { display: block; margin-bottom: 16px; color: #a2b0a7; font-size: 26px; }
 .calendar-panel-empty strong { font-size: 15px; font-weight: 500; }

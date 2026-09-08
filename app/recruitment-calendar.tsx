@@ -341,10 +341,21 @@ export function RecruitmentCalendar({
               {scope === "mine" && selectedEvent.isOwner && <button type="button" className={selectedEvent.kind === "interview" && selectedEvent.completed ? "secondary-button" : "primary-button"} disabled={busy} onClick={() => onEdit(selectedEvent)}>编辑日程</button>}
             </div>
           </div> : selectedItems.length ? <div className="calendar-panel-list">{selectedItems.map((item) => (
-            <button type="button" key={itemKey(item)} className={"calendar-panel-event" + eventClass(item)} onClick={(event) => openDetails(item, event.currentTarget)}>
-              <div><time dateTime={item.startsAt}>{formatEventTime(item)}</time><span>{statusLabel(item)}</span></div>
-              <strong>{item.company}</strong><span>{item.title}</span><small>{scope === "friends" ? item.ownerName + " · " : ""}{calendarKindLabel(item.kind)} · {item.position}</small>
-            </button>
+            <article className="calendar-panel-item" key={itemKey(item)}>
+              <button type="button" className={"calendar-panel-event" + eventClass(item)} onClick={(event) => openDetails(item, event.currentTarget)}>
+                <div><time dateTime={item.startsAt}>{formatEventTime(item)}</time><span>{statusLabel(item)}</span></div>
+                <strong>{item.company}</strong><span>{item.title}</span><small>{scope === "friends" ? item.ownerName + " · " : ""}{calendarKindLabel(item.kind)} · {item.position}</small>
+              </button>
+              {scope === "mine" && item.isOwner && item.kind === "interview" && (
+                <div className="calendar-panel-quick-actions">
+                  {item.completed ? (
+                    <button type="button" className="experience" disabled={busy} onClick={() => onAddExperience?.(item)}>去补充面经</button>
+                  ) : (
+                    <button type="button" className="complete" disabled={busy} onClick={() => onCompleteInterview?.(item)}>标记完成</button>
+                  )}
+                </div>
+              )}
+            </article>
           ))}</div> : <div className="calendar-panel-empty"><span aria-hidden="true">—</span><strong>{hasFilters ? "当天没有匹配的日程" : "这天没有安排"}</strong><p>{scope === "friends" ? "选择其他日期查看好友安排。" : "选一个日期，安排下一场面试或笔试。"}</p>{canCreate && <button type="button" className="secondary-button" disabled={busy} onClick={() => createOnDay(selectedDay)}>＋ 添加安排</button>}</div>}
         </aside>
       </div>
