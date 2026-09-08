@@ -22,6 +22,7 @@ export type RecruitmentCalendarItem = {
   location: string;
   eventUrl: string;
   status: string;
+  completed?: boolean;
   ownerName: string;
   ownerEmail: string;
   isOwner: boolean;
@@ -75,7 +76,7 @@ function useCalendarClock() {
 }
 
 export function RecruitmentCalendar({
-  items, applications, busy, scope, friendCount, onScopeChange, onCreate, onEdit,
+  items, applications, busy, scope, friendCount, onScopeChange, onCreate, onEdit, onCompleteInterview, onAddExperience,
 }: {
   items: RecruitmentCalendarItem[];
   applications: Application[];
@@ -85,6 +86,8 @@ export function RecruitmentCalendar({
   onScopeChange: (scope: "mine" | "friends") => void;
   onCreate?: (date: Date) => void;
   onEdit: (item: RecruitmentCalendarItem) => void;
+  onCompleteInterview?: (item: RecruitmentCalendarItem) => void;
+  onAddExperience?: (item: RecruitmentCalendarItem) => void;
 }) {
   const [cursor, setCursor] = useState(() => new Date());
   const [preferredMode, setMode] = useState<CalendarMode | null>(null);
@@ -144,7 +147,7 @@ export function RecruitmentCalendar({
   }, [visibleItems]);
   const selectedItems = filteredItems.filter((item) => localDateKey(item.startsAt) === selectedDay);
   const selectedEvent = filteredItems.find((item) => itemKey(item) === selectedEventKey);
-  const upcomingCount = filteredItems.filter((item) => item.status !== "已取消" && item.status !== "已完成")
+  const upcomingCount = filteredItems.filter((item) => item.status !== "已取消" && !item.completed && item.status !== "已完成")
     .filter((item) => new Date(item.startsAt).getTime() >= now && new Date(item.startsAt).getTime() < now + 7 * 86_400_000).length;
   const title = mode === "week"
     ? days[0].getFullYear() + "年 " + (days[0].getMonth() + 1) + "月" + days[0].getDate() + "日 – " +
@@ -182,7 +185,8 @@ export function RecruitmentCalendar({
   };
   const goToday = () => { const today = new Date(); setCursor(today); selectDay(today); };
   const eventClass = (item: RecruitmentCalendarItem) => " event-" + item.kind +
-    (item.status === "已取消" ? " cancelled" : item.status === "已完成" ? " completed" : "");
+    (item.status === "已取消" ? " cancelled" : item.completed || item.status === "已完成" ? " completed" : "");
+  const statusLabel = (item: RecruitmentCalendarItem) => item.completed && item.status !== "已完成" ? `已完成 · ${item.status}` : item.status;
   const createOnDay = (key: string) => onCreate?.(new Date(key + "T09:00:00"));
   const emptyTitle = hasFilters ? "没有符合条件的日程" : scope === "friends" ? "这个月暂无共享日程" : "这个月还没有安排";
   const renderAgendaEvent = (item: RecruitmentCalendarItem) => (
@@ -190,7 +194,7 @@ export function RecruitmentCalendar({
       onClick={(event) => openDetails(item, event.currentTarget)}>
       <time dateTime={item.startsAt}>{formatEventTime(item)}</time>
       <span><strong>{item.company} · {item.title}</strong><small>{scope === "friends" ? item.ownerName + " · " : ""}{calendarKindLabel(item.kind)} · {item.position}</small></span>
-      <i>{item.status}</i>
+      <i>{statusLabel(item)}</i>
     </button>
   );
 
@@ -300,7 +304,7 @@ export function RecruitmentCalendar({
                             {dayItems.slice(0, limit).map((item) => <button type="button" className={"calendar-event" + eventClass(item)} key={itemKey(item)}
                               onClick={(event) => openDetails(item, event.currentTarget)} title={item.company + " · " + item.title + " · " + item.status}>
                               <time dateTime={item.startsAt}>{formatEventTime(item)}</time><span>{item.company} · {item.title}</span>
-                              <small>{scope === "friends" ? item.ownerName + " · " : ""}{calendarKindLabel(item.kind)}{item.status === "已完成" ? " · 已完成" : item.status === "已取消" ? " · 已取消" : ""}</small>
+                              <small>{scope === "friends" ? item.ownerName + " · " : ""}{calendarKindLabel(item.kind)}{item.completed || item.status === "已完成" ? " · 已完成" : item.status === "已取消" ? " · 已取消" : ""}</small>
                             </button>)}
                             {dayItems.length > limit && <button type="button" className="calendar-more" onClick={() => { selectDay(day); panelRef.current?.focus({ preventScroll: true }); }}>还有 {dayItems.length - limit} 项 →</button>}
                           </div>
@@ -321,7 +325,7 @@ export function RecruitmentCalendar({
           </header>
           {selectedEvent ? <div className="calendar-detail">
             <button type="button" className="calendar-detail-back" onClick={closeDetails}>← 当日全部日程</button>
-            <div className="calendar-detail-tags"><span className={"calendar-kind-tag event-" + selectedEvent.kind}>{calendarKindLabel(selectedEvent.kind)}</span><span>{selectedEvent.status}</span></div>
+            <div className="calendar-detail-tags"><span className={"calendar-kind-tag event-" + selectedEvent.kind}>{calendarKindLabel(selectedEvent.kind)}</span><span>{statusLabel(selectedEvent)}</span></div>
             <h4 ref={detailTitleRef} tabIndex={-1}>{selectedEvent.title}</h4>
             <p>{selectedEvent.company} · {selectedEvent.position}</p>
             <dl>
@@ -332,11 +336,13 @@ export function RecruitmentCalendar({
             </dl>
             <div className="calendar-detail-actions">
               {scheduleLink(selectedEvent.eventUrl) && <a className="secondary-button button-link" href={scheduleLink(selectedEvent.eventUrl)} target="_blank" rel="noopener noreferrer">打开日程链接 ↗</a>}
-              {scope === "mine" && selectedEvent.isOwner && <button type="button" className="primary-button" disabled={busy} onClick={() => onEdit(selectedEvent)}>编辑日程</button>}
+              {scope === "mine" && selectedEvent.isOwner && selectedEvent.kind === "interview" && !selectedEvent.completed && <button type="button" className="secondary-button" disabled={busy} onClick={() => onCompleteInterview?.(selectedEvent)}>标记已完成</button>}
+              {scope === "mine" && selectedEvent.isOwner && selectedEvent.kind === "interview" && selectedEvent.completed && <button type="button" className="primary-button" disabled={busy} onClick={() => onAddExperience?.(selectedEvent)}>去补充面经</button>}
+              {scope === "mine" && selectedEvent.isOwner && <button type="button" className={selectedEvent.kind === "interview" && selectedEvent.completed ? "secondary-button" : "primary-button"} disabled={busy} onClick={() => onEdit(selectedEvent)}>编辑日程</button>}
             </div>
           </div> : selectedItems.length ? <div className="calendar-panel-list">{selectedItems.map((item) => (
             <button type="button" key={itemKey(item)} className={"calendar-panel-event" + eventClass(item)} onClick={(event) => openDetails(item, event.currentTarget)}>
-              <div><time dateTime={item.startsAt}>{formatEventTime(item)}</time><span>{item.status}</span></div>
+              <div><time dateTime={item.startsAt}>{formatEventTime(item)}</time><span>{statusLabel(item)}</span></div>
               <strong>{item.company}</strong><span>{item.title}</span><small>{scope === "friends" ? item.ownerName + " · " : ""}{calendarKindLabel(item.kind)} · {item.position}</small>
             </button>
           ))}</div> : <div className="calendar-panel-empty"><span aria-hidden="true">—</span><strong>{hasFilters ? "当天没有匹配的日程" : "这天没有安排"}</strong><p>{scope === "friends" ? "选择其他日期查看好友安排。" : "选一个日期，安排下一场面试或笔试。"}</p>{canCreate && <button type="button" className="secondary-button" disabled={busy} onClick={() => createOnDay(selectedDay)}>＋ 添加安排</button>}</div>}
@@ -350,7 +356,7 @@ export function UpcomingScheduleCard({ items, onOpenCalendar, onEdit }: { items:
   const now = useCalendarClock();
   const upcoming = useMemo(() => {
     const deadline = now + 7 * 86_400_000;
-    return items.filter((item) => item.status !== "已取消" && item.status !== "已完成" && new Date(item.startsAt).getTime() >= now && new Date(item.startsAt).getTime() <= deadline).sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()).slice(0, 4);
+    return items.filter((item) => item.status !== "已取消" && !item.completed && item.status !== "已完成" && new Date(item.startsAt).getTime() >= now && new Date(item.startsAt).getTime() <= deadline).sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()).slice(0, 4);
   }, [items, now]);
   if (!upcoming.length) return null;
   return (

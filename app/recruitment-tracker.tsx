@@ -1655,6 +1655,7 @@ export function RecruitmentTracker({
         location: item.location ?? "",
         eventUrl: item.eventUrl ?? "",
         status: item.result || "待定",
+        completed: !isScheduledInterview(item),
         ownerName: "我",
         ownerEmail: user?.email ?? "",
         isOwner: true,
@@ -1679,6 +1680,7 @@ export function RecruitmentTracker({
         location: item.location,
         eventUrl: item.eventUrl,
         status: item.status,
+        completed: item.status === "已完成",
         ownerName: "我",
         ownerEmail: user?.email ?? "",
         isOwner: true,
@@ -1712,6 +1714,7 @@ export function RecruitmentTracker({
         location: item.location ?? "",
         eventUrl: item.eventUrl ?? "",
         status: item.result || "未开始",
+        completed: !isScheduledInterview(item),
         ownerName: application.ownerName || "好友",
         ownerEmail: application.ownerEmail || application.ownerName || "好友",
         isOwner: false,
@@ -1736,6 +1739,7 @@ export function RecruitmentTracker({
         location: item.location,
         eventUrl: item.eventUrl,
         status: item.status,
+        completed: item.status === "已完成",
         ownerName: application.ownerName || "好友",
         ownerEmail: application.ownerEmail || application.ownerName || "好友",
         isOwner: false,
@@ -2917,6 +2921,22 @@ export function RecruitmentTracker({
     setNotice(`${calendarKindLabel(next.eventType)}已标记完成`);
   }, [events, runCloudMutation, user]);
 
+  const completeCalendarInterview = useCallback(async (calendarItem: RecruitmentCalendarItem) => {
+    if (calendarItem.source !== "interview") return;
+    const interview = interviews.find((item) => item.id === calendarItem.id);
+    if (!interview) {
+      setNotice("标记完成失败：面试记录不存在或已被删除，请刷新后重试");
+      return;
+    }
+    const scheduledAt = new Date(interview.scheduledAt).getTime();
+    const completedAt = new Date(Math.max(Date.now(), Number.isNaN(scheduledAt) ? Date.now() : scheduledAt)).toISOString();
+    const saved = await updateInterview(interview.id, {
+      endedAt: interview.endedAt || completedAt,
+      result: !interview.result || interview.result === "未开始" ? "待定" : interview.result,
+    });
+    if (saved) setNotice("面试已标记完成，可以去补充面经");
+  }, [interviews, updateInterview]);
+
   const dismissCalendarTodo = useCallback(async (todo: CalendarTodoEntry) => {
     if (user) {
       const saved = await runCloudMutation("忽略待做提醒中", { action: "dismissTodo", reminderKey: todo.dismissKey });
@@ -3880,6 +3900,12 @@ export function RecruitmentTracker({
               onScopeChange={setCalendarScope}
               onCreate={(date) => schedulableApplications.length ? openCalendarCreate(date) : ownApplications.length ? setNotice("当前没有可添加日程的进行中岗位") : openCreate()}
               onEdit={openCalendarEdit}
+              onCompleteInterview={(calendarItem) => void completeCalendarInterview(calendarItem)}
+              onAddExperience={(calendarItem) => {
+                const interview = interviews.find((item) => item.id === calendarItem.id);
+                if (interview) openExperienceByInterview(interview);
+                else setNotice("打开面经失败：面试记录不存在，请刷新后重试");
+              }}
             />
             <section className="calendar-todo-panel" aria-label="招聘待做事项">
               <header className="calendar-todo-head">
@@ -5489,7 +5515,7 @@ export function RecruitmentTracker({
                       {externalHttpUrl(calendarEventForm.eventUrl) && <a className="secondary-button button-link" href={externalHttpUrl(calendarEventForm.eventUrl)} target="_blank" rel="noopener noreferrer">打开链接 ↗</a>}
                       {editingCalendarInterview && editingCalendarInterviewStoredCompleted && calendarEventForm.phase === "completed" && (
                         <button type="button" className="secondary-button" disabled={busy} onClick={() => { closeCalendarEvent(); openExperienceByInterview(editingCalendarInterview); }}>
-                          {editingCalendarInterviewHasExperience ? "编辑面经" : "补充面经"}
+                          {editingCalendarInterviewHasExperience ? "编辑面经" : "去补充面经"}
                         </button>
                       )}
                     </div>
