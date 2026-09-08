@@ -2144,7 +2144,8 @@ export function RecruitmentTracker({
       );
       const recordedEnd = new Date(interview.endedAt).getTime();
       const finishedAt = Number.isFinite(recordedEnd) ? recordedEnd : scheduledAt + 2 * 60 * 60 * 1000;
-      if (finishedAt > now && calendarItem) {
+      const completed = !isScheduledInterview(interview);
+      if (!completed && finishedAt > now && calendarItem) {
         todos.push({
           id: `todo-interview-${interview.id}`,
           dismissKey: `todo-interview-${interview.id}@${interview.updatedAt}`,
@@ -2158,8 +2159,9 @@ export function RecruitmentTracker({
           application,
           interview,
           calendarItem,
+          canComplete: true,
         });
-      } else if (finishedAt <= now && !hasExperience) {
+      } else if ((completed || finishedAt <= now) && !hasExperience) {
         todos.push({
           id: `todo-experience-${interview.id}`,
           dismissKey: `todo-experience-${interview.id}@${interview.updatedAt}`,
@@ -2174,7 +2176,7 @@ export function RecruitmentTracker({
           interview,
           calendarItem,
         });
-      } else if (finishedAt <= now && (!interview.result || interview.result === "待定" || interview.result === "未开始") && calendarItem) {
+      } else if ((completed || finishedAt <= now) && (!interview.result || interview.result === "待定" || interview.result === "未开始") && calendarItem) {
         todos.push({
           id: `todo-result-${interview.id}`,
           dismissKey: `todo-result-${interview.id}@${interview.updatedAt}`,
@@ -3933,7 +3935,12 @@ export function RecruitmentTracker({
                           <button type="button" className="todo-job-link missing" disabled title="请先在岗位信息中填写官网或投递链接">未填写岗位链接</button>
                         )}
                         {todo.canComplete && todo.calendarItem && (
-                          <button type="button" className="todo-complete-button" disabled={busy} onClick={() => void completeCalendarTodo(todo.calendarItem!)}>标记完成</button>
+                          <button
+                            type="button"
+                            className="todo-complete-button"
+                            disabled={busy}
+                            onClick={() => void (todo.calendarItem!.source === "interview" ? completeCalendarInterview(todo.calendarItem!) : completeCalendarTodo(todo.calendarItem!))}
+                          >标记完成</button>
                         )}
                         <button
                           type="button"
@@ -3945,7 +3952,7 @@ export function RecruitmentTracker({
                             else if (todo.calendarItem) openCalendarEdit(todo.calendarItem);
                           }}
                         >
-                          {todo.action === "scheduleInterview" ? "定面试" : todo.action === "writeExperience" ? "补充面经" : "查看安排"} →
+                          {todo.action === "scheduleInterview" ? "定面试" : todo.action === "writeExperience" ? "去补充面经" : "查看安排"} →
                         </button>
                       </div>
                     </article>
