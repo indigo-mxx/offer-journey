@@ -68,6 +68,9 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(calendar, /completionStats\.completed/);
   assert.match(calendar, /completionStats\.pending/);
   assert.match(calendar, /completionStats\.total/);
+  assert.match(tracker, /calendar-todo-filters/);
+  assert.match(tracker, /visibleCalendarTodos\.map/);
+  assert.doesNotMatch(tracker, /calendarTodos\.slice\(0,\s*12\)/);
   assert.match(tracker, /formatInterviewDate/);
   assert.match(tracker, /关联面试场次/);
   assert.match(tracker, /<span>形式<\/span>/);

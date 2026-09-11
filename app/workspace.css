@@ -1214,8 +1214,117 @@ body {
 .calendar-status-summary .total { border-left: 3px solid #315f4c; background: #eef4f0; }
 .calendar-status-summary .total dd { color: #244f3d; }
 
+.calendar-todo-layout {
+  display: grid;
+  grid-template-columns: 152px minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+  margin-top: 17px;
+}
+.calendar-todo-filters {
+  position: sticky;
+  top: 14px;
+  padding: 10px;
+  border: 1px solid rgba(80, 96, 86, .15);
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 254, 250, .94), rgba(239, 242, 236, .9));
+  box-shadow: 0 8px 22px rgba(39, 52, 44, .055);
+}
+.calendar-todo-filters > span {
+  display: block;
+  padding: 2px 7px 8px;
+  color: #7a827c;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+.calendar-todo-filters > div { display: grid; gap: 4px; }
+.calendar-todo-filters button {
+  width: 100%;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 8px 0 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #657068;
+  font-size: 10px;
+  font-weight: 750;
+  text-align: left;
+}
+.calendar-todo-filters button:hover {
+  border-color: rgba(47, 88, 69, .13);
+  background: rgba(255, 255, 252, .82);
+  color: #2f5845;
+}
+.calendar-todo-filters button.active {
+  border-color: rgba(45, 91, 69, .23);
+  background: linear-gradient(115deg, #e5eee8, #f4f6f1);
+  color: #274f3c;
+  box-shadow: inset 3px 0 0 #376b53;
+}
+.calendar-todo-filters button b {
+  min-width: 24px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: rgba(77, 91, 82, .08);
+  color: #778078;
+  font-family: Georgia, serif;
+  font-size: 10px;
+  line-height: 1;
+  text-align: center;
+}
+.calendar-todo-filters button.active b { background: #315f4c; color: #fff; }
+.calendar-todo-results { min-width: 0; }
+.calendar-todo-layout .calendar-todo-list { margin-top: 0; }
+.calendar-todo-layout .calendar-todo-item {
+  grid-template-columns: 94px minmax(130px, 1fr) 126px minmax(0, auto);
+}
+.calendar-todo-layout .calendar-todo-actions { flex-wrap: wrap; }
+.calendar-todo-filter-empty {
+  min-height: 138px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 6px;
+  border: 1px dashed #c9d5cd;
+  border-radius: 12px;
+  background: rgba(250, 250, 246, .72);
+  color: #7a857e;
+  text-align: center;
+}
+.calendar-todo-filter-empty strong { color: #40574a; font-size: 12px; }
+.calendar-todo-filter-empty span { font-size: 10px; }
+.calendar-todo-filter-empty button {
+  margin-top: 5px;
+  padding: 7px 11px;
+  border: 1px solid #bdcec3;
+  border-radius: 8px;
+  background: #edf4ef;
+  color: #315f4c;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+@media (max-width: 1100px) {
+  .calendar-todo-layout .calendar-todo-item { grid-template-columns: 92px minmax(0, 1fr) auto; }
+  .calendar-todo-layout .calendar-todo-item time { grid-column: 2; grid-row: 2; }
+  .calendar-todo-layout .calendar-todo-actions { grid-column: 3; grid-row: 1 / 3; }
+}
+
 @media (max-width: 720px) {
   .calendar-status-summary { gap: 5px; padding-inline: 14px; }
   .calendar-status-summary > div { align-items: flex-start; flex-direction: column; gap: 5px; padding: 9px 10px; }
   .calendar-status-summary dd { font-size: 19px; }
+  .calendar-todo-layout { grid-template-columns: 1fr; gap: 10px; }
+  .calendar-todo-filters { position: static; overflow-x: auto; padding: 8px; scrollbar-width: thin; }
+  .calendar-todo-filters > span { padding-bottom: 6px; }
+  .calendar-todo-filters > div { display: flex; width: max-content; }
+  .calendar-todo-filters button { width: auto; min-width: 104px; flex: none; }
+  .calendar-todo-layout .calendar-todo-item { grid-template-columns: 1fr auto; }
+  .calendar-todo-layout .calendar-todo-item time { grid-column: 2; grid-row: 1; }
+  .calendar-todo-layout .calendar-todo-actions { grid-column: 1 / -1; grid-row: auto; }
 }

@@ -121,6 +121,24 @@ interface CalendarTodoEntry {
   canComplete?: boolean;
 }
 
+type CalendarTodoFilter = "all" | "schedule" | "complete" | "experience" | "result";
+
+const CALENDAR_TODO_FILTERS: Array<{ value: CalendarTodoFilter; label: string }> = [
+  { value: "all", label: "全部待做" },
+  { value: "schedule", label: "待安排" },
+  { value: "complete", label: "待完成" },
+  { value: "experience", label: "补面经" },
+  { value: "result", label: "补结果" },
+];
+
+function calendarTodoMatchesFilter(todo: CalendarTodoEntry, filter: CalendarTodoFilter) {
+  if (filter === "schedule") return todo.action === "scheduleInterview";
+  if (filter === "complete") return todo.canComplete === true;
+  if (filter === "experience") return todo.action === "writeExperience";
+  if (filter === "result") return todo.action === "writeResult";
+  return true;
+}
+
 interface RecoverySnapshot extends WorkspaceBackup {
   id: string;
   ownerKey: string;
@@ -1158,6 +1176,7 @@ export function RecruitmentTracker({
   const [calendarScope, setCalendarScope] = useState<"mine" | "friends">("mine");
   const [calendarEventForm, setCalendarEventForm] = useState<CalendarEventForm>(() => emptyCalendarEventForm());
   const [dismissedTodoKeys, setDismissedTodoKeys] = useState<string[]>([]);
+  const [calendarTodoFilter, setCalendarTodoFilter] = useState<CalendarTodoFilter>("all");
   const [editingExperienceId, setEditingExperienceId] = useState<string | null>(null);
   const [experienceForm, setExperienceForm] = useState(EMPTY_EXPERIENCE);
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
@@ -2225,6 +2244,18 @@ export function RecruitmentTracker({
 
     return todos.filter((todo) => !dismissedTodoKeys.includes(todo.dismissKey)).sort((a, b) => a.priority - b.priority);
   }, [calendarItems, dismissedTodoKeys, events, experiences, interviews, ownApplications]);
+
+  const visibleCalendarTodos = useMemo(
+    () => calendarTodos.filter((todo) => calendarTodoMatchesFilter(todo, calendarTodoFilter)),
+    [calendarTodoFilter, calendarTodos],
+  );
+  const calendarTodoFilterCounts = useMemo(
+    () => new Map(CALENDAR_TODO_FILTERS.map((filter) => [
+      filter.value,
+      calendarTodos.filter((todo) => calendarTodoMatchesFilter(todo, filter.value)).length,
+    ])),
+    [calendarTodos],
+  );
 
   const toggleSort = useCallback((key: SortKey) => {
     if (sortKey === key) {
@@ -3955,48 +3986,76 @@ export function RecruitmentTracker({
                 <span><strong>{calendarTodos.length}</strong> 项待处理</span>
               </header>
               {calendarTodos.length ? (
-                <div className="calendar-todo-list">
-                  {calendarTodos.slice(0, 12).map((todo) => (
-                    <article className={`calendar-todo-item ${todo.tone}`} key={todo.id}>
-                      <div className="calendar-todo-state"><i aria-hidden="true" /><span>{todo.label}</span></div>
-                      <div className="calendar-todo-copy">
-                        <strong>{todo.title}</strong>
-                        <small>{todo.detail}</small>
-                      </div>
-                      <time>{calendarTodoTime(todo.scheduledAt)}</time>
-                      <div className="calendar-todo-actions">
-                        <button type="button" className="todo-ignore-button" disabled={busy} onClick={() => void dismissCalendarTodo(todo)} title="只隐藏这条提醒，不删除原记录">忽略</button>
-                        <button type="button" className="todo-position-button" disabled={busy} onClick={() => openEdit(todo.application)}>修改/查看岗位</button>
-                        {externalHttpUrl(todo.application.link) ? (
-                          <a className="todo-job-link" href={externalHttpUrl(todo.application.link)} target="_blank" rel="noopener noreferrer" title="打开该岗位的官网或投递进度页面">打开岗位链接 ↗</a>
-                        ) : (
-                          <button type="button" className="todo-job-link missing" disabled title="请先在岗位信息中填写官网或投递链接">未填写岗位链接</button>
-                        )}
-                        {todo.canComplete && todo.calendarItem && (
-                          <button
-                            type="button"
-                            className="todo-complete-button"
-                            disabled={busy}
-                            onClick={() => void (todo.calendarItem!.source === "interview" ? completeCalendarInterview(todo.calendarItem!) : completeCalendarTodo(todo.calendarItem!))}
-                          >标记完成</button>
-                        )}
+                <div className="calendar-todo-layout">
+                  <aside className="calendar-todo-filters" aria-label="筛选待做事项">
+                    <span>筛选待做</span>
+                    <div>
+                      {CALENDAR_TODO_FILTERS.map((filter) => (
                         <button
                           type="button"
-                          className="todo-primary-button"
-                          disabled={busy}
-                          onClick={() => {
-                            if (todo.action === "scheduleInterview") openCalendarCreate(new Date(), todo.application.id, "interview");
-                            else if (todo.action === "writeExperience" && todo.interview) openExperienceByInterview(todo.interview);
-                            else if (todo.action === "writeResult" && todo.calendarItem) openCalendarResult(todo.calendarItem);
-                            else if (todo.calendarItem) openCalendarEdit(todo.calendarItem);
-                          }}
+                          key={filter.value}
+                          className={calendarTodoFilter === filter.value ? "active" : ""}
+                          aria-pressed={calendarTodoFilter === filter.value}
+                          onClick={() => setCalendarTodoFilter(filter.value)}
                         >
-                          {todo.action === "scheduleInterview" ? "定面试" : todo.action === "writeExperience" ? "去补充面经" : todo.action === "writeResult" ? "补充面试结果" : "查看安排"} →
+                          <span>{filter.label}</span>
+                          <b>{calendarTodoFilterCounts.get(filter.value) ?? 0}</b>
                         </button>
+                      ))}
+                    </div>
+                  </aside>
+                  <div className="calendar-todo-results">
+                    {visibleCalendarTodos.length ? (
+                      <div className="calendar-todo-list">
+                        {visibleCalendarTodos.map((todo) => (
+                          <article className={`calendar-todo-item ${todo.tone}`} key={todo.id}>
+                            <div className="calendar-todo-state"><i aria-hidden="true" /><span>{todo.label}</span></div>
+                            <div className="calendar-todo-copy">
+                              <strong>{todo.title}</strong>
+                              <small>{todo.detail}</small>
+                            </div>
+                            <time>{calendarTodoTime(todo.scheduledAt)}</time>
+                            <div className="calendar-todo-actions">
+                              <button type="button" className="todo-ignore-button" disabled={busy} onClick={() => void dismissCalendarTodo(todo)} title="只隐藏这条提醒，不删除原记录">忽略</button>
+                              <button type="button" className="todo-position-button" disabled={busy} onClick={() => openEdit(todo.application)}>修改/查看岗位</button>
+                              {externalHttpUrl(todo.application.link) ? (
+                                <a className="todo-job-link" href={externalHttpUrl(todo.application.link)} target="_blank" rel="noopener noreferrer" title="打开该岗位的官网或投递进度页面">打开岗位链接 ↗</a>
+                              ) : (
+                                <button type="button" className="todo-job-link missing" disabled title="请先在岗位信息中填写官网或投递链接">未填写岗位链接</button>
+                              )}
+                              {todo.canComplete && todo.calendarItem && (
+                                <button
+                                  type="button"
+                                  className="todo-complete-button"
+                                  disabled={busy}
+                                  onClick={() => void (todo.calendarItem!.source === "interview" ? completeCalendarInterview(todo.calendarItem!) : completeCalendarTodo(todo.calendarItem!))}
+                                >标记完成</button>
+                              )}
+                              <button
+                                type="button"
+                                className="todo-primary-button"
+                                disabled={busy}
+                                onClick={() => {
+                                  if (todo.action === "scheduleInterview") openCalendarCreate(new Date(), todo.application.id, "interview");
+                                  else if (todo.action === "writeExperience" && todo.interview) openExperienceByInterview(todo.interview);
+                                  else if (todo.action === "writeResult" && todo.calendarItem) openCalendarResult(todo.calendarItem);
+                                  else if (todo.calendarItem) openCalendarEdit(todo.calendarItem);
+                                }}
+                              >
+                                {todo.action === "scheduleInterview" ? "定面试" : todo.action === "writeExperience" ? "去补充面经" : todo.action === "writeResult" ? "补充面试结果" : "查看安排"} →
+                              </button>
+                            </div>
+                          </article>
+                        ))}
                       </div>
-                    </article>
-                  ))}
-                  {calendarTodos.length > 12 && <p className="calendar-todo-more">优先显示最近的 12 项，完成后会自动展示后续待做。</p>}
+                    ) : (
+                      <div className="calendar-todo-filter-empty">
+                        <strong>当前分类没有待做</strong>
+                        <span>可以切换到其他分类继续查看。</span>
+                        <button type="button" onClick={() => setCalendarTodoFilter("all")}>查看全部待做</button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="calendar-todo-empty"><span>✓</span><div><strong>当前待做已经处理完毕</strong><small>新增测评或面试安排后，这里会自动生成提醒。</small></div></div>
