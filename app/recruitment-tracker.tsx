@@ -692,6 +692,10 @@ function applicationOwnerName(application: Application) {
   return application.ownerName?.trim() || application.ownerEmail?.split("@")[0]?.trim() || "好友";
 }
 
+function calendarItemCompleted(item: RecruitmentCalendarItem) {
+  return item.completed === true || item.status === "已完成";
+}
+
 // ──────────────────────────────────────────────── components
 function SharingPanel({
   groups,
@@ -2427,17 +2431,31 @@ export function RecruitmentTracker({
   const renderScheduleStrip = (item: Application, compact = false) => {
     const now = Date.now();
     const related = calendarItems.filter((entry) => entry.applicationId === item.id && entry.status !== "已取消");
-    const upcoming = related.filter((entry) => new Date(entry.startsAt).getTime() >= now);
-    const visible = (upcoming.length ? upcoming : related.slice().sort((a, b) => b.startsAt.localeCompare(a.startsAt))).slice(0, compact ? 2 : 3);
+    const upcoming = related
+      .filter((entry) => !calendarItemCompleted(entry) && new Date(entry.startsAt).getTime() >= now)
+      .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+    const completed = related
+      .filter(calendarItemCompleted)
+      .sort((a, b) => b.startsAt.localeCompare(a.startsAt));
+    const pastPending = related
+      .filter((entry) => !calendarItemCompleted(entry) && new Date(entry.startsAt).getTime() < now)
+      .sort((a, b) => b.startsAt.localeCompare(a.startsAt));
+    const prioritized = upcoming.length
+      ? [upcoming[0], ...completed.slice(0, 1), ...upcoming.slice(1), ...pastPending]
+      : [...completed, ...pastPending];
+    const visible = prioritized.slice(0, compact ? 2 : 3);
     if (!visible.length && view !== "mine") return null;
     return (
       <div className={`schedule-chip-strip ${compact ? "compact" : ""}`} aria-label={`${item.company} ${item.position} 的日程`}>
-        {visible.map((entry) => (
-          <button type="button" className={`schedule-chip event-${entry.kind}`} key={`${entry.source}-${entry.id}`} onClick={() => openCalendarEdit(entry)}>
-            <strong>{calendarKindLabel(entry.kind)} · {formatDateTime(entry.startsAt)}</strong>
-            <span>{entry.title}</span>
-          </button>
-        ))}
+        {visible.map((entry) => {
+          const done = calendarItemCompleted(entry);
+          return (
+            <button type="button" className={`schedule-chip event-${entry.kind} ${done ? "completed" : "pending"}`} key={`${entry.source}-${entry.id}`} onClick={() => openCalendarEdit(entry)}>
+              <strong>{done ? `${calendarKindLabel(entry.kind)}已完成` : `${calendarKindLabel(entry.kind)} · ${formatDateTime(entry.startsAt)}`}</strong>
+              <span>{done ? `${formatDateTime(entry.startsAt)} · ${entry.title}` : entry.title}</span>
+            </button>
+          );
+        })}
         {view === "mine" && !CLOSED_STATUSES.includes(item.status) && (
           <button type="button" className="schedule-chip add" onClick={() => openCalendarCreate(new Date(), item.id, INTERVIEW_STATUSES.includes(item.status) ? "interview" : "written_test")}>
             <strong>＋ 添加日程</strong><span>笔试 / 测评 / 面试</span>
@@ -2450,11 +2468,15 @@ export function RecruitmentTracker({
   const renderCompanySchedule = (companyApplications: Application[]) => {
     const ids = new Set(companyApplications.map((item) => item.id));
     const now = Date.now();
-    const next = calendarItems.find((entry) => ids.has(entry.applicationId) && entry.status !== "已取消" && new Date(entry.startsAt).getTime() >= now);
-    if (!next) return null;
+    const related = calendarItems.filter((entry) => ids.has(entry.applicationId) && entry.status !== "已取消");
+    const next = related.find((entry) => !calendarItemCompleted(entry) && new Date(entry.startsAt).getTime() >= now);
+    const latestCompleted = related.filter(calendarItemCompleted).sort((a, b) => b.startsAt.localeCompare(a.startsAt))[0];
+    const displayed = next ?? latestCompleted;
+    if (!displayed) return null;
+    const completed = calendarItemCompleted(displayed);
     return (
-      <button type="button" className={`company-next-schedule event-${next.kind}`} onClick={() => openCalendarEdit(next)}>
-        <strong>下一项 · {calendarKindLabel(next.kind)}</strong><span>{formatDateTime(next.startsAt)} · {next.position}</span>
+      <button type="button" className={`company-next-schedule event-${displayed.kind} ${completed ? "completed" : "pending"}`} onClick={() => openCalendarEdit(displayed)}>
+        <strong>{completed ? `${calendarKindLabel(displayed.kind)}已完成` : `下一项 · ${calendarKindLabel(displayed.kind)}`}</strong><span>{formatDateTime(displayed.startsAt)} · {displayed.position}</span>
       </button>
     );
   };

@@ -1174,3 +1174,16 @@ body {
   border-color: #cfd4d0;
   background: #ecefec;
 }
+.schedule-chip.completed,
+.company-next-schedule.completed {
+  border-color: #c5cbc7;
+  background: linear-gradient(115deg, #ecefec, #e3e7e4);
+  color: #68736c;
+  filter: grayscale(.65) saturate(.5);
+}
+.schedule-chip.completed strong::before,
+.company-next-schedule.completed strong::before {
+  margin-right: 5px;
+  content: "✓";
+  font-weight: 900;
+}
