@@ -114,7 +114,7 @@ interface CalendarTodoEntry {
   detail: string;
   scheduledAt: string;
   priority: number;
-  action: "scheduleInterview" | "editSchedule" | "writeExperience";
+  action: "scheduleInterview" | "editSchedule" | "writeExperience" | "writeResult";
   application: Application;
   interview?: Interview;
   calendarItem?: RecruitmentCalendarItem;
@@ -2186,7 +2186,7 @@ export function RecruitmentTracker({
           detail: `${application.position} · 面经已记录，补充本轮结果`,
           scheduledAt: interview.endedAt || interview.scheduledAt,
           priority: 30_000_000_000_000 - Math.max(finishedAt, 0),
-          action: "editSchedule",
+          action: "writeResult",
           application,
           interview,
           calendarItem,
@@ -2717,6 +2717,21 @@ export function RecruitmentTracker({
     setEditingCalendarItem(calendarItem);
     setIsCalendarEventOpen(true);
   }, [events, interviews]);
+
+  const openCalendarResult = useCallback((calendarItem: RecruitmentCalendarItem) => {
+    openCalendarEdit(calendarItem);
+    setCalendarEventForm((current) => ({
+      ...current,
+      phase: "completed",
+      status: !current.status || current.status === "未开始" ? "待定" : current.status,
+      endsAt: current.endsAt || dateTimeLocalValue(new Date().toISOString()),
+    }));
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      const resultField = document.querySelector<HTMLElement>(".calendar-interview-result-field");
+      resultField?.scrollIntoView({ behavior: "smooth", block: "center" });
+      resultField?.querySelector<HTMLElement>(".select-trigger")?.focus({ preventScroll: true });
+    }));
+  }, [openCalendarEdit]);
 
   const closeCalendarEvent = useCallback(() => {
     setIsCalendarEventOpen(false);
@@ -3929,6 +3944,7 @@ export function RecruitmentTracker({
                       <time>{calendarTodoTime(todo.scheduledAt)}</time>
                       <div className="calendar-todo-actions">
                         <button type="button" className="todo-ignore-button" disabled={busy} onClick={() => void dismissCalendarTodo(todo)} title="只隐藏这条提醒，不删除原记录">忽略</button>
+                        <button type="button" className="todo-position-button" disabled={busy} onClick={() => openEdit(todo.application)}>修改/查看岗位</button>
                         {externalHttpUrl(todo.application.link) ? (
                           <a className="todo-job-link" href={externalHttpUrl(todo.application.link)} target="_blank" rel="noopener noreferrer" title="打开该岗位的官网或投递进度页面">打开岗位链接 ↗</a>
                         ) : (
@@ -3949,10 +3965,11 @@ export function RecruitmentTracker({
                           onClick={() => {
                             if (todo.action === "scheduleInterview") openCalendarCreate(new Date(), todo.application.id, "interview");
                             else if (todo.action === "writeExperience" && todo.interview) openExperienceByInterview(todo.interview);
+                            else if (todo.action === "writeResult" && todo.calendarItem) openCalendarResult(todo.calendarItem);
                             else if (todo.calendarItem) openCalendarEdit(todo.calendarItem);
                           }}
                         >
-                          {todo.action === "scheduleInterview" ? "定面试" : todo.action === "writeExperience" ? "去补充面经" : "查看安排"} →
+                          {todo.action === "scheduleInterview" ? "定面试" : todo.action === "writeExperience" ? "去补充面经" : todo.action === "writeResult" ? "补充面试结果" : "查看安排"} →
                         </button>
                       </div>
                     </article>
@@ -5481,7 +5498,7 @@ export function RecruitmentTracker({
                       <DropdownSelect value={calendarEventForm.mode} onChange={(mode) => setCalendarEventForm((current) => ({ ...current, mode }))} options={(calendarEventForm.kind === "interview" ? INTERVIEW_FORMATS : CALENDAR_EVENT_MODES).map((mode) => ({ value: mode, label: mode }))} ariaLabel="选择日程形式" />
                     </label>
                     {calendarEventForm.phase === "completed" && calendarEventForm.kind === "interview" && (
-                      <label>
+                      <label className="calendar-interview-result-field">
                         <span>面试结果</span>
                         <DropdownSelect value={calendarEventForm.status === "未开始" ? "待定" : calendarEventForm.status} onChange={(status) => setCalendarEventForm((current) => ({ ...current, status }))} options={INTERVIEW_RESULTS.map((status) => ({ value: status, label: status }))} ariaLabel="选择面试结果" />
                       </label>

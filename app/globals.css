@@ -2218,6 +2218,8 @@ button.interview-date-chip:hover { border-color: #769abb; box-shadow: 0 7px 17px
 .todo-complete-button { border: 1px solid #c9dbcf; background: #f0f8f3; color: #397052; }
 .todo-ignore-button { border: 1px solid #d9ddd9; background: #fff; color: #78817b; }
 .todo-ignore-button:hover:not(:disabled) { border-color: #aeb8b1; color: #4f5d54; }
+.todo-position-button { border: 1px solid #d5c9b9; background: #faf6ef; color: #765f45; }
+.todo-position-button:hover:not(:disabled) { border-color: #bca787; background: #f5ecdf; color: #5d472f; }
 .todo-job-link { border: 1px solid #b9d3e2; background: #eef7fc; color: #356f8f; }
 .todo-job-link:hover { border-color: #77a9c4; background: #e3f2fa; transform: translateY(-1px); }
 .todo-job-link.missing { border-color: #e2e5e3; background: #f6f7f6; color: #a0a7a2; }
