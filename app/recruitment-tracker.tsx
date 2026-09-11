@@ -165,6 +165,7 @@ const RETRYABLE_CLOUD_ACTIONS = new Set([
   "deleteInterview",
   "saveExperience",
   "updateExperience",
+  "updateExperienceVisibilityBatch",
   "deleteExperience",
   "saveEvent",
   "updateEvent",
@@ -561,6 +562,13 @@ function safeInterviews(value: unknown): value is Interview[] {
 }
 function safeExperiences(value: unknown): value is InterviewExperience[] {
   return Array.isArray(value) && value.every((item) => item && typeof item === "object" && typeof item.id === "string" && typeof item.title === "string" && typeof item.content === "string");
+}
+
+function linkedInterviewForExperience(item: InterviewExperience, interviews: Interview[]) {
+  return interviews.find((interview) =>
+    interview.id === item.interviewId ||
+    (!item.interviewId && interview.applicationId === item.applicationId && interviewStage(interview.round) === interviewStage(item.round)),
+  );
 }
 
 function isScheduledInterview(interview: Interview) {
@@ -1169,6 +1177,9 @@ export function RecruitmentTracker({
   const [experienceQuery, setExperienceQuery] = useState("");
   const [experienceApplicationFilter, setExperienceApplicationFilter] = useState("");
   const [experienceScope, setExperienceScope] = useState<"all" | "mine" | "friends">("mine");
+  const [experienceSelectionMode, setExperienceSelectionMode] = useState(false);
+  const [selectedExperienceIds, setSelectedExperienceIds] = useState<string[]>([]);
+  const [experienceShareGroupId, setExperienceShareGroupId] = useState("");
   const [isExperienceOpen, setIsExperienceOpen] = useState(false);
   const [isCalendarEventOpen, setIsCalendarEventOpen] = useState(false);
   const [editingCalendarItem, setEditingCalendarItem] = useState<RecruitmentCalendarItem | null>(null);
@@ -1213,6 +1224,21 @@ export function RecruitmentTracker({
   );
 
   const defaultGroupId = activeGroupId || groups[0]?.id || "";
+
+  useEffect(() => {
+    if (!groups.length) {
+      setExperienceShareGroupId("");
+      return;
+    }
+    if (!experienceShareGroupId || !groups.some((group) => group.id === experienceShareGroupId)) {
+      setExperienceShareGroupId(defaultGroupId);
+    }
+  }, [defaultGroupId, experienceShareGroupId, groups]);
+
+  useEffect(() => {
+    const ownedIds = new Set(experiences.filter((item) => item.isOwner !== false).map((item) => item.id));
+    setSelectedExperienceIds((current) => current.filter((id) => ownedIds.has(id)));
+  }, [experiences]);
 
   const cloudAction = useCallback(async (payload: Record<string, unknown>) => {
     let token = accessToken;
@@ -1794,8 +1820,19 @@ export function RecruitmentTracker({
       .filter((item) => experienceScope === "all" || (experienceScope === "mine" ? item.isOwner !== false : item.isOwner === false))
       .filter((item) => !experienceApplicationFilter || item.applicationId === experienceApplicationFilter)
       .filter((item) => !keyword || matchesFieldsSearch([item.title, item.company, item.position, item.round], keyword) || matchesLiteralSearch(`${item.content} ${item.takeaway}`, keyword))
-      .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
-  }, [experiences, experienceQuery, experienceApplicationFilter, experienceScope]);
+      .sort((a, b) => {
+        const aInterviewTime = linkedInterviewForExperience(a, interviews)?.scheduledAt ?? "";
+        const bInterviewTime = linkedInterviewForExperience(b, interviews)?.scheduledAt ?? "";
+        if (aInterviewTime || bInterviewTime) return bInterviewTime.localeCompare(aInterviewTime) || (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "");
+        return (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "");
+      });
+  }, [experiences, experienceQuery, experienceApplicationFilter, experienceScope, interviews]);
+
+  const selectableExperienceIds = useMemo(
+    () => filteredExperiences.filter((item) => item.isOwner !== false).map((item) => item.id),
+    [filteredExperiences],
+  );
+  const allVisibleExperiencesSelected = selectableExperienceIds.length > 0 && selectableExperienceIds.every((id) => selectedExperienceIds.includes(id));
 
   const importDuplicateCount = useMemo(() => {
     if (!importPreview) return 0;
@@ -3046,6 +3083,35 @@ export function RecruitmentTracker({
     return true;
   }, [experiences, user, runCloudMutation]);
 
+  const updateExperienceVisibilityBatch = useCallback(async (visibility: "private" | "full") => {
+    const ownedIds = new Set(experiences.filter((item) => item.isOwner !== false).map((item) => item.id));
+    const ids = selectedExperienceIds.filter((id) => ownedIds.has(id));
+    if (!ids.length) {
+      setNotice("请先选择要修改共享范围的面经");
+      return;
+    }
+    const groupId = visibility === "full" ? (experienceShareGroupId || defaultGroupId) : null;
+    if (visibility === "full" && !groupId) {
+      setNotice("请先创建或加入小组，再批量共享面经");
+      return;
+    }
+    if (user) {
+      const saved = await runCloudMutation("批量设置面经共享中", {
+        action: "updateExperienceVisibilityBatch",
+        ids,
+        visibility,
+        groupId,
+      });
+      if (!saved) return;
+    }
+    const updatedAt = new Date().toISOString();
+    const selectedIds = new Set(ids);
+    setExperiences((items) => items.map((item) => selectedIds.has(item.id) ? { ...item, visibility, groupId, updatedAt } : item));
+    setSelectedExperienceIds([]);
+    setExperienceSelectionMode(false);
+    setNotice(`${ids.length} 篇面经已${visibility === "full" ? "共享到小组" : "设为仅自己可见"}`);
+  }, [defaultGroupId, experienceShareGroupId, experiences, runCloudMutation, selectedExperienceIds, user]);
+
   const removeExperience = useCallback(async (item: InterviewExperience) => {
     if (!confirm("删除这条面经？关联的面试时间记录也会一并删除。")) return false;
     if (user) {
@@ -4069,9 +4135,22 @@ export function RecruitmentTracker({
                 <h2>{"\u9762\u7ecf\u5e93"}</h2>
                 <p>{"\u628a\u6bcf\u6b21\u9762\u8bd5\u7684\u9ad8\u9891\u95ee\u9898\u3001\u56de\u7b54\u601d\u8def\u548c\u590d\u76d8\u8981\u70b9\u6c89\u6dc0\u4e0b\u6765\uff0c\u4e0b\u4e00\u6b21\u66f4\u4ece\u5bb9\u3002"}</p>
               </div>
-              <button type="button" className="primary-button experience-create-button" onClick={() => openExperienceCreate()}>
-                <span aria-hidden="true">+</span> {"\u8bb0\u5f55\u9762\u7ecf"}
-              </button>
+              <div className="experience-head-actions">
+                <button
+                  type="button"
+                  className={`secondary-button experience-select-button ${experienceSelectionMode ? "active" : ""}`}
+                  disabled={experienceScope === "friends" || !experiences.some((item) => item.isOwner !== false)}
+                  onClick={() => {
+                    setExperienceSelectionMode((current) => !current);
+                    setSelectedExperienceIds([]);
+                  }}
+                >
+                  {experienceSelectionMode ? "退出批量" : "批量设置共享"}
+                </button>
+                <button type="button" className="primary-button experience-create-button" onClick={() => openExperienceCreate()}>
+                  <span aria-hidden="true">+</span> {"\u8bb0\u5f55\u9762\u7ecf"}
+                </button>
+              </div>
             </div>
             {experienceApplicationFilter && (
               <div className="experience-application-filter">
@@ -4086,7 +4165,7 @@ export function RecruitmentTracker({
               </label>
               <div className="experience-scope-tabs" aria-label="面经查看范围">
                 <button type="button" className={experienceScope === "mine" ? "active" : ""} onClick={() => setExperienceScope("mine")}>我的</button>
-                <button type="button" className={experienceScope === "friends" ? "active" : ""} onClick={() => setExperienceScope("friends")} disabled={!user}>好友共享</button>
+                <button type="button" className={experienceScope === "friends" ? "active" : ""} onClick={() => { setExperienceScope("friends"); setExperienceSelectionMode(false); setSelectedExperienceIds([]); }} disabled={!user}>好友共享</button>
                 <button type="button" className={experienceScope === "all" ? "active" : ""} onClick={() => setExperienceScope("all")} disabled={!user}>全部</button>
               </div>
               <div className="experience-counts">
@@ -4105,7 +4184,17 @@ export function RecruitmentTracker({
             ) : (
               <div className="experience-grid">
                 {filteredExperiences.map((experience) => (
-                  <article className="experience-card" key={experience.id}>
+                  <article className={`experience-card ${selectedExperienceIds.includes(experience.id) ? "selected" : ""}`} key={experience.id}>
+                    {experienceSelectionMode && experience.isOwner !== false && (
+                      <label className="experience-card-select">
+                        <input
+                          type="checkbox"
+                          checked={selectedExperienceIds.includes(experience.id)}
+                          onChange={(event) => setSelectedExperienceIds((current) => event.target.checked ? [...new Set([...current, experience.id])] : current.filter((id) => id !== experience.id))}
+                        />
+                        <span>{selectedExperienceIds.includes(experience.id) ? "已选择" : "选择"}</span>
+                      </label>
+                    )}
                     <header>
                       <div>
                         <span className="experience-round">{experience.round || "\u901a\u7528\u590d\u76d8"}</span>
@@ -4120,10 +4209,7 @@ export function RecruitmentTracker({
                     </header>
                     {(experience.company || experience.position) && <p className="experience-company">{[experience.company, experience.position].filter(Boolean).join(" / ")}</p>}
                     {(() => {
-                      const linkedInterview = interviews.find((interview) =>
-                        interview.id === experience.interviewId ||
-                        (!experience.interviewId && interview.applicationId === experience.applicationId && interviewStage(interview.round) === interviewStage(experience.round)),
-                      );
+                      const linkedInterview = linkedInterviewForExperience(experience, interviews);
                       if (linkedInterview) {
                         return (
                           <div className={`experience-interview-meta result-${linkedInterview.result || "待定"}`}>
@@ -5443,6 +5529,37 @@ export function RecruitmentTracker({
                 </footer>
               </div>
             </div>
+            {experienceSelectionMode && (
+              <div className="experience-batch-bar" aria-label="批量设置面经共享范围">
+                <button
+                  type="button"
+                  className="experience-select-all"
+                  disabled={!selectableExperienceIds.length}
+                  onClick={() => setSelectedExperienceIds((current) => {
+                    if (allVisibleExperiencesSelected) {
+                      const visibleIds = new Set(selectableExperienceIds);
+                      return current.filter((id) => !visibleIds.has(id));
+                    }
+                    return [...new Set([...current, ...selectableExperienceIds])];
+                  })}
+                >
+                  {allVisibleExperiencesSelected ? "取消全选" : `全选当前 ${selectableExperienceIds.length} 篇`}
+                </button>
+                <span className="experience-selected-count">已选 <b>{selectedExperienceIds.length}</b> 篇</span>
+                <div className="experience-batch-share-controls">
+                  {groups.length > 0 && (
+                    <DropdownSelect
+                      value={experienceShareGroupId || defaultGroupId}
+                      onChange={setExperienceShareGroupId}
+                      options={groups.map((group) => ({ value: group.id, label: `${group.name} · ${group.members.length} 人` }))}
+                      ariaLabel="选择批量共享的小组"
+                    />
+                  )}
+                  <button type="button" className="secondary-button" disabled={busy || !selectedExperienceIds.length} onClick={() => void updateExperienceVisibilityBatch("private")}>设为仅自己</button>
+                  <button type="button" className="primary-button" disabled={busy || !selectedExperienceIds.length || !groups.length} onClick={() => void updateExperienceVisibilityBatch("full")}>共享到小组</button>
+                </div>
+              </div>
+            )}
           </ModalPortal>
         )}
 

@@ -1328,3 +1328,83 @@ body {
   .calendar-todo-layout .calendar-todo-item time { grid-column: 2; grid-row: 1; }
   .calendar-todo-layout .calendar-todo-actions { grid-column: 1 / -1; grid-row: auto; }
 }
+
+.experience-head-actions,
+.experience-batch-share-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.experience-select-button.active {
+  border-color: #315f4c;
+  background: #e8f0eb;
+  color: #284f3e;
+  box-shadow: inset 0 0 0 1px rgba(49, 95, 76, .12);
+}
+.experience-batch-bar {
+  position: sticky;
+  top: 10px;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 11px 13px;
+  border: 1px solid rgba(48, 92, 73, .2);
+  border-radius: 10px;
+  background: rgba(247, 249, 245, .96);
+  box-shadow: 0 10px 25px rgba(35, 55, 44, .1);
+  backdrop-filter: blur(14px);
+}
+.experience-select-all {
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid #b9cac0;
+  border-radius: 8px;
+  background: #fff;
+  color: #315f4c;
+  font-size: 13px;
+  font-weight: 800;
+}
+.experience-select-all:hover:not(:disabled) { border-color: #668d79; background: #edf4ef; }
+.experience-select-all:disabled { cursor: not-allowed; opacity: .45; }
+.experience-selected-count { color: #68756d; font-size: 13px; white-space: nowrap; }
+.experience-selected-count b { color: #214b39; font-size: 16px; }
+.experience-batch-share-controls { margin-left: auto; justify-content: flex-end; }
+.experience-batch-share-controls .select-field { min-width: 180px; }
+.experience-batch-share-controls .primary-button,
+.experience-batch-share-controls .secondary-button { min-height: 38px; padding-inline: 13px; font-size: 13px; }
+.experience-card.selected {
+  border-color: rgba(42, 100, 75, .7);
+  background: linear-gradient(150deg, #fff, #edf4ef);
+  box-shadow: 0 0 0 3px rgba(58, 112, 87, .12), 0 14px 30px rgba(36, 77, 60, .09);
+}
+.experience-card-select {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  margin: -4px 0 12px;
+  padding: 0 9px;
+  border: 1px solid #d2ddd6;
+  border-radius: 8px;
+  background: #f7f9f6;
+  color: #607067;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.experience-card-select:has(input:checked) { border-color: #608974; background: #e5f0e9; color: #28523f; }
+.experience-card-select input { width: 16px; height: 16px; accent-color: #315f4c; }
+
+@media (max-width: 720px) {
+  .experience-head-actions { width: 100%; }
+  .experience-head-actions > button { flex: 1; }
+  .experience-batch-bar { align-items: stretch; flex-direction: column; }
+  .experience-batch-share-controls { width: 100%; margin-left: 0; justify-content: stretch; }
+  .experience-batch-share-controls .select-field { width: 100%; }
+  .experience-batch-share-controls .primary-button,
+  .experience-batch-share-controls .secondary-button { flex: 1; }
+}

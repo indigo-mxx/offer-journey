@@ -533,6 +533,20 @@ export async function POST(request: Request) {
     } else if (action === "deleteEvent") {
       const { error } = await supabase.from("recruitment_events").delete().eq("id", textValue(body.id, 80)).eq("owner_id", user.id);
       if (error) return json({ error: calendarSchemaMissing(error) ? calendarSchemaMessage() : error.message }, 400);
+    } else if (action === "updateExperienceVisibilityBatch") {
+      const ids = [...new Set((Array.isArray(body.ids) ? body.ids : []).map((id) => textValue(id, 80)).filter(Boolean))].slice(0, 200);
+      if (!ids.length) return json({ error: "请至少选择一篇面经" }, 400);
+      const experienceVisibility = visibility(body.visibility) === "full" ? "full" : "private";
+      const userGroups = await groupsForUser(supabase, user.id);
+      const requestedGroupId = textValue(body.groupId, 80);
+      const experienceGroupId = experienceVisibility === "full" && userGroups.some((group) => group.id === requestedGroupId) ? requestedGroupId : null;
+      if (experienceVisibility === "full" && !experienceGroupId) return json({ error: "请选择一个已加入的小组后再共享面经" }, 400);
+      const { error } = await supabase
+        .from("interview_experiences")
+        .update({ visibility: experienceVisibility, group_id: experienceGroupId })
+        .eq("owner_id", user.id)
+        .in("id", ids);
+      if (error) return json({ error: error.code === "42P01" ? "面经库尚未初始化，请先在 Supabase SQL Editor 执行 004_interview_experiences.sql" : error.code === "42703" ? "请先在 Supabase SQL Editor 执行 006_share_interview_experiences.sql" : error.message }, 400);
     } else if (action === "saveExperience" || action === "updateExperience") {
       const value = (body.experience ?? {}) as Record<string, unknown>;
       const userGroups = await groupsForUser(supabase, user.id);

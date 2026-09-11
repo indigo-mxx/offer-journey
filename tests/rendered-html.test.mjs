@@ -57,6 +57,11 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(route, /interview_experiences/);
   assert.match(tracker, /好友共享/);
   assert.match(tracker, /选择面经共享范围/);
+  assert.match(tracker, /批量设置面经共享/);
+  assert.match(tracker, /updateExperienceVisibilityBatch/);
+  assert.match(tracker, /linkedInterviewForExperience\(b, interviews\)\?\.scheduledAt/);
+  assert.match(route, /action === "updateExperienceVisibilityBatch"/);
+  assert.match(route, /\.in\("id", ids\)/);
   assert.match(tracker, /只读 · 来自共同小组/);
   assert.match(route, /experienceGroupId/);
   assert.match(experienceSharingMigration, /public\.is_group_member\(group_id\)/);
