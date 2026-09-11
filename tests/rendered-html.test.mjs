@@ -3,9 +3,10 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("includes the cloud workspace, access control, and sharing surfaces", async () => {
-  const [page, tracker, route, schema, hosting, styles, experienceSharingMigration, search] = await Promise.all([
+  const [page, tracker, calendar, route, schema, hosting, styles, experienceSharingMigration, search] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/recruitment-tracker.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/recruitment-calendar.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/workspace/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
     readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
@@ -63,6 +64,10 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(tracker, /openStatFilter/);
   assert.match(tracker, /interview-stage-workspace/);
   assert.match(tracker, /renderExperienceLink/);
+  assert.match(calendar, /calendar-status-summary/);
+  assert.match(calendar, /completionStats\.completed/);
+  assert.match(calendar, /completionStats\.pending/);
+  assert.match(calendar, /completionStats\.total/);
   assert.match(tracker, /formatInterviewDate/);
   assert.match(tracker, /关联面试场次/);
   assert.match(tracker, /<span>形式<\/span>/);

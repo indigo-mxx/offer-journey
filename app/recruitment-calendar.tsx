@@ -132,6 +132,10 @@ export function RecruitmentCalendar({
     .filter((item) => !query.trim() || [item.company, item.position, item.title, item.location, item.ownerName].join(" ").toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
     .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()),
   [applicationIds, items, kindFilter, activeOwner, query]);
+  const completionStats = useMemo(() => {
+    const completed = filteredItems.filter((item) => item.completed || item.status === "已完成").length;
+    return { completed, pending: filteredItems.length - completed, total: filteredItems.length };
+  }, [filteredItems]);
   const days = useMemo(() => calendarDays(cursor, mode), [cursor, mode]);
   const visibleItems = useMemo(() => itemsInRange(filteredItems,
     mode === "agenda" ? new Date(cursor.getFullYear(), cursor.getMonth(), 1) : days[0],
@@ -255,6 +259,11 @@ export function RecruitmentCalendar({
         {ownerOptions.length > 1 && <><button type="button" aria-pressed={activeOwner === "all"} className={activeOwner === "all" ? "active" : ""} onClick={() => { setOwnerFilter("all"); setSelectedEventKey(null); }}>全部好友</button>
           {ownerOptions.map((owner) => <button type="button" aria-pressed={activeOwner === owner.value} className={activeOwner === owner.value ? "active" : ""} key={owner.value} onClick={() => { setOwnerFilter(owner.value); setSelectedEventKey(null); }}>{owner.label}</button>)}</>}
       </div>}
+      <dl className="calendar-status-summary" aria-label="当前日程完成情况">
+        <div className="completed"><dt>已完成</dt><dd>{completionStats.completed}</dd></div>
+        <div className="pending"><dt>未完成</dt><dd>{completionStats.pending}</dd></div>
+        <div className="total"><dt>总数</dt><dd>{completionStats.total}</dd></div>
+      </dl>
       {hasFilters && <div className="calendar-filter-summary" role="status"><span>当前范围找到 {visibleItems.length} 项日程</span><button type="button" onClick={clearFilters}>清除筛选</button></div>}
       <div className="calendar-layout">
         <div className="calendar-main">

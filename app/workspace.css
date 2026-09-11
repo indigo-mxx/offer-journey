@@ -1187,3 +1187,35 @@ body {
   content: "✓";
   font-weight: 900;
 }
+.calendar-status-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0 24px 16px;
+}
+.calendar-status-summary > div {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 13px;
+  border: 1px solid rgba(71, 91, 78, .12);
+  border-radius: 9px;
+  background: rgba(255, 255, 252, .72);
+}
+.calendar-status-summary dt { color: #6f7c74; font-size: 12px; }
+.calendar-status-summary dd { margin: 0; font-family: Georgia, serif; font-size: 22px; font-weight: 700; line-height: 1; }
+.calendar-status-summary .completed { border-left: 3px solid #708d7b; background: #edf1ee; }
+.calendar-status-summary .completed dd { color: #617267; }
+.calendar-status-summary .pending { border-left: 3px solid #b66b49; background: #fbf3e9; }
+.calendar-status-summary .pending dd { color: #a4593c; }
+.calendar-status-summary .total { border-left: 3px solid #315f4c; background: #eef4f0; }
+.calendar-status-summary .total dd { color: #244f3d; }
+
+@media (max-width: 720px) {
+  .calendar-status-summary { gap: 5px; padding-inline: 14px; }
+  .calendar-status-summary > div { align-items: flex-start; flex-direction: column; gap: 5px; padding: 9px 10px; }
+  .calendar-status-summary dd { font-size: 19px; }
+}
