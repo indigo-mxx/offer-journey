@@ -2050,7 +2050,7 @@ button.interview-date-chip:hover { border-color: #769abb; box-shadow: 0 7px 17px
 .interview-stage-summary span { min-width: 91px; display: grid; gap: 3px; padding: 10px 11px; border: 1px solid rgba(64,105,139,.11); border-radius: 11px; background: rgba(255,255,255,.72); color: #718596; font-size: 9px; }
 .interview-stage-summary b { color: #315f82; font-family: Georgia,serif; font-size: 18px; }
 .interview-stage-board-wrap { overflow-x: auto; padding: 17px; }
-.interview-stage-board { min-width: 1430px; display: grid; grid-template-columns: repeat(5, minmax(270px, 1fr)); gap: 11px; align-items: start; }
+.interview-stage-board { min-width: 1711px; display: grid; grid-template-columns: repeat(6, minmax(270px, 1fr)); gap: 11px; align-items: start; }
 .interview-stage-column { overflow: hidden; border: 1px solid rgba(49,91,126,.13); border-radius: 15px; background: rgba(255,255,255,.52); box-shadow: 0 8px 23px rgba(42,75,99,.04); }
 .interview-stage-column > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 14px; border-bottom: 1px solid rgba(54,95,128,.11); background: rgba(235,243,248,.8); }
 .interview-stage-column > header strong, .interview-stage-column > header small { display: block; }
@@ -2083,7 +2083,7 @@ button.interview-date-chip:hover { border-color: #769abb; box-shadow: 0 7px 17px
   .interview-stage-summary { width: 100%; overflow-x: auto; }
   .interview-stage-summary span { flex: 1; }
   .interview-stage-board-wrap { padding: 12px; scroll-snap-type: x proximity; }
-  .interview-stage-board { min-width: max-content; grid-template-columns: repeat(5, 270px); }
+  .interview-stage-board { min-width: max-content; grid-template-columns: repeat(6, 270px); }
   .interview-stage-column { scroll-snap-align: start; }
 }
 

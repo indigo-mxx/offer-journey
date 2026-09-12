@@ -13,6 +13,7 @@ export type ApplicationStatus =
   | "简历筛选"
   | "已投递"
   | "笔试"
+  | "AI面"
   | "一面"
   | "二面"
   | "三面"

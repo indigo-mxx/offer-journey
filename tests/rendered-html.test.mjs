@@ -58,6 +58,8 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(tracker, /好友共享/);
   assert.match(tracker, /选择面经共享范围/);
   assert.match(tracker, /批量设置面经共享/);
+  assert.match(tracker, /一键全选/);
+  assert.ok(tracker.indexOf("experience-batch-bar") < tracker.indexOf("{filteredExperiences.length"), "batch sharing controls render in the experience library");
   assert.match(tracker, /updateExperienceVisibilityBatch/);
   assert.match(tracker, /linkedInterviewForExperience\(b, interviews\)\?\.scheduledAt/);
   assert.match(route, /action === "updateExperienceVisibilityBatch"/);
@@ -85,6 +87,9 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.doesNotMatch(tracker, /(?:<span>|placeholder="|ariaLabel=")\\u[0-9a-f]{4}/i);
   assert.match(route, /interview_id/);
   assert.match(schema, /interviewId/);
+  assert.match(schema, /\| "AI面"/);
+  assert.match(tracker, /INTERVIEW_ROUNDS = \["AI面", "技术一面"/);
+  assert.match(tracker, /\{ key: "AI面", hint:/);
   assert.match(styles, /interview-stage-board/);
   assert.match(styles, /interview-date-chip/);
   assert.match(styles, /stat-card\.is-selected/);

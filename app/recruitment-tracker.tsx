@@ -227,15 +227,15 @@ function ModalPortal({ children }: { children: ReactNode }) {
 }
 
 // ──────────────────────────────────────────────── constants
-const STATUSES: ApplicationStatus[] = ["准备投递", "简历投递", "已投递", "简历筛选", "笔试", "一面", "二面", "三面", "终面", "HR面", "Offer", "已拒绝", "流程结束"];
-const INTERVIEW_STATUSES: ApplicationStatus[] = ["一面", "二面", "三面", "终面", "HR面"];
+const STATUSES: ApplicationStatus[] = ["准备投递", "简历投递", "已投递", "简历筛选", "笔试", "AI面", "一面", "二面", "三面", "终面", "HR面", "Offer", "已拒绝", "流程结束"];
+const INTERVIEW_STATUSES: ApplicationStatus[] = ["AI面", "一面", "二面", "三面", "终面", "HR面"];
 const CLOSED_STATUSES: ApplicationStatus[] = ["已拒绝", "流程结束"];
 const RESUME_STATUSES: ApplicationStatus[] = ["准备投递", "简历投递", "已投递", "简历筛选"];
 const QUICK_STATUS_FILTERS = ["全部状态", "简历阶段", "笔试", "面试进行中", "Offer", "流程已结束"];
 const KANBAN_COLUMNS: { key: string; label: string; hint: string; statuses: ApplicationStatus[] }[] = [
   { key: "resume", label: "简历阶段", hint: "准备、投递与筛选", statuses: RESUME_STATUSES },
   { key: "test", label: "笔试", hint: "测评与笔试", statuses: ["笔试"] },
-  { key: "interview", label: "面试中", hint: "一面至 HR 面", statuses: INTERVIEW_STATUSES },
+  { key: "interview", label: "面试中", hint: "AI 面至 HR 面", statuses: INTERVIEW_STATUSES },
   { key: "offer", label: "Offer", hint: "已获得录用", statuses: ["Offer"] },
   { key: "closed", label: "已结束", hint: "拒绝或主动终止", statuses: CLOSED_STATUSES },
 ];
@@ -286,7 +286,7 @@ const COMPANY_NATURE_OPTIONS = [
   { value: "其他", subtypes: ["社会组织", "国际组织", "其他单位"] },
 ];
 
-const FINAL_OUTCOME_OPTIONS = ["简历挂", "笔试挂", "一面挂", "二面挂", "三面挂", "终面挂", "HR 面挂", "薪资不满足", "岗位关闭", "主动终止", "其他"];
+const FINAL_OUTCOME_OPTIONS = ["简历挂", "笔试挂", "AI 面挂", "一面挂", "二面挂", "三面挂", "终面挂", "HR 面挂", "薪资不满足", "岗位关闭", "主动终止", "其他"];
 const REJECTION_REASON_OPTIONS = ["薪资不满足", "岗位 / 方向不匹配", "已接受其他 Offer", "地点或到岗时间不合适", "个人原因", "其他"];
 
 const EMPTY_FORM: FormState = {
@@ -337,7 +337,7 @@ const EMPTY_EXPERIENCE: ExperienceForm = {
   groupId: "",
 };
 
-const INTERVIEW_ROUNDS = ["技术一面", "技术二面", "技术三面", "交叉面", "主管面", "HR面", "群面", "VP面", "其他"];
+const INTERVIEW_ROUNDS = ["AI面", "技术一面", "技术二面", "技术三面", "交叉面", "主管面", "HR面", "群面", "VP面", "其他"];
 const INTERVIEW_FORMATS = ["视频面试", "电话面试", "线下", "笔试", "其他"];
 const INTERVIEW_RESULTS = ["待定", "通过", "未通过", "未参加"];
 const RECRUITMENT_EVENT_TYPES: RecruitmentEventType[] = ["written_test", "assessment", "deadline", "hr_contact", "other"];
@@ -446,9 +446,10 @@ function calendarStartValue(value: Date) {
   return localDate.toISOString().slice(0, 16);
 }
 
-type InterviewStage = "一面" | "二面" | "三面" | "终面" | "HR面" | "其他";
+type InterviewStage = "AI面" | "一面" | "二面" | "三面" | "终面" | "HR面" | "其他";
 
 const INTERVIEW_STAGE_COLUMNS: Array<{ key: InterviewStage; hint: string }> = [
+  { key: "AI面", hint: "智能问答与基础筛选" },
   { key: "一面", hint: "初轮沟通与基础考察" },
   { key: "二面", hint: "技术深挖与项目追问" },
   { key: "三面", hint: "高阶技术或交叉评估" },
@@ -458,6 +459,7 @@ const INTERVIEW_STAGE_COLUMNS: Array<{ key: InterviewStage; hint: string }> = [
 
 function interviewStage(value: string): InterviewStage {
   const normalized = value.trim().toLocaleLowerCase().replace(/[\s\-_]/g, "");
+  if (/ai|智能面/.test(normalized)) return "AI面";
   if (/hr|人力/.test(normalized)) return "HR面";
   if (/终|vp|高管|主管/.test(normalized)) return "终面";
   if (/三|3|交叉/.test(normalized)) return "三面";
@@ -467,6 +469,7 @@ function interviewStage(value: string): InterviewStage {
 }
 
 function defaultRoundForStage(stage: InterviewStage) {
+  if (stage === "AI面") return "AI面";
   if (stage === "一面") return "技术一面";
   if (stage === "二面") return "技术二面";
   if (stage === "三面") return "技术三面";
@@ -507,7 +510,7 @@ function tagsWithClassification(companyNature: string, companySubtype: string, i
 
 function statusTone(status: ApplicationStatus) {
   if (status === "Offer") return "offer";
-  if (["一面", "二面", "三面", "终面", "HR面"].includes(status)) return "interview";
+  if (["AI面", "一面", "二面", "三面", "终面", "HR面"].includes(status)) return "interview";
   if (status === "笔试") return "test";
   if (["已拒绝", "流程结束"].includes(status)) return "closed";
   return "default";
@@ -983,7 +986,7 @@ function DashboardPanel({
       funnel: [
         { label: "岗位记录", count: total, hint: "全部状态" },
         { label: "进入笔试", count: applications.filter((item) => item.status === "笔试" || INTERVIEW_STATUSES.includes(item.status) || item.status === "Offer").length, hint: "笔试及后续阶段" },
-        { label: "进入面试", count: applications.filter((item) => INTERVIEW_STATUSES.includes(item.status) || item.status === "Offer").length, hint: "一面至 Offer" },
+        { label: "进入面试", count: applications.filter((item) => INTERVIEW_STATUSES.includes(item.status) || item.status === "Offer").length, hint: "AI 面至 Offer" },
         { label: "获得 Offer", count: offers, hint: "录用结果" },
       ],
       statuses: KANBAN_COLUMNS.map((column) => ({ label: column.label, count: applications.filter((item) => column.statuses.includes(item.status)).length })),
@@ -1044,7 +1047,7 @@ function DashboardPanel({
         <div className="dashboard-kpis">
           <article><span>岗位投递</span><strong>{dashboard.total}</strong><small>{dashboard.companyCount} 家公司</small></article>
           <article><span>活跃流程</span><strong>{dashboard.active}</strong><small>仍在持续推进</small></article>
-          <article><span>面试阶段</span><strong>{dashboard.interview}</strong><small>一面至 HR 面</small></article>
+          <article><span>面试阶段</span><strong>{dashboard.interview}</strong><small>AI 面至 HR 面</small></article>
           <article><span>Offer</span><strong>{dashboard.offers}</strong><small>Offer 率 {dashboard.offerRate}%</small></article>
           <article><span>流程推进率</span><strong>{dashboard.responseRate}%</strong><small>已走出简历阶段</small></article>
           <article><span>已共享记录</span><strong>{dashboard.sharedCount}</strong><small>可与搭子同步进展</small></article>
@@ -4174,6 +4177,37 @@ export function RecruitmentTracker({
                 <span><b>{new Set(experiences.map((item) => item.company).filter(Boolean)).size}</b> {"\u5bb6\u516c\u53f8"}</span>
               </div>
             </div>
+            {experienceSelectionMode && (
+              <div className="experience-batch-bar" aria-label="批量设置面经共享范围">
+                <button
+                  type="button"
+                  className="experience-select-all"
+                  disabled={!selectableExperienceIds.length}
+                  onClick={() => setSelectedExperienceIds((current) => {
+                    if (allVisibleExperiencesSelected) {
+                      const visibleIds = new Set(selectableExperienceIds);
+                      return current.filter((id) => !visibleIds.has(id));
+                    }
+                    return [...new Set([...current, ...selectableExperienceIds])];
+                  })}
+                >
+                  {allVisibleExperiencesSelected ? "取消全选" : `一键全选 ${selectableExperienceIds.length} 篇`}
+                </button>
+                <span className="experience-selected-count">已选 <b>{selectedExperienceIds.length}</b> 篇</span>
+                <div className="experience-batch-share-controls">
+                  {groups.length > 0 && (
+                    <DropdownSelect
+                      value={experienceShareGroupId || defaultGroupId}
+                      onChange={setExperienceShareGroupId}
+                      options={groups.map((group) => ({ value: group.id, label: `${group.name} · ${group.members.length} 人` }))}
+                      ariaLabel="选择批量共享的小组"
+                    />
+                  )}
+                  <button type="button" className="secondary-button" disabled={busy || !selectedExperienceIds.length} onClick={() => void updateExperienceVisibilityBatch("private")}>设为仅自己</button>
+                  <button type="button" className="primary-button" disabled={busy || !selectedExperienceIds.length || !groups.length} onClick={() => void updateExperienceVisibilityBatch("full")}>共享到小组</button>
+                </div>
+              </div>
+            )}
             {filteredExperiences.length === 0 ? (
               <div className="experience-empty">
                 <div className="experience-empty-mark">{"\u2726"}</div>
@@ -5529,37 +5563,6 @@ export function RecruitmentTracker({
                 </footer>
               </div>
             </div>
-            {experienceSelectionMode && (
-              <div className="experience-batch-bar" aria-label="批量设置面经共享范围">
-                <button
-                  type="button"
-                  className="experience-select-all"
-                  disabled={!selectableExperienceIds.length}
-                  onClick={() => setSelectedExperienceIds((current) => {
-                    if (allVisibleExperiencesSelected) {
-                      const visibleIds = new Set(selectableExperienceIds);
-                      return current.filter((id) => !visibleIds.has(id));
-                    }
-                    return [...new Set([...current, ...selectableExperienceIds])];
-                  })}
-                >
-                  {allVisibleExperiencesSelected ? "取消全选" : `全选当前 ${selectableExperienceIds.length} 篇`}
-                </button>
-                <span className="experience-selected-count">已选 <b>{selectedExperienceIds.length}</b> 篇</span>
-                <div className="experience-batch-share-controls">
-                  {groups.length > 0 && (
-                    <DropdownSelect
-                      value={experienceShareGroupId || defaultGroupId}
-                      onChange={setExperienceShareGroupId}
-                      options={groups.map((group) => ({ value: group.id, label: `${group.name} · ${group.members.length} 人` }))}
-                      ariaLabel="选择批量共享的小组"
-                    />
-                  )}
-                  <button type="button" className="secondary-button" disabled={busy || !selectedExperienceIds.length} onClick={() => void updateExperienceVisibilityBatch("private")}>设为仅自己</button>
-                  <button type="button" className="primary-button" disabled={busy || !selectedExperienceIds.length || !groups.length} onClick={() => void updateExperienceVisibilityBatch("full")}>共享到小组</button>
-                </div>
-              </div>
-            )}
           </ModalPortal>
         )}
 
