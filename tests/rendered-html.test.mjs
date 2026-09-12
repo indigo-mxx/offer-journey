@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("includes the cloud workspace, access control, and sharing surfaces", async () => {
-  const [page, tracker, calendar, route, schema, hosting, styles, experienceSharingMigration, search] = await Promise.all([
+  const [page, tracker, calendar, route, schema, hosting, styles, experienceSharingMigration, aiInterviewDeadlineMigration, search] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/recruitment-tracker.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/recruitment-calendar.tsx", import.meta.url), "utf8"),
@@ -12,6 +12,7 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
     readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../supabase/migrations/006_share_interview_experiences.sql", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/010_ai_interview_deadlines.sql", import.meta.url), "utf8"),
     readFile(new URL("../lib/search.ts", import.meta.url), "utf8"),
   ]);
 
@@ -90,6 +91,10 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(schema, /\| "AI面"/);
   assert.match(tracker, /INTERVIEW_ROUNDS = \["AI面", "技术一面"/);
   assert.match(tracker, /\{ key: "AI面", hint:/);
+  assert.match(tracker, /剩余时间（小时，可选）/);
+  assert.match(tracker, /applyCalendarRemainingHours\("72"\)/);
+  assert.match(route, /timing_type: textValue\(value\.timingType/);
+  assert.match(aiInterviewDeadlineMigration, /add column if not exists timing_type/);
   assert.match(styles, /interview-stage-board/);
   assert.match(styles, /interview-date-chip/);
   assert.match(styles, /stat-card\.is-selected/);

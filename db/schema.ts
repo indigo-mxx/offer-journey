@@ -55,6 +55,7 @@ export type Interview = {
   applicationId: string;
   scheduledAt: string;
   endedAt: string;
+  timingType?: "scheduled" | "deadline";
   round: string;
   format: string;
   location?: string;

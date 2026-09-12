@@ -181,13 +181,13 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup) {
 
   const interviewsSheet = addDataSheet("面试安排", "面试安排", "每一行是一场面试。开始与结束时间使用 Excel 日期格式，可正常排序筛选。", [
     { header: "公司", key: "company", width: 18 }, { header: "岗位", key: "position", width: 24 }, { header: "轮次", key: "round", width: 14 },
-    { header: "开始时间", key: "scheduledAt", width: 19 }, { header: "结束时间", key: "endedAt", width: 19 }, { header: "形式", key: "format", width: 14 },
+    { header: "时间类型", key: "timingType", width: 14 }, { header: "开始时间", key: "scheduledAt", width: 19 }, { header: "结束时间", key: "endedAt", width: 19 }, { header: "形式", key: "format", width: 14 },
     { header: "结果", key: "result", width: 12 }, { header: "地点", key: "location", width: 18 }, { header: "会议链接", key: "eventUrl", width: 34 }, { header: "面试官", key: "interviewer", width: 16 }, { header: "总结", key: "summary", width: 36 },
     { header: "后续安排", key: "nextSteps", width: 30 }, { header: "岗位ID", key: "applicationId", width: 18, hidden: true },
     { header: "面试ID", key: "id", width: 18, hidden: true }, { header: "创建时间", key: "createdAt", width: 20, hidden: true }, { header: "更新时间", key: "updatedAt", width: 20, hidden: true },
   ], data.interviews.map((item) => {
     const application = appById.get(item.applicationId);
-    return { company: application?.company ?? "", position: application?.position ?? "", round: item.round, scheduledAt: validDate(item.scheduledAt), endedAt: validDate(item.endedAt), format: item.format, result: item.result, location: item.location ?? "", eventUrl: item.eventUrl ?? "", interviewer: item.interviewer, summary: item.summary, nextSteps: item.nextSteps, applicationId: item.applicationId, id: item.id, createdAt: validDate(item.createdAt ?? ""), updatedAt: validDate(item.updatedAt) };
+    return { company: application?.company ?? "", position: application?.position ?? "", round: item.round, timingType: item.timingType === "deadline" ? "截止时间" : "指定时间", scheduledAt: validDate(item.scheduledAt), endedAt: validDate(item.endedAt), format: item.format, result: item.result, location: item.location ?? "", eventUrl: item.eventUrl ?? "", interviewer: item.interviewer, summary: item.summary, nextSteps: item.nextSteps, applicationId: item.applicationId, id: item.id, createdAt: validDate(item.createdAt ?? ""), updatedAt: validDate(item.updatedAt) };
   }), palette.blue);
   interviewsSheet.getColumn("scheduledAt").numFmt = "yyyy-mm-dd hh:mm";
   interviewsSheet.getColumn("endedAt").numFmt = "yyyy-mm-dd hh:mm";
@@ -333,7 +333,7 @@ export async function readWorkspaceWorkbook(file: File): Promise<WorkspaceBackup
     const applicationId = excelText(row["岗位ID"]).trim() || applicationByName.get(applicationKey(excelText(row["公司"]), excelText(row["岗位"]))) || "";
     const scheduledAt = dateFromExcel(row["开始时间"]);
     if (!applicationIds.has(applicationId) || !scheduledAt) return null;
-    return { id: safeId(row["面试ID"]), applicationId, scheduledAt, endedAt: dateFromExcel(row["结束时间"]), round: excelText(row["轮次"]).trim() || "一面", format: excelText(row["形式"]).trim() || "视频面试", result: excelText(row["结果"]).trim() || "待定", location: excelText(row["地点"]).trim(), eventUrl: excelText(row["会议链接"]).trim(), interviewer: excelText(row["面试官"]).trim(), summary: excelText(row["总结"]).trim(), nextSteps: excelText(row["后续安排"]).trim(), createdAt: dateFromExcel(row["创建时间"]) || now, updatedAt: dateFromExcel(row["更新时间"]) || now };
+    return { id: safeId(row["面试ID"]), applicationId, scheduledAt, endedAt: dateFromExcel(row["结束时间"]), timingType: excelText(row["时间类型"]).trim() === "截止时间" ? "deadline" : "scheduled", round: excelText(row["轮次"]).trim() || "一面", format: excelText(row["形式"]).trim() || "视频面试", result: excelText(row["结果"]).trim() || "待定", location: excelText(row["地点"]).trim(), eventUrl: excelText(row["会议链接"]).trim(), interviewer: excelText(row["面试官"]).trim(), summary: excelText(row["总结"]).trim(), nextSteps: excelText(row["后续安排"]).trim(), createdAt: dateFromExcel(row["创建时间"]) || now, updatedAt: dateFromExcel(row["更新时间"]) || now };
   }).filter((item): item is Interview => Boolean(item));
   if (interviews.length > 1000) throw new Error("单次最多导入 1000 条面试记录");
   const interviewIds = new Set(interviews.map((item) => item.id));

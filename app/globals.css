@@ -2278,6 +2278,11 @@ button.interview-date-chip:hover { border-color: #769abb; box-shadow: 0 7px 17px
 .calendar-written-test-timing button strong { font-size: 11px; }
 .calendar-written-test-timing button small { color: #8a958e; font-size: 8px; }
 .calendar-written-test-timing button.active { border-color: var(--brand); background: #eef8f2; color: var(--brand); box-shadow: inset 0 0 0 1px rgba(19,105,76,.08); }
+.calendar-remaining-hours { grid-column: 1 / -1; }
+.calendar-remaining-hours > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.calendar-remaining-hours > div button { min-width: 104px; border: 1px solid #c8d9cf; border-radius: 8px; background: #edf5f0; color: #315f4c; font-size: 13px; font-weight: 800; }
+.calendar-remaining-hours > div button:hover { border-color: #6f9883; background: #e2eee7; }
+.calendar-remaining-hours small { color: #7b8880; font-size: 12px; line-height: 1.55; }
 .calendar-completed-note { display: grid; align-content: center; gap: 3px; min-height: 43px; padding: 8px 12px; border: 1px solid #d9e6dd; border-radius: 9px; background: #eff8f2; }
 .calendar-completed-note strong { color: #347052; font-size: 10px; }
 .calendar-completed-note small { color: #819087; font-size: 8px; }

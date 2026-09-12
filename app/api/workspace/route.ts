@@ -41,6 +41,10 @@ function calendarEnhancementsMessage() {
   return "日历增强功能尚未初始化，请先在 Supabase SQL Editor 执行 008_calendar_deadlines_and_todo_dismissals.sql";
 }
 
+function aiInterviewDeadlineMessage() {
+  return "AI 面截止时间功能尚未初始化，请先在 Supabase SQL Editor 执行 010_ai_interview_deadlines.sql";
+}
+
 const FINAL_OUTCOME_PREFIX = "【最终结果】";
 const REJECTION_REASON_PREFIX = "【拒绝原因】";
 
@@ -192,6 +196,7 @@ export async function GET(request: Request) {
     applicationId: row.application_id,
     scheduledAt: row.scheduled_at,
     endedAt: row.ended_at ?? "",
+    timingType: row.timing_type === "deadline" ? "deadline" : "scheduled",
     round: row.round,
     format: row.format,
     interviewer: row.interviewer,
@@ -330,6 +335,7 @@ export async function POST(request: Request) {
             owner_id: user.id,
             scheduled_at: textValue(value.scheduledAt, 60),
             ended_at: textValue(value.endedAt, 60) || null,
+            timing_type: textValue(value.timingType, 20) === "deadline" ? "deadline" : "scheduled",
             round: textValue(value.round, 40) || "一面",
             format: textValue(value.format, 40) || "视频面试",
             location: textValue(value.location, 240),
@@ -345,7 +351,7 @@ export async function POST(request: Request) {
         }
         if (interviewPayload.length) {
           const { error } = await supabase.from("interviews").upsert(interviewPayload, { onConflict: "id" });
-          if (error) return json({ error: error.code === "42703" ? calendarSchemaMessage() : error.message }, 400);
+          if (error) return json({ error: error.code === "42703" || error.code === "PGRST204" ? aiInterviewDeadlineMessage() : error.message }, 400);
         }
         const rawEvents = Array.isArray(body.events) ? body.events : [];
         if (rawEvents.length > 2000) return json({ error: "单次最多导入 2000 条日程记录" }, 400);
@@ -475,6 +481,7 @@ export async function POST(request: Request) {
         owner_id: user.id,
         scheduled_at: textValue(value.scheduledAt, 60),
         ended_at: textValue(value.endedAt, 60) || null,
+        timing_type: textValue(value.timingType, 20) === "deadline" ? "deadline" : "scheduled",
         round: textValue(value.round, 40) || "一面",
         format: textValue(value.format, 40) || "视频面试",
         location: textValue(value.location, 240),
@@ -486,7 +493,7 @@ export async function POST(request: Request) {
       };
       if (!interview.application_id || !interview.scheduled_at) return json({ error: "请选择岗位并填写面试时间" }, 400);
       const { error } = await supabase.from("interviews").upsert(interview, { onConflict: "id" });
-      if (error) return json({ error: error.code === "42703" ? calendarSchemaMessage() : error.message }, 400);
+      if (error) return json({ error: error.code === "42703" || error.code === "PGRST204" ? aiInterviewDeadlineMessage() : error.message }, 400);
     } else if (action === "deleteInterview") {
       const { error } = await supabase.from("interviews").delete().eq("id", textValue(body.id, 80)).eq("owner_id", user.id);
       if (error) return json({ error: error.message }, 400);

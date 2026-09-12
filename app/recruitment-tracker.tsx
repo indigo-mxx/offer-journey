@@ -7,7 +7,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { autocompleteScore, matchesFieldsSearch, matchesLiteralSearch, matchesTextSearch, matchingAutocompleteOptions } from "@/lib/search";
 import { createWorkspaceWorkbook, readWorkspaceWorkbook } from "@/lib/workbook-backup";
 import type { WorkspaceBackup } from "@/lib/workbook-backup";
-import { calendarTimingDefaults, supportsCalendarTimingChoice } from "@/lib/calendar";
+import { calendarTimingDefaults, deadlineFromRemainingHours, isAiInterviewRound, supportsCalendarTimingChoice } from "@/lib/calendar";
 import type { Application, Interview, InterviewExperience, RecruitmentEvent, RecruitmentEventStatus, RecruitmentEventType, GroupInfo, ApplicationStatus, Visibility } from "@/db/schema";
 import { RecruitmentCalendar, UpcomingScheduleCard, calendarKindLabel } from "./recruitment-calendar";
 import type { CalendarItemKind, RecruitmentCalendarItem } from "./recruitment-calendar";
@@ -595,7 +595,7 @@ function normalizeLocal(items: Application[]) {
 }
 
 function normalizeInterviews(items: Interview[]) {
-  return items.map((item) => ({ ...item, endedAt: item.endedAt ?? "", location: item.location ?? "", eventUrl: item.eventUrl ?? "" }));
+  return items.map((item) => ({ ...item, timingType: item.timingType === "deadline" ? "deadline" as const : "scheduled" as const, endedAt: item.endedAt ?? "", location: item.location ?? "", eventUrl: item.eventUrl ?? "" }));
 }
 
 function normalizeRecruitmentEvents(items: RecruitmentEvent[]): RecruitmentEvent[] {
@@ -1189,6 +1189,7 @@ export function RecruitmentTracker({
   const [viewingFriendCalendarItem, setViewingFriendCalendarItem] = useState<RecruitmentCalendarItem | null>(null);
   const [calendarScope, setCalendarScope] = useState<"mine" | "friends">("mine");
   const [calendarEventForm, setCalendarEventForm] = useState<CalendarEventForm>(() => emptyCalendarEventForm());
+  const [calendarRemainingHours, setCalendarRemainingHours] = useState("");
   const [dismissedTodoKeys, setDismissedTodoKeys] = useState<string[]>([]);
   const [calendarTodoFilter, setCalendarTodoFilter] = useState<CalendarTodoFilter>("all");
   const [editingExperienceId, setEditingExperienceId] = useState<string | null>(null);
@@ -1696,7 +1697,7 @@ export function RecruitmentTracker({
         id: item.id,
         applicationId: item.applicationId,
         kind: "interview" as const,
-        timingType: "scheduled" as const,
+        timingType: item.timingType === "deadline" ? "deadline" as const : "scheduled" as const,
         title: item.round || "面试",
         company: application.company,
         position: application.position,
@@ -1755,7 +1756,7 @@ export function RecruitmentTracker({
         id: item.id,
         applicationId: item.applicationId,
         kind: "interview" as const,
-        timingType: "scheduled" as const,
+        timingType: item.timingType === "deadline" ? "deadline" as const : "scheduled" as const,
         title: item.round || "面试",
         company: application.company,
         position: application.position,
@@ -2133,7 +2134,7 @@ export function RecruitmentTracker({
         reminders.push({
           id: `calendar-${calendarItem.id}`,
           kind: "event",
-          label: supportsCalendarTimingChoice(calendarItem.kind) && calendarItem.timingType === "deadline"
+          label: supportsCalendarTimingChoice(calendarItem.kind, calendarItem.title) && calendarItem.timingType === "deadline"
             ? (daysAway < 0 ? `${calendarKindLabel(calendarItem.kind)}截止时间已过` : `${calendarKindLabel(calendarItem.kind)}即将截止`)
             : daysAway < 0 ? "日程已过期" : `即将${calendarKindLabel(calendarItem.kind)}`,
           title: `${application.company} · ${calendarItem.title}`,
@@ -2206,16 +2207,17 @@ export function RecruitmentTracker({
         ),
       );
       const recordedEnd = new Date(interview.endedAt).getTime();
-      const finishedAt = Number.isFinite(recordedEnd) ? recordedEnd : scheduledAt + 2 * 60 * 60 * 1000;
+      const deadlineInterview = interview.timingType === "deadline";
+      const finishedAt = Number.isFinite(recordedEnd) ? recordedEnd : scheduledAt + (deadlineInterview ? 0 : 2 * 60 * 60 * 1000);
       const completed = !isScheduledInterview(interview);
       if (!completed && finishedAt > now && calendarItem) {
         todos.push({
           id: `todo-interview-${interview.id}`,
           dismissKey: `todo-interview-${interview.id}@${interview.updatedAt}`,
           tone: "upcoming",
-          label: scheduledAt <= now ? "面试进行中" : "待参加面试",
+          label: deadlineInterview ? (scheduledAt <= now ? "AI 面已截止" : "AI 面待截止") : scheduledAt <= now ? "面试进行中" : "待参加面试",
           title: `${application.company} · ${interview.round || "面试"}`,
-          detail: `${application.position}${interview.format ? ` · ${interview.format}` : ""}`,
+          detail: `${application.position}${deadlineInterview ? " · 截止前完成" : interview.format ? ` · ${interview.format}` : ""}`,
           scheduledAt: interview.scheduledAt,
           priority: 50_000_000_000_000 + scheduledAt,
           action: "editSchedule",
@@ -2734,8 +2736,9 @@ export function RecruitmentTracker({
 
   const openCalendarCreate = useCallback((date = new Date(), applicationId = "", kind: CalendarItemKind = "written_test") => {
     const form = emptyCalendarEventForm(date);
-    const timingDefaults = calendarTimingDefaults(kind);
     const application = ownApplications.find((item) => item.id === applicationId);
+    const round = kind === "interview" ? defaultRoundForStage(interviewStage(application?.status ?? "")) : form.round;
+    const timingDefaults = calendarTimingDefaults(kind, round);
     if (application && CLOSED_STATUSES.includes(application.status)) {
       setNotice("该岗位流程已经终止，不能再添加新日程");
       return;
@@ -2745,11 +2748,12 @@ export function RecruitmentTracker({
       applicationId,
       kind,
       ...timingDefaults,
-      round: kind === "interview" ? defaultRoundForStage(interviewStage(application?.status ?? "")) : form.round,
+      round,
       mode: kind === "interview" ? "视频面试" : form.mode,
       status: kind === "interview" ? "未开始" : "待进行",
       syncStatus: kind === "interview" || kind === "written_test",
     });
+    setCalendarRemainingHours("");
     setEditingCalendarItem(null);
     setIsCalendarEventOpen(true);
   }, [ownApplications]);
@@ -2769,7 +2773,7 @@ export function RecruitmentTracker({
       setCalendarEventForm({
         phase: scheduled ? "scheduled" : "completed",
         kind: "interview",
-        timingType: "scheduled",
+        timingType: item.timingType === "deadline" ? "deadline" : "scheduled",
         applicationId: item.applicationId,
         title: item.round || "面试",
         startsAt: dateTimeLocalValue(item.scheduledAt),
@@ -2807,6 +2811,7 @@ export function RecruitmentTracker({
         syncStatus: false,
       });
     }
+    setCalendarRemainingHours("");
     setEditingCalendarItem(calendarItem);
     setIsCalendarEventOpen(true);
   }, [events, interviews]);
@@ -2825,6 +2830,19 @@ export function RecruitmentTracker({
       resultField?.querySelector<HTMLElement>(".select-trigger")?.focus({ preventScroll: true });
     }));
   }, [openCalendarEdit]);
+
+  const applyCalendarRemainingHours = useCallback((value: string) => {
+    setCalendarRemainingHours(value);
+    const deadline = deadlineFromRemainingHours(value);
+    if (!deadline) return;
+    setCalendarEventForm((current) => ({
+      ...current,
+      startsAt: dateTimeLocalValue(deadline),
+      timingType: "deadline",
+      allDay: false,
+      endsAt: "",
+    }));
+  }, []);
 
   const closeCalendarEvent = useCallback(() => {
     setIsCalendarEventOpen(false);
@@ -2906,6 +2924,7 @@ export function RecruitmentTracker({
         applicationId: application.id,
         scheduledAt: startsAt,
         endedAt: endsAt,
+        timingType: supportsCalendarTimingChoice("interview", calendarEventForm.round) ? calendarEventForm.timingType : "scheduled",
         round: calendarEventForm.round || "技术一面",
         format: calendarEventForm.mode || "视频面试",
         location: calendarEventForm.location.trim(),
@@ -5610,16 +5629,25 @@ export function RecruitmentTracker({
                       <span>事项类型 *</span>
                       <DropdownSelect
                         value={calendarEventForm.kind}
-                        onChange={(kind) => setCalendarEventForm((current) => ({
-                          ...current,
-                          kind: kind as CalendarItemKind,
-                          ...calendarTimingDefaults(kind),
-                          title: current.kind === "interview" && kind !== "interview" ? "" : current.title,
-                          round: kind === "interview" && current.kind !== "interview" ? defaultRoundForStage(interviewStage(ownApplications.find((item) => item.id === current.applicationId)?.status ?? "")) : current.round,
-                          mode: kind === "interview" ? "视频面试" : "线上",
-                          status: kind === "interview" ? (current.phase === "scheduled" ? "未开始" : "待定") : (current.phase === "completed" ? "已完成" : "待进行"),
-                          syncStatus: kind === "interview" || kind === "written_test",
-                        }))}
+                        onChange={(kind) => {
+                          setCalendarRemainingHours("");
+                          setCalendarEventForm((current) => {
+                            const nextKind = kind as CalendarItemKind;
+                            const nextRound = nextKind === "interview" && current.kind !== "interview"
+                              ? defaultRoundForStage(interviewStage(ownApplications.find((item) => item.id === current.applicationId)?.status ?? ""))
+                              : current.round;
+                            return {
+                              ...current,
+                              kind: nextKind,
+                              ...calendarTimingDefaults(nextKind, nextRound),
+                              title: current.kind === "interview" && nextKind !== "interview" ? "" : current.title,
+                              round: nextRound,
+                              mode: nextKind === "interview" ? "视频面试" : "线上",
+                              status: nextKind === "interview" ? (current.phase === "scheduled" ? "未开始" : "待定") : (current.phase === "completed" ? "已完成" : "待进行"),
+                              syncStatus: nextKind === "interview" || nextKind === "written_test",
+                            };
+                          });
+                        }}
                         options={[
                           { value: "interview", label: "面试" },
                           { value: "written_test", label: "笔试" },
@@ -5645,7 +5673,10 @@ export function RecruitmentTracker({
                     {calendarEventForm.kind === "interview" ? (
                       <label>
                         <span>面试轮次 *</span>
-                        <DropdownSelect value={calendarEventForm.round} onChange={(round) => setCalendarEventForm((current) => ({ ...current, round }))} options={INTERVIEW_ROUNDS.map((round) => ({ value: round, label: round }))} ariaLabel="选择面试轮次" />
+                        <DropdownSelect value={calendarEventForm.round} onChange={(round) => {
+                          setCalendarRemainingHours("");
+                          setCalendarEventForm((current) => ({ ...current, round, ...calendarTimingDefaults("interview", round), endsAt: "" }));
+                        }} options={INTERVIEW_ROUNDS.map((round) => ({ value: round, label: round }))} ariaLabel="选择面试轮次" />
                       </label>
                     ) : (
                       <label className="calendar-event-title-field">
@@ -5654,33 +5685,47 @@ export function RecruitmentTracker({
                       </label>
                     )}
 
-                    {supportsCalendarTimingChoice(calendarEventForm.kind) && (
+                    {supportsCalendarTimingChoice(calendarEventForm.kind, calendarEventForm.round) && (
                       <div className="calendar-written-test-timing" role="group" aria-label={`选择${calendarKindLabel(calendarEventForm.kind)}时间类型`}>
                         <span>{calendarKindLabel(calendarEventForm.kind)}时间类型 *</span>
                         <div>
-                          <button type="button" className={calendarEventForm.timingType === "scheduled" ? "active" : ""} onClick={() => setCalendarEventForm((current) => ({ ...current, timingType: "scheduled", allDay: false }))}>
+                          <button type="button" className={calendarEventForm.timingType === "scheduled" ? "active" : ""} onClick={() => { setCalendarRemainingHours(""); setCalendarEventForm((current) => ({ ...current, timingType: "scheduled", allDay: false })); }}>
                             <strong>指定时间</strong><small>有明确的开始时间</small>
                           </button>
-                          <button type="button" className={calendarEventForm.timingType === "deadline" ? "active" : ""} onClick={() => setCalendarEventForm((current) => ({ ...current, timingType: "deadline", allDay: true, endsAt: "" }))}>
+                          <button type="button" className={calendarEventForm.timingType === "deadline" ? "active" : ""} onClick={() => { setCalendarRemainingHours(""); setCalendarEventForm((current) => ({ ...current, timingType: "deadline", allDay: current.kind === "interview" ? false : true, endsAt: "" })); }}>
                             <strong>截止时间</strong><small>在此之前自行完成</small>
                           </button>
                         </div>
                       </div>
                     )}
 
+                    {calendarEventForm.phase === "scheduled" && calendarEventForm.kind === "interview" && isAiInterviewRound(calendarEventForm.round) && calendarEventForm.timingType === "deadline" && (
+                      <label className="calendar-remaining-hours">
+                        <span>剩余时间（小时，可选）</span>
+                        <div>
+                          <input type="number" min="1" max="8760" step="0.5" inputMode="decimal" value={calendarRemainingHours} onChange={(event) => applyCalendarRemainingHours(event.target.value)} placeholder="例如：72" />
+                          <button type="button" onClick={() => applyCalendarRemainingHours("72")}>填入 72h</button>
+                        </div>
+                        <small>按当前时间自动推算截止时刻；留空时可在下方手动填写。</small>
+                      </label>
+                    )}
+
                     {calendarEventForm.kind !== "interview" && (
                       <label className="calendar-all-day-toggle">
                         <input type="checkbox" checked={calendarEventForm.allDay} onChange={(event) => setCalendarEventForm((current) => ({ ...current, allDay: event.target.checked }))} />
-                        <span>{supportsCalendarTimingChoice(calendarEventForm.kind) && calendarEventForm.timingType === "deadline" ? "只记录截止日期，不指定具体时刻" : "全天事项"}</span>
+                        <span>{supportsCalendarTimingChoice(calendarEventForm.kind, calendarEventForm.round) && calendarEventForm.timingType === "deadline" ? "只记录截止日期，不指定具体时刻" : "全天事项"}</span>
                       </label>
                     )}
 
                     <label>
-                      <span>{supportsCalendarTimingChoice(calendarEventForm.kind) && calendarEventForm.timingType === "deadline" ? "截止" : "开始"}{calendarEventForm.allDay ? "日期" : "时间"} *</span>
+                      <span>{supportsCalendarTimingChoice(calendarEventForm.kind, calendarEventForm.round) && calendarEventForm.timingType === "deadline" ? "截止" : "开始"}{calendarEventForm.allDay ? "日期" : "时间"} *</span>
                       <input
                         type={calendarEventForm.allDay ? "date" : "datetime-local"}
                         value={calendarEventForm.allDay ? calendarEventForm.startsAt.slice(0, 10) : calendarEventForm.startsAt}
-                        onChange={(event) => setCalendarEventForm((current) => ({ ...current, startsAt: current.allDay ? `${event.target.value}T09:00` : event.target.value }))}
+                        onChange={(event) => {
+                          setCalendarRemainingHours("");
+                          setCalendarEventForm((current) => ({ ...current, startsAt: current.allDay ? `${event.target.value}T09:00` : event.target.value }));
+                        }}
                         required
                       />
                     </label>

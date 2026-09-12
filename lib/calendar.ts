@@ -42,12 +42,23 @@ export function scheduleLink(value: string) {
 
 export type CalendarTimingType = "scheduled" | "deadline";
 
-export function supportsCalendarTimingChoice(kind: string) {
-  return kind === "written_test" || kind === "assessment";
+export function isAiInterviewRound(round: string) {
+  return /^ai(?:面|面试)?$/i.test(round.trim().replace(/[\s\-_]/g, ""));
 }
 
-export function calendarTimingDefaults(kind: string): { timingType: CalendarTimingType; allDay: boolean } {
+export function supportsCalendarTimingChoice(kind: string, round = "") {
+  return kind === "written_test" || kind === "assessment" || (kind === "interview" && isAiInterviewRound(round));
+}
+
+export function calendarTimingDefaults(kind: string, round = ""): { timingType: CalendarTimingType; allDay: boolean } {
+  if (kind === "interview" && isAiInterviewRound(round)) return { timingType: "deadline", allDay: false };
   if (kind === "assessment") return { timingType: "deadline", allDay: true };
   if (kind === "deadline") return { timingType: "scheduled", allDay: true };
   return { timingType: "scheduled", allDay: false };
+}
+
+export function deadlineFromRemainingHours(value: string | number, now = new Date()) {
+  const hours = typeof value === "number" ? value : Number(value.trim());
+  if (!Number.isFinite(hours) || hours <= 0 || hours > 8_760) return "";
+  return new Date(now.getTime() + hours * 60 * 60 * 1000).toISOString();
 }
