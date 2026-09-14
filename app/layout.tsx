@@ -18,6 +18,13 @@ export async function generateMetadata(): Promise<Metadata> {
       template: "%s · 秋招同行录",
     },
     description: "清晰记录每一次秋招与提前批投递进度。",
+    icons: {
+      icon: [
+        { url: "/favicon.ico", sizes: "any" },
+        { url: "/favicon.svg", type: "image/svg+xml" },
+      ],
+      shortcut: "/favicon.ico",
+    },
     openGraph: {
       title: "MXX · 秋招同行录",
       description: "把每一次投递，变成清晰的下一步。",
