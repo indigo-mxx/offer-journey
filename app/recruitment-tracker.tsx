@@ -2175,6 +2175,7 @@ export function RecruitmentTracker({
     for (const application of ownApplications) {
       if (!INTERVIEW_STATUSES.includes(application.status)) continue;
       const stage = interviewStage(application.status);
+      if (stage === "AI面") continue;
       const currentInterview = interviews.find((interview) =>
         interview.applicationId === application.id && interviewStage(interview.round) === stage,
       );
@@ -2196,7 +2197,7 @@ export function RecruitmentTracker({
 
     for (const interview of interviews) {
       const application = applicationMap.get(interview.applicationId);
-      if (!application) continue;
+      if (!application || interviewStage(interview.round) === "AI面") continue;
       const scheduledAt = new Date(interview.scheduledAt).getTime();
       if (!Number.isFinite(scheduledAt) || interview.result === "未参加") continue;
       const calendarItem = calendarItemMap.get(`interview-${interview.id}`);

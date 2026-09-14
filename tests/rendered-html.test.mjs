@@ -91,6 +91,8 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(schema, /\| "AI面"/);
   assert.match(tracker, /INTERVIEW_ROUNDS = \["AI面", "技术一面"/);
   assert.match(tracker, /\{ key: "AI面", hint:/);
+  assert.match(tracker, /if \(stage === "AI面"\) continue/);
+  assert.match(tracker, /interviewStage\(interview\.round\) === "AI面"\) continue/);
   assert.match(tracker, /剩余时间（小时，可选）/);
   assert.match(tracker, /applyCalendarRemainingHours\("72"\)/);
   assert.match(route, /timing_type: textValue\(value\.timingType/);
