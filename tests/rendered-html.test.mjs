@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("includes the cloud workspace, access control, and sharing surfaces", async () => {
-  const [page, tracker, calendar, route, schema, hosting, styles, experienceSharingMigration, aiInterviewDeadlineMigration, search] = await Promise.all([
+  const [page, tracker, calendar, route, schema, hosting, styles, workspaceStyles, experienceSharingMigration, aiInterviewDeadlineMigration, search] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/recruitment-tracker.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/recruitment-calendar.tsx", import.meta.url), "utf8"),
@@ -11,6 +11,7 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
     readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/workspace.css", import.meta.url), "utf8"),
     readFile(new URL("../supabase/migrations/006_share_interview_experiences.sql", import.meta.url), "utf8"),
     readFile(new URL("../supabase/migrations/010_ai_interview_deadlines.sql", import.meta.url), "utf8"),
     readFile(new URL("../lib/search.ts", import.meta.url), "utf8"),
@@ -76,6 +77,11 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(calendar, /completionStats\.completed/);
   assert.match(calendar, /completionStats\.pending/);
   assert.match(calendar, /completionStats\.total/);
+  assert.match(calendar, /className="calendar-event-summary"/);
+  assert.match(calendar, /className="calendar-event-company"/);
+  assert.match(calendar, /className="calendar-event-stage"/);
+  assert.match(workspaceStyles, /\.calendar-event \.calendar-event-stage\s*\{[^}]*flex:\s*none[^}]*white-space:\s*nowrap/s);
+  assert.match(workspaceStyles, /\.calendar-event \.calendar-event-company\s*\{[^}]*text-overflow:\s*ellipsis/s);
   assert.match(tracker, /calendar-todo-filters/);
   assert.match(tracker, /visibleCalendarTodos\.map/);
   assert.doesNotMatch(tracker, /calendarTodos\.slice\(0,\s*12\)/);

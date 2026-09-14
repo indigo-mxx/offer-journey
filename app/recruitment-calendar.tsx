@@ -319,7 +319,12 @@ export function RecruitmentCalendar({
                           <div className="calendar-day-events">
                             {dayItems.slice(0, limit).map((item) => <button type="button" className={"calendar-event" + eventClass(item)} key={itemKey(item)}
                               onClick={(event) => openDetails(item, event.currentTarget)} title={item.company + " · " + item.title + " · " + item.status}>
-                              <time dateTime={item.startsAt}>{formatEventTime(item)}</time><span>{item.company} · {item.title}</span>
+                              <span className="calendar-event-summary">
+                                <span className="calendar-event-company">{item.company}</span>
+                                <span className="calendar-event-separator" aria-hidden="true">·</span>
+                                <strong className="calendar-event-stage">{item.title}</strong>
+                              </span>
+                              <time dateTime={item.startsAt}>{formatEventTime(item)}</time>
                               <small>{scope === "friends" ? item.ownerName + " · " : ""}{calendarKindLabel(item.kind)}{item.completed || item.status === "已完成" ? " · 已完成" : item.status === "已取消" ? " · 已取消" : ""}</small>
                             </button>)}
                             {dayItems.length > limit && <button type="button" className="calendar-more" onClick={() => { selectDay(day); panelRef.current?.focus({ preventScroll: true }); }}>还有 {dayItems.length - limit} 项 →</button>}
