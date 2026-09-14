@@ -101,6 +101,7 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(tracker, /interviewStage\(interview\.round\) === "AI面"\) continue/);
   assert.match(tracker, /剩余时间（小时，可选）/);
   assert.match(tracker, /applyCalendarRemainingHours\("72"\)/);
+  assert.match(tracker, /supportsRemainingHourDeadline\(calendarEventForm\.kind, calendarEventForm\.round\)/);
   assert.match(route, /timing_type: textValue\(value\.timingType/);
   assert.match(aiInterviewDeadlineMigration, /add column if not exists timing_type/);
   assert.match(styles, /interview-stage-board/);

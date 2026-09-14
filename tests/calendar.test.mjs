@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { addDays, calendarDays, calendarTimingDefaults, deadlineFromRemainingHours, itemsInRange, localDateKey, scheduleLink, supportsCalendarTimingChoice } from "../lib/calendar.ts";
+import { addDays, calendarDays, calendarTimingDefaults, deadlineFromRemainingHours, itemsInRange, localDateKey, scheduleLink, supportsCalendarTimingChoice, supportsRemainingHourDeadline } from "../lib/calendar.ts";
 
 test("month grids cover complete Monday-to-Sunday weeks, including adjacent months", () => {
   const days = calendarDays(new Date(2026, 8, 5), "month");
@@ -74,4 +74,11 @@ test("AI interviews default to deadline timing and can derive the deadline from 
   assert.deepEqual(calendarTimingDefaults("interview", "AI面"), { timingType: "deadline", allDay: false });
   assert.equal(deadlineFromRemainingHours("72", new Date("2026-09-12T08:00:00.000Z")), "2026-09-15T08:00:00.000Z");
   assert.equal(deadlineFromRemainingHours(""), "");
+});
+
+test("written-test deadlines support the same remaining-hour calculation as AI interviews", () => {
+  assert.equal(supportsRemainingHourDeadline("written_test"), true);
+  assert.equal(supportsRemainingHourDeadline("interview", "AI面"), true);
+  assert.equal(supportsRemainingHourDeadline("interview", "技术一面"), false);
+  assert.equal(supportsRemainingHourDeadline("assessment"), false);
 });

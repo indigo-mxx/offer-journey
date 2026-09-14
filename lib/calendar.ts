@@ -50,6 +50,10 @@ export function supportsCalendarTimingChoice(kind: string, round = "") {
   return kind === "written_test" || kind === "assessment" || (kind === "interview" && isAiInterviewRound(round));
 }
 
+export function supportsRemainingHourDeadline(kind: string, round = "") {
+  return kind === "written_test" || (kind === "interview" && isAiInterviewRound(round));
+}
+
 export function calendarTimingDefaults(kind: string, round = ""): { timingType: CalendarTimingType; allDay: boolean } {
   if (kind === "interview" && isAiInterviewRound(round)) return { timingType: "deadline", allDay: false };
   if (kind === "assessment") return { timingType: "deadline", allDay: true };

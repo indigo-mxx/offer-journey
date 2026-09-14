@@ -7,7 +7,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { autocompleteScore, matchesFieldsSearch, matchesLiteralSearch, matchesTextSearch, matchingAutocompleteOptions } from "@/lib/search";
 import { createWorkspaceWorkbook, readWorkspaceWorkbook } from "@/lib/workbook-backup";
 import type { WorkspaceBackup } from "@/lib/workbook-backup";
-import { calendarTimingDefaults, deadlineFromRemainingHours, isAiInterviewRound, supportsCalendarTimingChoice } from "@/lib/calendar";
+import { calendarTimingDefaults, deadlineFromRemainingHours, isAiInterviewRound, supportsCalendarTimingChoice, supportsRemainingHourDeadline } from "@/lib/calendar";
 import type { Application, Interview, InterviewExperience, RecruitmentEvent, RecruitmentEventStatus, RecruitmentEventType, GroupInfo, ApplicationStatus, Visibility } from "@/db/schema";
 import { RecruitmentCalendar, UpcomingScheduleCard, calendarKindLabel } from "./recruitment-calendar";
 import type { CalendarItemKind, RecruitmentCalendarItem } from "./recruitment-calendar";
@@ -1728,7 +1728,7 @@ export function RecruitmentTracker({
         position: application.position,
         startsAt: item.startsAt,
         endsAt: item.endsAt ?? "",
-        allDay: item.allDay,
+        allDay: item.eventType === "written_test" && item.timingType === "deadline" ? false : item.allDay,
         mode: item.mode,
         location: item.location,
         eventUrl: item.eventUrl,
@@ -5693,14 +5693,14 @@ export function RecruitmentTracker({
                           <button type="button" className={calendarEventForm.timingType === "scheduled" ? "active" : ""} onClick={() => { setCalendarRemainingHours(""); setCalendarEventForm((current) => ({ ...current, timingType: "scheduled", allDay: false })); }}>
                             <strong>指定时间</strong><small>有明确的开始时间</small>
                           </button>
-                          <button type="button" className={calendarEventForm.timingType === "deadline" ? "active" : ""} onClick={() => { setCalendarRemainingHours(""); setCalendarEventForm((current) => ({ ...current, timingType: "deadline", allDay: current.kind === "interview" ? false : true, endsAt: "" })); }}>
+                          <button type="button" className={calendarEventForm.timingType === "deadline" ? "active" : ""} onClick={() => { setCalendarRemainingHours(""); setCalendarEventForm((current) => ({ ...current, timingType: "deadline", allDay: !supportsRemainingHourDeadline(current.kind, current.round), endsAt: "" })); }}>
                             <strong>截止时间</strong><small>在此之前自行完成</small>
                           </button>
                         </div>
                       </div>
                     )}
 
-                    {calendarEventForm.phase === "scheduled" && calendarEventForm.kind === "interview" && isAiInterviewRound(calendarEventForm.round) && calendarEventForm.timingType === "deadline" && (
+                    {calendarEventForm.phase === "scheduled" && calendarEventForm.timingType === "deadline" && supportsRemainingHourDeadline(calendarEventForm.kind, calendarEventForm.round) && (
                       <label className="calendar-remaining-hours">
                         <span>剩余时间（小时，可选）</span>
                         <div>
@@ -5711,7 +5711,7 @@ export function RecruitmentTracker({
                       </label>
                     )}
 
-                    {calendarEventForm.kind !== "interview" && (
+                    {calendarEventForm.kind !== "interview" && !(calendarEventForm.timingType === "deadline" && supportsRemainingHourDeadline(calendarEventForm.kind, calendarEventForm.round)) && (
                       <label className="calendar-all-day-toggle">
                         <input type="checkbox" checked={calendarEventForm.allDay} onChange={(event) => setCalendarEventForm((current) => ({ ...current, allDay: event.target.checked }))} />
                         <span>{supportsCalendarTimingChoice(calendarEventForm.kind, calendarEventForm.round) && calendarEventForm.timingType === "deadline" ? "只记录截止日期，不指定具体时刻" : "全天事项"}</span>
