@@ -2786,7 +2786,7 @@ export function RecruitmentTracker({
         eventUrl: item.eventUrl ?? "",
         status: scheduled ? "未开始" : item.result || "待定",
         note: scheduled ? "" : item.summary || "",
-        syncStatus: false,
+        syncStatus: true,
       });
     } else {
       const item = events.find((entry) => entry.id === calendarItem.id);
@@ -2809,7 +2809,7 @@ export function RecruitmentTracker({
         eventUrl: item.eventUrl,
         status: item.status,
         note: item.note,
-        syncStatus: false,
+        syncStatus: item.eventType === "written_test",
       });
     }
     setCalendarRemainingHours("");
