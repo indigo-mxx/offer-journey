@@ -226,6 +226,8 @@ button:disabled { cursor: not-allowed; }
 .calendar-detail dt { color: var(--muted); }
 .calendar-detail dd { margin: 0; overflow-wrap: anywhere; }
 .calendar-detail-actions { display: grid; gap: 8px; }
+.calendar-detail-open-link { border-color: #b9cbc0; background: rgba(255, 253, 248, .78); color: var(--brand); }
+.calendar-detail-open-link:hover { border-color: #7da18d; background: #eef5f0; }
 .calendar-mobile-count { display: none; }
 
 @media (max-width: 1100px) {

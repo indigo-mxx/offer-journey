@@ -151,6 +151,8 @@ export function RecruitmentCalendar({
   }, [visibleItems]);
   const selectedItems = filteredItems.filter((item) => localDateKey(item.startsAt) === selectedDay);
   const selectedEvent = filteredItems.find((item) => itemKey(item) === selectedEventKey);
+  const selectedApplication = selectedEvent ? applications.find((item) => item.id === selectedEvent.applicationId) : undefined;
+  const selectedLink = selectedEvent ? scheduleLink(selectedEvent.eventUrl) || scheduleLink(selectedApplication?.link ?? "") : "";
   const upcomingCount = filteredItems.filter((item) => item.status !== "已取消" && !item.completed && item.status !== "已完成")
     .filter((item) => new Date(item.startsAt).getTime() >= now && new Date(item.startsAt).getTime() < now + 7 * 86_400_000).length;
   const title = mode === "week"
@@ -356,10 +358,10 @@ export function RecruitmentCalendar({
               {scope === "friends" && <div><dt>来自</dt><dd>{selectedEvent.ownerName} · 只读</dd></div>}
             </dl>
             <div className="calendar-detail-actions">
-              {scheduleLink(selectedEvent.eventUrl) && <a className="secondary-button button-link" href={scheduleLink(selectedEvent.eventUrl)} target="_blank" rel="noopener noreferrer">打开日程链接 ↗</a>}
               {scope === "mine" && selectedEvent.isOwner && selectedEvent.kind === "interview" && !selectedEvent.completed && <button type="button" className="secondary-button" disabled={busy} onClick={() => onCompleteInterview?.(selectedEvent)}>标记已完成</button>}
               {scope === "mine" && selectedEvent.isOwner && selectedEvent.kind === "interview" && selectedEvent.completed && <button type="button" className="primary-button" disabled={busy} onClick={() => onAddExperience?.(selectedEvent)}>去补充面经</button>}
               {scope === "mine" && selectedEvent.isOwner && <button type="button" className={selectedEvent.kind === "interview" && selectedEvent.completed ? "secondary-button" : "primary-button"} disabled={busy} onClick={() => onEdit(selectedEvent)}>编辑日程</button>}
+              {selectedLink && <a className="secondary-button button-link calendar-detail-open-link" href={selectedLink} target="_blank" rel="noopener noreferrer">打开链接 ↗</a>}
             </div>
           </div> : selectedItems.length ? <div className="calendar-panel-list">{selectedItems.map((item) => (
             <article className="calendar-panel-item" key={itemKey(item)}>
