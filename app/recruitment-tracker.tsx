@@ -1184,6 +1184,7 @@ export function RecruitmentTracker({
   const [selectedExperienceIds, setSelectedExperienceIds] = useState<string[]>([]);
   const [experienceShareGroupId, setExperienceShareGroupId] = useState("");
   const [isExperienceOpen, setIsExperienceOpen] = useState(false);
+  const [viewingFriendExperience, setViewingFriendExperience] = useState<InterviewExperience | null>(null);
   const [isCalendarEventOpen, setIsCalendarEventOpen] = useState(false);
   const [editingCalendarItem, setEditingCalendarItem] = useState<RecruitmentCalendarItem | null>(null);
   const [viewingFriendCalendarItem, setViewingFriendCalendarItem] = useState<RecruitmentCalendarItem | null>(null);
@@ -4238,7 +4239,20 @@ export function RecruitmentTracker({
             ) : (
               <div className="experience-grid">
                 {filteredExperiences.map((experience) => (
-                  <article className={`experience-card ${selectedExperienceIds.includes(experience.id) ? "selected" : ""}`} key={experience.id}>
+                  <article
+                    className={`experience-card ${selectedExperienceIds.includes(experience.id) ? "selected" : ""} ${experience.isOwner === false ? "is-openable" : ""}`}
+                    key={experience.id}
+                    role={experience.isOwner === false ? "button" : undefined}
+                    tabIndex={experience.isOwner === false ? 0 : undefined}
+                    aria-label={experience.isOwner === false ? `查看${experience.ownerName || "好友"}分享的面经：${experience.title}` : undefined}
+                    onClick={experience.isOwner === false ? () => setViewingFriendExperience(experience) : undefined}
+                    onKeyDown={experience.isOwner === false ? (event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setViewingFriendExperience(experience);
+                      }
+                    } : undefined}
+                  >
                     {experienceSelectionMode && experience.isOwner !== false && (
                       <label className="experience-card-select">
                         <input
@@ -4283,7 +4297,12 @@ export function RecruitmentTracker({
                           <button type="button" className="text-button" onClick={() => openExperienceEdit(experience)}>{"\u7f16\u8f91"}</button>
                           <button type="button" className="text-button danger-text" onClick={() => void removeExperience(experience)}>{"\u5220\u9664"}</button>
                         </>
-                      ) : <span className="experience-readonly">只读 · 来自共同小组</span>}
+                      ) : (
+                        <>
+                          <span className="experience-readonly">只读 · 来自共同小组</span>
+                          <span className="experience-open-hint">查看完整面经 <span aria-hidden="true">→</span></span>
+                        </>
+                      )}
                     </footer>
                   </article>
                 ))}
@@ -5466,6 +5485,63 @@ export function RecruitmentTracker({
             </div>
           </ModalPortal>
         )}
+
+        {viewingFriendExperience && (() => {
+          const linkedInterview = linkedInterviewForExperience(viewingFriendExperience, interviews);
+          return (
+            <ModalPortal>
+              <div className="modal-overlay modal-overlay-elevated" onClick={() => setViewingFriendExperience(null)}>
+                <div className="modal experience-detail-modal" role="dialog" aria-modal="true" aria-labelledby="friend-experience-title" onClick={(event) => event.stopPropagation()}>
+                  <div className="modal-head experience-detail-head">
+                    <div>
+                      <div className="experience-detail-owner">
+                        <span>{viewingFriendExperience.ownerName || "好友"} 分享</span>
+                        <span>只读</span>
+                      </div>
+                      <h2 id="friend-experience-title">{viewingFriendExperience.title}</h2>
+                      <p className="modal-subtitle">共同小组中共享的完整面试记录</p>
+                    </div>
+                    <button type="button" className="close-button" onClick={() => setViewingFriendExperience(null)} aria-label="关闭">×</button>
+                  </div>
+                  <div className="experience-detail-body">
+                    <div className="experience-detail-summary">
+                      {viewingFriendExperience.round && <span className="experience-round">{viewingFriendExperience.round}</span>}
+                      {(viewingFriendExperience.company || viewingFriendExperience.position) && (
+                        <strong>{[viewingFriendExperience.company, viewingFriendExperience.position].filter(Boolean).join(" · ")}</strong>
+                      )}
+                      <time>{formatDateTime(viewingFriendExperience.updatedAt)} 更新</time>
+                    </div>
+                    {linkedInterview && (
+                      <div className={`experience-interview-meta experience-detail-interview result-${linkedInterview.result || "待定"}`}>
+                        <span className="eim-time">{formatInterviewDate(linkedInterview.scheduledAt)}</span>
+                        <span className="eim-result">{linkedInterview.result || "结果待定"}</span>
+                        {linkedInterview.format && <span className="eim-format">{linkedInterview.format}</span>}
+                      </div>
+                    )}
+                    {viewingFriendExperience.tags.length > 0 && (
+                      <div className="experience-tags" aria-label="面经标签">
+                        {viewingFriendExperience.tags.map((tag) => <span key={tag}>{tag}</span>)}
+                      </div>
+                    )}
+                    <section className="experience-detail-section">
+                      <h3>面试内容</h3>
+                      <p>{viewingFriendExperience.content}</p>
+                    </section>
+                    {viewingFriendExperience.takeaway && (
+                      <section className="experience-detail-section experience-detail-takeaway">
+                        <h3>复盘要点</h3>
+                        <p>{viewingFriendExperience.takeaway}</p>
+                      </section>
+                    )}
+                  </div>
+                  <div className="form-actions experience-detail-actions">
+                    <button type="button" className="primary-button" onClick={() => setViewingFriendExperience(null)}>看完了</button>
+                  </div>
+                </div>
+              </div>
+            </ModalPortal>
+          );
+        })()}
 
         {editingCompanyName && (
           <ModalPortal>

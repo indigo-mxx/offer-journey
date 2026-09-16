@@ -67,6 +67,10 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(route, /action === "updateExperienceVisibilityBatch"/);
   assert.match(route, /\.in\("id", ids\)/);
   assert.match(tracker, /只读 · 来自共同小组/);
+  assert.match(tracker, /查看完整面经/);
+  assert.match(tracker, /共同小组中共享的完整面试记录/);
+  assert.match(tracker, /setViewingFriendExperience\(experience\)/);
+  assert.match(styles, /\.experience-detail-section p[^}]*white-space: pre-wrap/);
   assert.match(route, /experienceGroupId/);
   assert.match(experienceSharingMigration, /public\.is_group_member\(group_id\)/);
   assert.match(experienceSharingMigration, /visibility = 'full'/);
