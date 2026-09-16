@@ -162,15 +162,23 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup) {
     { header: "当前进度", key: "status", width: 14 }, { header: "投递日期", key: "appliedAt", width: 13 }, { header: "投递渠道", key: "channel", width: 16 },
     { header: "岗位链接", key: "link", width: 34 }, { header: "薪资", key: "salary", width: 16 }, { header: "备注", key: "note", width: 34 },
     { header: "最终结果", key: "finalOutcome", width: 14 }, { header: "拒绝原因", key: "rejectionReason", width: 20 }, { header: "公开范围", key: "visibility", width: 14 },
+    { header: "Offer 获得时间", key: "offerReceivedAt", width: 19 }, { header: "Offer 答复截止", key: "offerDeadline", width: 19 }, { header: "预计入职日期", key: "offerOnboardDate", width: 15 },
+    { header: "Offer 薪酬", key: "offerCompensation", width: 24 }, { header: "Offer 福利", key: "offerBenefits", width: 30 }, { header: "Offer 联系人", key: "offerContact", width: 20 },
+    { header: "Offer 备注", key: "offerNote", width: 34 }, { header: "共享 Offer 详情", key: "offerShared", width: 16 },
     { header: "岗位ID", key: "id", width: 18, hidden: true }, { header: "共享小组ID", key: "groupId", width: 18, hidden: true },
     { header: "创建时间", key: "createdAt", width: 20, hidden: true }, { header: "更新时间", key: "updatedAt", width: 20, hidden: true },
   ], data.applications.map((item) => ({
     company: item.company, position: item.position, base: item.base, industryTags: item.industryTags.join("、"), companyScale: item.companyScale,
     batch: item.batch, status: item.status, appliedAt: validDate(item.appliedAt), channel: item.channel, link: item.link, salary: item.salary, note: item.note,
     finalOutcome: item.finalOutcome ?? "", rejectionReason: item.rejectionReason ?? "", visibility: VISIBILITY_LABELS[item.visibility], id: item.id,
+    offerReceivedAt: validDate(item.offerReceivedAt ?? ""), offerDeadline: validDate(item.offerDeadline ?? ""), offerOnboardDate: validDate(item.offerOnboardDate ?? ""),
+    offerCompensation: item.offerCompensation ?? "", offerBenefits: item.offerBenefits ?? "", offerContact: item.offerContact ?? "", offerNote: item.offerNote ?? "", offerShared: item.offerShared ? "是" : "否",
     groupId: item.groupId ?? "", createdAt: validDate(item.createdAt ?? ""), updatedAt: validDate(item.updatedAt),
   })), palette.brand);
   applicationsSheet.getColumn("appliedAt").numFmt = "yyyy-mm-dd";
+  applicationsSheet.getColumn("offerReceivedAt").numFmt = "yyyy-mm-dd hh:mm";
+  applicationsSheet.getColumn("offerDeadline").numFmt = "yyyy-mm-dd hh:mm";
+  applicationsSheet.getColumn("offerOnboardDate").numFmt = "yyyy-mm-dd";
   applicationsSheet.getColumn("createdAt").numFmt = "yyyy-mm-dd hh:mm";
   applicationsSheet.getColumn("updatedAt").numFmt = "yyyy-mm-dd hh:mm";
   applicationsSheet.getColumn("link").eachCell((cell: Cell, rowNumber: number) => {
@@ -322,6 +330,8 @@ export async function readWorkspaceWorkbook(file: File): Promise<WorkspaceBackup
       status: APPLICATION_STATUSES.includes(statusText) ? statusText : "准备投递", appliedAt: dateFromExcel(row["投递日期"], true), channel: excelText(row["投递渠道"]).trim(),
       link: excelText(row["岗位链接"]).trim(), salary: excelText(row["薪资"]).trim(), note: excelText(row["备注"]).trim(), finalOutcome: excelText(row["最终结果"]).trim(),
       rejectionReason: excelText(row["拒绝原因"]).trim(), visibility: VISIBILITY_VALUES[excelText(row["公开范围"]).trim()] ?? "private", groupId: excelText(row["共享小组ID"]).trim() || null,
+      offerReceivedAt: dateFromExcel(row["Offer 获得时间"]), offerDeadline: dateFromExcel(row["Offer 答复截止"]), offerOnboardDate: dateFromExcel(row["预计入职日期"], true),
+      offerCompensation: excelText(row["Offer 薪酬"]).trim(), offerBenefits: excelText(row["Offer 福利"]).trim(), offerContact: excelText(row["Offer 联系人"]).trim(), offerNote: excelText(row["Offer 备注"]).trim(), offerShared: excelText(row["共享 Offer 详情"]).trim() === "是",
       createdAt: dateFromExcel(row["创建时间"]) || now, updatedAt: dateFromExcel(row["更新时间"]) || now, isOwner: true,
     };
   }).filter((item) => item.company && item.position);

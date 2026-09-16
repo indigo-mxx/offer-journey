@@ -521,6 +521,7 @@ body {
 .event-interview { border-color: #9eb8c8; border-left-color: #49768f; background: #e8f0f4; color: #315c73; }
 .event-written_test { border-color: #d7b477; border-left-color: #ad7527; background: #f7eedc; color: #80561e; }
 .event-assessment { border-color: #9fbea7; border-left-color: #4f8760; background: #e7f0e8; color: #356844; }
+.event-offer { border-color: #d3bd81; border-left-color: #9d7627; background: #f7f0d9; color: #755615; }
 .event-deadline { border-color: #dda19a; border-left-color: #ad5148; background: #f7e7e4; color: #8b4039; }
 .event-hr_contact { border-color: #b7a6c7; border-left-color: #745f8c; background: #eee9f2; color: #5f4c75; }
 .event-other { border-color: #b7bbb5; border-left-color: #68726c; background: #eceeea; color: #505b55; }

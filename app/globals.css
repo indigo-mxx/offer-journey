@@ -2019,6 +2019,41 @@ body::before {
 .experience-detail-section p { margin: 0; color: #334f45; font-size: 14px; line-height: 1.85; overflow-wrap: anywhere; white-space: pre-wrap; }
 .experience-detail-takeaway { background: linear-gradient(120deg, #f3f9f4, #edf7f3); }
 .experience-detail-actions { position: sticky; bottom: 0; padding: 15px 25px 21px; border-top: 1px solid rgba(35, 105, 80, .1); background: rgba(255, 255, 255, .94); backdrop-filter: blur(10px); }
+.offer-detail-strip { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; padding: 10px 12px; border: 1px solid rgba(183, 134, 39, .22); border-radius: 12px; background: linear-gradient(120deg, rgba(255, 249, 222, .95), rgba(243, 239, 212, .82)); }
+.offer-detail-strip > div { display: grid; gap: 2px; min-width: 0; }
+.offer-detail-strip > div span { color: #9a7221; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.offer-detail-strip > div strong { overflow: hidden; color: #604817; font-size: 11px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.offer-detail-strip button { flex: none; padding: 6px 9px; border: 0; border-radius: 8px; background: #785b20; color: #fffaf0; font-size: 11px; font-weight: 750; cursor: pointer; }
+.offer-detail-strip button:hover { background: #946f24; transform: translateY(-1px); }
+.offer-detail-strip.compact { padding: 8px 9px; }
+.offer-detail-modal { width: min(760px, calc(100vw - 30px)); max-height: min(90vh, 880px); overflow: auto; }
+.offer-detail-head { background: linear-gradient(120deg, #fffdf4, #f5f0da); }
+.offer-modal-kicker { display: inline-flex; margin-bottom: 6px; padding: 4px 8px; border-radius: 999px; background: #72551c; color: #fff8e5; font-size: 9px; font-weight: 850; letter-spacing: .16em; }
+.offer-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; padding: 23px 25px 8px; }
+.offer-form-grid label { display: grid; gap: 7px; color: #5d655f; font-size: 12px; font-weight: 700; }
+.offer-form-grid input:not([type="checkbox"]), .offer-form-grid textarea { width: 100%; border: 1px solid #d9ddd3; border-radius: 10px; background: #fffefa; color: #263c33; font: inherit; font-weight: 500; }
+.offer-form-grid input:not([type="checkbox"]) { min-height: 42px; padding: 0 11px; }
+.offer-form-grid textarea { padding: 11px; resize: vertical; }
+.offer-form-grid .full-width { grid-column: 1 / -1; }
+.offer-share-toggle { display: flex !important; grid-template-columns: none; align-items: flex-start; gap: 10px !important; padding: 14px; border: 1px solid #d8e5d8; border-radius: 12px; background: #f4f8f1; }
+.offer-share-toggle input { margin-top: 3px; accent-color: #287158; }
+.offer-share-toggle > span { display: grid; gap: 3px; }
+.offer-share-toggle strong { color: #285949; font-size: 13px; }
+.offer-share-toggle small { color: #738278; font-size: 11px; font-weight: 500; line-height: 1.5; }
+.offer-calendar-note { display: flex; align-items: center; gap: 11px; margin: 13px 25px 0; padding: 12px 14px; border-radius: 12px; background: #f7f3e4; color: #745c27; }
+.offer-calendar-note > span { font-size: 23px; }
+.offer-calendar-note > div { display: grid; gap: 2px; }
+.offer-calendar-note strong { font-size: 12px; }
+.offer-calendar-note small { font-size: 11px; line-height: 1.45; }
+.offer-readonly-body { padding: 23px 25px 0; }
+.offer-readonly-body dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.offer-readonly-body dl div { padding: 13px 14px; border: 1px solid #e3e1d7; border-radius: 11px; background: #fffefa; }
+.offer-readonly-body dt { color: #8b876f; font-size: 10px; font-weight: 750; }
+.offer-readonly-body dd { margin: 5px 0 0; color: #3d483f; font-size: 13px; line-height: 1.55; white-space: pre-wrap; }
+.offer-readonly-body section { margin-top: 13px; padding: 15px; border-radius: 12px; background: #f6f4e9; }
+.offer-readonly-body section h3 { margin: 0 0 7px; color: #725a25; font-size: 12px; }
+.offer-readonly-body section p { margin: 0; color: #4d544e; font-size: 13px; line-height: 1.7; white-space: pre-wrap; }
+.offer-shared-by { color: #8a948d; font-size: 11px; }
 @media (max-width: 720px) {
   .experience-library { padding: 20px 15px; }
   .experience-library-head { flex-direction: column; gap: 15px; }
@@ -2030,6 +2065,13 @@ body::before {
   .experience-detail-summary time { width: 100%; margin-left: 0; }
   .experience-detail-section { padding: 16px; }
   .experience-detail-actions { padding: 13px 17px 17px; }
+  .offer-detail-strip { align-items: stretch; flex-direction: column; }
+  .offer-detail-strip button { width: 100%; }
+  .offer-form-grid { grid-template-columns: 1fr; padding: 18px 17px 7px; }
+  .offer-form-grid .full-width { grid-column: auto; }
+  .offer-calendar-note { margin: 12px 17px 0; }
+  .offer-readonly-body { padding: 18px 17px 0; }
+  .offer-readonly-body dl { grid-template-columns: 1fr; }
 }
 
 /* Clickable statistic filters */
@@ -2189,6 +2231,7 @@ button.interview-date-chip:hover { border-color: #769abb; box-shadow: 0 7px 17px
 .event-interview { border-color: #89b5d6; border-left-color: #4e83af; background: #eaf3fa; color: #2e6189; }
 .event-written_test { border-color: #dfbc80; border-left-color: #c9821f; background: #fbf1df; color: #8e5b17; }
 .event-assessment { border-color: #a7caac; border-left-color: #559b64; background: #eaf5eb; color: #347143; }
+.event-offer { border-color: #e5c982; border-left-color: #b98a2b; background: linear-gradient(120deg, #fff8df, #f6efcf); color: #7a5716; }
 .event-deadline { border-color: #e4a49d; border-left-color: #bd5b52; background: #faeae8; color: #98423b; }
 .event-hr_contact { border-color: #bba8d8; border-left-color: #7e61ae; background: #f0eafa; color: #674893; }
 .event-other { border-color: #b8c0c2; border-left-color: #768184; background: #eef1f1; color: #596467; }

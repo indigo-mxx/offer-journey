@@ -87,6 +87,18 @@ interface ImportPreview {
   ignoredEvents: number;
 }
 
+interface OfferForm {
+  receivedAt: string;
+  deadline: string;
+  onboardDate: string;
+  compensation: string;
+  benefits: string;
+  contact: string;
+  note: string;
+  shared: boolean;
+  groupId: string;
+}
+
 interface CalendarEventForm {
   phase: "scheduled" | "completed";
   kind: CalendarItemKind;
@@ -316,6 +328,18 @@ const EMPTY_COMPANY_FORM: CompanyFormState = {
   companySubtype: "",
   industryTags: [],
   companyScale: "",
+};
+
+const EMPTY_OFFER_FORM: OfferForm = {
+  receivedAt: "",
+  deadline: "",
+  onboardDate: "",
+  compensation: "",
+  benefits: "",
+  contact: "",
+  note: "",
+  shared: false,
+  groupId: "",
 };
 
 const EMPTY_EXPERIENCE: ExperienceForm = {
@@ -590,8 +614,43 @@ function normalizeLocal(items: Application[]) {
     visibility: item.visibility ?? "private",
     industryTags: Array.isArray(item.industryTags) ? item.industryTags.filter(Boolean) : [],
     companyScale: item.companyScale ?? "",
+    offerReceivedAt: item.offerReceivedAt ?? "",
+    offerDeadline: item.offerDeadline ?? "",
+    offerOnboardDate: item.offerOnboardDate ?? "",
+    offerCompensation: item.offerCompensation ?? "",
+    offerBenefits: item.offerBenefits ?? "",
+    offerContact: item.offerContact ?? "",
+    offerNote: item.offerNote ?? "",
+    offerShared: Boolean(item.offerShared),
     isOwner: true,
   }));
+}
+
+function hasOfferDetails(item: Application) {
+  return Boolean(item.offerReceivedAt || item.offerDeadline || item.offerOnboardDate || item.offerCompensation || item.offerBenefits || item.offerContact || item.offerNote);
+}
+
+function offerCalendarItems(application: Application, ownerName: string, ownerEmail: string, isOwner: boolean): RecruitmentCalendarItem[] {
+  const shared = isOwner || application.offerShared === true;
+  if (!shared) return [];
+  const base = {
+    source: "offer" as const,
+    applicationId: application.id,
+    kind: "offer" as const,
+    company: application.company,
+    position: application.position,
+    endsAt: "",
+    location: application.base ?? "",
+    eventUrl: "",
+    ownerName,
+    ownerEmail,
+    isOwner,
+  };
+  const items: RecruitmentCalendarItem[] = [];
+  if (application.offerReceivedAt) items.push({ ...base, id: `${application.id}:received`, timingType: "scheduled", title: "收到 Offer", startsAt: application.offerReceivedAt, allDay: false, mode: "Offer 到达", status: "已完成", completed: true });
+  if (application.offerDeadline) items.push({ ...base, id: `${application.id}:deadline`, timingType: "deadline", title: "Offer 答复截止", startsAt: application.offerDeadline, allDay: false, mode: "答复截止", status: "待进行", completed: false });
+  if (application.offerOnboardDate) items.push({ ...base, id: `${application.id}:onboard`, timingType: "scheduled", title: "预计入职", startsAt: `${application.offerOnboardDate}T09:00:00`, allDay: true, mode: "预计入职", status: "待进行", completed: false });
+  return items;
 }
 
 function normalizeInterviews(items: Interview[]) {
@@ -704,6 +763,7 @@ function importedApplication(item: Application, groupIds: Set<string>, fallbackG
     ...item,
     visibility: canShare ? item.visibility : "private" as Visibility,
     groupId,
+    offerShared: canShare && item.offerShared === true,
     isOwner: true,
   };
 }
@@ -1138,6 +1198,8 @@ export function RecruitmentTracker({
   const [editingCompanyName, setEditingCompanyName] = useState<string | null>(null);
   const [companyForm, setCompanyForm] = useState<CompanyFormState>(EMPTY_COMPANY_FORM);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [offerApplication, setOfferApplication] = useState<Application | null>(null);
+  const [offerForm, setOfferForm] = useState<OfferForm>(EMPTY_OFFER_FORM);
   const [batchPositions, setBatchPositions] = useState<BatchPositionEntry[]>([{ position: "", base: "" }]);
   const [companyAutocompleteOpen, setCompanyAutocompleteOpen] = useState(false);
   const [positionAutocompleteIndex, setPositionAutocompleteIndex] = useState<number | "edit" | null>(null);
@@ -1418,6 +1480,14 @@ export function RecruitmentTracker({
         visibility: item.visibility ?? "private",
         industryTags: Array.isArray(item.industryTags) ? item.industryTags.filter(Boolean) : [],
         companyScale: item.companyScale ?? "",
+        offerReceivedAt: item.offerReceivedAt ?? "",
+        offerDeadline: item.offerDeadline ?? "",
+        offerOnboardDate: item.offerOnboardDate ?? "",
+        offerCompensation: item.offerCompensation ?? "",
+        offerBenefits: item.offerBenefits ?? "",
+        offerContact: item.offerContact ?? "",
+        offerNote: item.offerNote ?? "",
+        offerShared: Boolean(item.offerShared),
         isOwner: item.isOwner ?? true,
       }));
     const normalizedInterviews = normalizeInterviews(result.interviews);
@@ -1490,6 +1560,14 @@ export function RecruitmentTracker({
               visibility: item.visibility ?? "private",
               industryTags: Array.isArray(item.industryTags) ? item.industryTags.filter(Boolean) : [],
               companyScale: item.companyScale ?? "",
+              offerReceivedAt: item.offerReceivedAt ?? "",
+              offerDeadline: item.offerDeadline ?? "",
+              offerOnboardDate: item.offerOnboardDate ?? "",
+              offerCompensation: item.offerCompensation ?? "",
+              offerBenefits: item.offerBenefits ?? "",
+              offerContact: item.offerContact ?? "",
+              offerNote: item.offerNote ?? "",
+              offerShared: Boolean(item.offerShared),
               isOwner: item.isOwner ?? true,
             }));
             setApplications(cachedApplications);
@@ -1740,7 +1818,8 @@ export function RecruitmentTracker({
         isOwner: true,
       }];
     });
-    return [...interviewItems, ...otherItems].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+    const offerItems = ownApplications.flatMap((application) => offerCalendarItems(application, "我", user?.email ?? "", true));
+    return [...interviewItems, ...otherItems, ...offerItems].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
   }, [events, interviews, ownApplications, user?.email]);
 
   const friendCalendarApplications = useMemo(
@@ -1799,7 +1878,13 @@ export function RecruitmentTracker({
         isOwner: false,
       }];
     });
-    return [...interviewItems, ...otherItems].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+    const offerItems = friendCalendarApplications.flatMap((application) => offerCalendarItems(
+      application,
+      application.ownerName || "好友",
+      application.ownerEmail || application.ownerName || "好友",
+      false,
+    ));
+    return [...interviewItems, ...otherItems, ...offerItems].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
   }, [events, friendCalendarApplications, interviews]);
   const friendCalendarOwnerCount = useMemo(
     () => new Set(friendCalendarApplications.map((item) => item.ownerEmail || item.ownerName).filter(Boolean)).size,
@@ -2349,7 +2434,12 @@ export function RecruitmentTracker({
         setNotice("保存修改失败：岗位记录不存在或已被删除，请刷新后重试");
         return false;
       }
-      const next = { ...current, ...changes, updatedAt: new Date().toISOString() };
+      const next = {
+        ...current,
+        ...changes,
+        offerShared: changes.visibility && changes.visibility !== "full" ? false : (changes.offerShared ?? current.offerShared),
+        updatedAt: new Date().toISOString(),
+      };
       if (user) {
         const saved = await runCloudMutation("保存修改中", { action: "saveApplication", application: next });
         if (!saved) return false;
@@ -2503,6 +2593,22 @@ export function RecruitmentTracker({
     );
   };
 
+  const renderOfferAction = (item: Application, compact = false) => {
+    if (item.status !== "Offer") return null;
+    const owned = item.isOwner !== false;
+    const available = hasOfferDetails(item);
+    if (!owned && (!item.offerShared || !available)) return null;
+    return (
+      <div className={`offer-detail-strip ${compact ? "compact" : ""}`}>
+        <div>
+          <span>{available ? "Offer 详情" : "恭喜拿到 Offer"}</span>
+          <strong>{item.offerDeadline ? `答复截止 ${formatDateTime(item.offerDeadline)}` : item.offerReceivedAt ? `获得于 ${formatDateTime(item.offerReceivedAt)}` : "补全薪酬、截止时间与入职安排"}</strong>
+        </div>
+        <button type="button" onClick={() => openOfferDetails(item)}>{owned ? (available ? "查看 / 编辑" : "填写 Offer 详情") : "查看 Offer 详情"} <span aria-hidden="true">→</span></button>
+      </div>
+    );
+  };
+
   const renderScheduleStrip = (item: Application, compact = false) => {
     const now = Date.now();
     const related = calendarItems.filter((entry) => entry.applicationId === item.id && entry.status !== "已取消");
@@ -2609,6 +2715,7 @@ export function RecruitmentTracker({
         ...(selectedSet.has(item.id) && batchVisibility ? {
           visibility: batchVisibility,
           groupId: batchVisibility === "private" ? null : shareGroupId,
+          offerShared: batchVisibility === "full" ? item.offerShared : false,
         } : {}),
         updatedAt: now,
       }));
@@ -2736,6 +2843,58 @@ export function RecruitmentTracker({
     [user, runCloudMutation],
   );
 
+  const openOfferDetails = useCallback((application: Application) => {
+    setSelectedCompany(null);
+    setOfferApplication(application);
+    setOfferForm({
+      receivedAt: dateTimeLocalValue(application.offerReceivedAt || new Date().toISOString()),
+      deadline: dateTimeLocalValue(application.offerDeadline ?? ""),
+      onboardDate: application.offerOnboardDate ?? "",
+      compensation: application.offerCompensation ?? application.salary ?? "",
+      benefits: application.offerBenefits ?? "",
+      contact: application.offerContact ?? "",
+      note: application.offerNote ?? "",
+      shared: application.offerShared === true,
+      groupId: application.groupId ?? defaultGroupId,
+    });
+  }, [defaultGroupId]);
+
+  const closeOfferDetails = useCallback(() => {
+    setOfferApplication(null);
+    setOfferForm(EMPTY_OFFER_FORM);
+  }, []);
+
+  const submitOfferDetails = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!offerApplication || offerApplication.isOwner === false) return;
+    if (!offerForm.receivedAt) {
+      setNotice("请填写收到 Offer 的时间");
+      return;
+    }
+    const groupId = offerForm.groupId || defaultGroupId;
+    if (offerForm.shared && !groupId) {
+      setNotice("请先创建或加入小组，再共享 Offer 详情");
+      return;
+    }
+    const saved = await updateApplication(offerApplication.id, {
+      status: "Offer",
+      offerReceivedAt: storedDateTimeValue(offerForm.receivedAt),
+      offerDeadline: storedDateTimeValue(offerForm.deadline),
+      offerOnboardDate: offerForm.onboardDate,
+      offerCompensation: offerForm.compensation.trim(),
+      offerBenefits: offerForm.benefits.trim(),
+      offerContact: offerForm.contact.trim(),
+      offerNote: offerForm.note.trim(),
+      offerShared: offerForm.shared,
+      visibility: offerForm.shared ? "full" : offerApplication.visibility,
+      groupId: offerForm.shared ? groupId : offerApplication.groupId,
+    });
+    if (saved) {
+      closeOfferDetails();
+      setNotice(offerForm.shared ? "Offer 详情已保存并共享，相关日期已同步到日历" : "Offer 详情已保存，相关日期已同步到日历");
+    }
+  }, [closeOfferDetails, defaultGroupId, offerApplication, offerForm, updateApplication]);
+
   const openCalendarCreate = useCallback((date = new Date(), applicationId = "", kind: CalendarItemKind = "written_test") => {
     const form = emptyCalendarEventForm(date);
     const application = ownApplications.find((item) => item.id === applicationId);
@@ -2761,6 +2920,12 @@ export function RecruitmentTracker({
   }, [ownApplications]);
 
   const openCalendarEdit = useCallback((calendarItem: RecruitmentCalendarItem) => {
+    if (calendarItem.source === "offer") {
+      const application = applications.find((item) => item.id === calendarItem.applicationId);
+      if (application) openOfferDetails(application);
+      else setNotice("打开 Offer 详情失败：岗位记录不存在，请刷新后重试");
+      return;
+    }
     if (!calendarItem.isOwner) {
       setViewingFriendCalendarItem(calendarItem);
       return;
@@ -2816,7 +2981,7 @@ export function RecruitmentTracker({
     setCalendarRemainingHours("");
     setEditingCalendarItem(calendarItem);
     setIsCalendarEventOpen(true);
-  }, [events, interviews]);
+  }, [applications, events, interviews, openOfferDetails]);
 
   const openCalendarResult = useCallback((calendarItem: RecruitmentCalendarItem) => {
     openCalendarEdit(calendarItem);
@@ -2953,18 +3118,19 @@ export function RecruitmentTracker({
       if (convertedEvent) setEvents((items) => items.filter((entry) => entry.id !== convertedEvent.id));
       setInterviews((items) => current ? items.map((entry) => entry.id === item.id ? item : entry) : [...items, item]);
     } else {
-      if (!RECRUITMENT_EVENT_TYPES.includes(calendarEventForm.kind)) {
+      if (!RECRUITMENT_EVENT_TYPES.includes(calendarEventForm.kind as RecruitmentEventType)) {
         setNotice("请选择有效的日程类型");
         return;
       }
+      const eventType = calendarEventForm.kind as RecruitmentEventType;
       const current = editingCalendarItem?.source === "event" ? events.find((item) => item.id === editingCalendarItem.id) : null;
       const convertedInterview = editingCalendarItem?.source === "interview" ? interviews.find((item) => item.id === editingCalendarItem.id) : null;
       const item: RecruitmentEvent = {
         id: current?.id ?? crypto.randomUUID(),
         applicationId: application.id,
-        eventType: calendarEventForm.kind,
-        timingType: supportsCalendarTimingChoice(calendarEventForm.kind) ? calendarEventForm.timingType : "scheduled",
-        title: calendarEventForm.title.trim() || `${application.company} · ${calendarKindLabel(calendarEventForm.kind)}`,
+        eventType,
+        timingType: supportsCalendarTimingChoice(eventType) ? calendarEventForm.timingType : "scheduled",
+        title: calendarEventForm.title.trim() || `${application.company} · ${calendarKindLabel(eventType)}`,
         startsAt,
         endsAt,
         allDay: calendarEventForm.allDay,
@@ -4582,6 +4748,7 @@ export function RecruitmentTracker({
                                   <span>当前进度</span>{renderStatusControl(item, true)}
                                 </div>
                                 {renderScheduleStrip(item, true)}
+                                {renderOfferAction(item, true)}
                                 {renderExperienceLink(item)}
                                 <footer>
                                   <PositionLinkAction application={item} compact />
@@ -4839,6 +5006,7 @@ export function RecruitmentTracker({
                                 <span>{formatDate(item.appliedAt)}</span>
                               </div>
                               {renderScheduleStrip(item, true)}
+                              {renderOfferAction(item, true)}
                               {(INTERVIEW_STATUSES.includes(item.status) || experiences.some((experience) => experience.applicationId === item.id)) && renderExperienceLink(item, true)}
                               <div className="kanban-card-foot">
                                 {renderStatusControl(item, true)}
@@ -4911,6 +5079,7 @@ export function RecruitmentTracker({
                             {item.finalOutcome && <small>最终：{item.finalOutcome}</small>}
                             {item.rejectionReason && <small>原因：{item.rejectionReason}</small>}
                             {renderScheduleStrip(item, true)}
+                            {renderOfferAction(item, true)}
                             {(INTERVIEW_STATUSES.includes(item.status) || experiences.some((experience) => experience.applicationId === item.id)) && renderExperienceLink(item, true)}
                           </div></td>
                           <td data-label="公开状态"><span className={`privacy-tag ${item.visibility}`}>{visibilityLabel(item.visibility)}</span></td>
@@ -5020,6 +5189,58 @@ export function RecruitmentTracker({
         )}
 
         {/* ────────────────────────────────── form modal */}
+        {offerApplication && (
+          <ModalPortal>
+            <div className="modal-overlay modal-overlay-elevated" onClick={closeOfferDetails}>
+              <div className="modal offer-detail-modal" role="dialog" aria-modal="true" aria-labelledby="offer-detail-title" onClick={(event) => event.stopPropagation()}>
+                <header className="modal-head offer-detail-head">
+                  <div>
+                    <span className="offer-modal-kicker">OFFER</span>
+                    <h2 id="offer-detail-title">{offerApplication.isOwner === false ? "好友的 Offer 详情" : hasOfferDetails(offerApplication) ? "Offer 详情" : "记录这份 Offer"}</h2>
+                    <p className="modal-subtitle">{offerApplication.company} · {offerApplication.position}</p>
+                  </div>
+                  <button type="button" className="close-button" onClick={closeOfferDetails} aria-label="关闭 Offer 详情">×</button>
+                </header>
+                {offerApplication.isOwner === false ? (
+                  <div className="offer-readonly-body">
+                    <dl>
+                      <div><dt>收到时间</dt><dd>{offerApplication.offerReceivedAt ? formatDateTime(offerApplication.offerReceivedAt) : "未填写"}</dd></div>
+                      <div><dt>答复截止</dt><dd>{offerApplication.offerDeadline ? formatDateTime(offerApplication.offerDeadline) : "未填写"}</dd></div>
+                      <div><dt>预计入职</dt><dd>{offerApplication.offerOnboardDate ? formatDate(offerApplication.offerOnboardDate) : "未填写"}</dd></div>
+                      <div><dt>薪酬方案</dt><dd>{offerApplication.offerCompensation || "未填写"}</dd></div>
+                      <div><dt>福利待遇</dt><dd>{offerApplication.offerBenefits || "未填写"}</dd></div>
+                      <div><dt>联系人</dt><dd>{offerApplication.offerContact || "未填写"}</dd></div>
+                    </dl>
+                    {offerApplication.offerNote && <section><h3>补充说明</h3><p>{offerApplication.offerNote}</p></section>}
+                    <p className="offer-shared-by">由 {applicationOwnerName(offerApplication)} 通过共同小组共享 · 只读</p>
+                    <div className="form-actions"><button type="button" className="primary-button" onClick={closeOfferDetails}>知道了</button></div>
+                  </div>
+                ) : (
+                  <form onSubmit={(event) => void submitOfferDetails(event)}>
+                    <div className="offer-form-grid">
+                      <label><span>收到 Offer 的时间 *</span><input type="datetime-local" required value={offerForm.receivedAt} onChange={(event) => setOfferForm((current) => ({ ...current, receivedAt: event.target.value }))} /></label>
+                      <label><span>答复截止时间</span><input type="datetime-local" value={offerForm.deadline} onChange={(event) => setOfferForm((current) => ({ ...current, deadline: event.target.value }))} /></label>
+                      <label><span>预计入职日期</span><input type="date" value={offerForm.onboardDate} onChange={(event) => setOfferForm((current) => ({ ...current, onboardDate: event.target.value }))} /></label>
+                      <label><span>薪酬方案</span><input value={offerForm.compensation} onChange={(event) => setOfferForm((current) => ({ ...current, compensation: event.target.value }))} placeholder="例如：30K × 15 薪、签字费、奖金" maxLength={300} /></label>
+                      <label className="full-width"><span>福利待遇</span><textarea value={offerForm.benefits} onChange={(event) => setOfferForm((current) => ({ ...current, benefits: event.target.value }))} rows={3} placeholder="例如：年假、餐补、住房补贴、股票等" maxLength={2000} /></label>
+                      <label className="full-width"><span>HR / 联系方式</span><input value={offerForm.contact} onChange={(event) => setOfferForm((current) => ({ ...current, contact: event.target.value }))} placeholder="姓名、电话或邮箱" maxLength={300} /></label>
+                      <label className="full-width"><span>补充说明</span><textarea value={offerForm.note} onChange={(event) => setOfferForm((current) => ({ ...current, note: event.target.value }))} rows={4} placeholder="记录需要确认的条款、谈薪情况或后续动作" maxLength={4000} /></label>
+                      <label className="offer-share-toggle full-width">
+                        <input type="checkbox" checked={offerForm.shared} onChange={(event) => setOfferForm((current) => ({ ...current, shared: event.target.checked }))} />
+                        <span><strong>共享给好友</strong><small>共同小组成员可查看完整 Offer 详情，相关日期也会出现在好友日历中。</small></span>
+                      </label>
+                      {offerForm.shared && groups.length > 0 && <label className="full-width"><span>共享到小组</span><DropdownSelect value={offerForm.groupId || defaultGroupId} onChange={(groupId) => setOfferForm((current) => ({ ...current, groupId }))} options={groups.map((group) => ({ value: group.id, label: `${group.name} · ${group.members.length} 人` }))} ariaLabel="选择 Offer 共享小组" /></label>}
+                      {offerForm.shared && groups.length === 0 && <div className="share-setup-prompt full-width"><div><strong>还没有共享小组</strong><small>请先保存为自己可见，再到共享管理创建或加入小组。</small></div></div>}
+                    </div>
+                    <div className="offer-calendar-note"><span aria-hidden="true">◇</span><div><strong>自动同步日历</strong><small>获得时间、答复截止和预计入职日期会自动生成 Offer 日程，无需重复录入。</small></div></div>
+                    <div className="form-actions"><button type="button" className="secondary-button" onClick={closeOfferDetails}>取消</button><button type="submit" className="primary-button" disabled={busy || (offerForm.shared && groups.length === 0)}>{busy ? "保存中…" : offerForm.shared ? "保存并共享" : "保存 Offer 详情"}</button></div>
+                  </form>
+                )}
+              </div>
+            </div>
+          </ModalPortal>
+        )}
+
         {isFormOpen && (
           <ModalPortal>
           <div className="modal-overlay">
@@ -6010,6 +6231,7 @@ export function RecruitmentTracker({
                           <small>{companyInterviews.filter((interview) => interview.applicationId === item.id).length} 场面试记录</small>
                         )}
                         {renderScheduleStrip(item, true)}
+                        {renderOfferAction(item, true)}
                         {(INTERVIEW_STATUSES.includes(item.status) || experiences.some((experience) => experience.applicationId === item.id)) && renderExperienceLink(item, true)}
                       </div></td>
                       {view === "friends" && <td data-label="岗位链接"><PositionLinkAction application={item} /></td>}

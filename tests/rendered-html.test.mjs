@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("includes the cloud workspace, access control, and sharing surfaces", async () => {
-  const [page, tracker, calendar, route, schema, hosting, styles, workspaceStyles, experienceSharingMigration, aiInterviewDeadlineMigration, search] = await Promise.all([
+  const [page, tracker, calendar, route, schema, hosting, styles, workspaceStyles, experienceSharingMigration, aiInterviewDeadlineMigration, offerDetailsMigration, search] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/recruitment-tracker.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/recruitment-calendar.tsx", import.meta.url), "utf8"),
@@ -14,6 +14,7 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
     readFile(new URL("../app/workspace.css", import.meta.url), "utf8"),
     readFile(new URL("../supabase/migrations/006_share_interview_experiences.sql", import.meta.url), "utf8"),
     readFile(new URL("../supabase/migrations/010_ai_interview_deadlines.sql", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/011_offer_details.sql", import.meta.url), "utf8"),
     readFile(new URL("../lib/search.ts", import.meta.url), "utf8"),
   ]);
 
@@ -112,6 +113,15 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(tracker, /supportsRemainingHourDeadline\(calendarEventForm\.kind, calendarEventForm\.round\)/);
   assert.match(route, /timing_type: textValue\(value\.timingType/);
   assert.match(aiInterviewDeadlineMigration, /add column if not exists timing_type/);
+  assert.match(tracker, /填写 Offer 详情/);
+  assert.match(tracker, /共享给好友/);
+  assert.match(tracker, /自动同步日历/);
+  assert.match(tracker, /offerCalendarItems/);
+  assert.match(calendar, /value: "offer", label: "Offer"/);
+  assert.match(route, /offer_shared/);
+  assert.match(route, /canSeeOfferDetails/);
+  assert.match(offerDetailsMigration, /add column if not exists offer_received_at/);
+  assert.match(offerDetailsMigration, /add column if not exists offer_shared boolean/);
   assert.match(styles, /interview-stage-board/);
   assert.match(styles, /interview-date-chip/);
   assert.match(styles, /stat-card\.is-selected/);

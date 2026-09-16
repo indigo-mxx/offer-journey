@@ -45,6 +45,10 @@ function aiInterviewDeadlineMessage() {
   return "AI 面截止时间功能尚未初始化，请先在 Supabase SQL Editor 执行 010_ai_interview_deadlines.sql";
 }
 
+function offerDetailsMessage() {
+  return "Offer 详情功能尚未初始化，请先在 Supabase SQL Editor 执行 011_offer_details.sql";
+}
+
 const FINAL_OUTCOME_PREFIX = "【最终结果】";
 const REJECTION_REASON_PREFIX = "【拒绝原因】";
 
@@ -166,6 +170,7 @@ export async function GET(request: Request) {
   const applications = (rows ?? []).map((row) => {
     const isOwner = row.owner_id === user.id;
     const progressOnly = !isOwner && row.visibility === "progress";
+    const canSeeOfferDetails = isOwner || (row.visibility === "full" && row.offer_shared === true);
     const resolution = progressOnly ? { finalOutcome: "", rejectionReason: "", note: "" } : resolutionFromNote(row.note ?? "");
     return {
       id: row.id,
@@ -188,6 +193,14 @@ export async function GET(request: Request) {
       note: resolution.note,
       finalOutcome: resolution.finalOutcome,
       rejectionReason: resolution.rejectionReason,
+      offerReceivedAt: canSeeOfferDetails ? row.offer_received_at ?? "" : "",
+      offerDeadline: canSeeOfferDetails ? row.offer_deadline ?? "" : "",
+      offerOnboardDate: canSeeOfferDetails ? row.offer_onboard_date ?? "" : "",
+      offerCompensation: canSeeOfferDetails ? row.offer_compensation ?? "" : "",
+      offerBenefits: canSeeOfferDetails ? row.offer_benefits ?? "" : "",
+      offerContact: canSeeOfferDetails ? row.offer_contact ?? "" : "",
+      offerNote: canSeeOfferDetails ? row.offer_note ?? "" : "",
+      offerShared: canSeeOfferDetails && row.offer_shared === true,
       updatedAt: row.updated_at,
     };
   });
@@ -303,6 +316,14 @@ export async function POST(request: Request) {
           link: textValue(value.link, 1000),
           salary: textValue(value.salary, 100),
           note: noteWithResolution(value.note, textValue(value.status, 40) || "准备投递", value.finalOutcome, value.rejectionReason),
+          offer_received_at: textValue(value.offerReceivedAt, 60) || null,
+          offer_deadline: textValue(value.offerDeadline, 60) || null,
+          offer_onboard_date: textValue(value.offerOnboardDate, 20) || null,
+          offer_compensation: textValue(value.offerCompensation, 300),
+          offer_benefits: textValue(value.offerBenefits, 2000),
+          offer_contact: textValue(value.offerContact, 300),
+          offer_note: textValue(value.offerNote, 4000),
+          offer_shared: value.offerShared === true && level === "full" && Boolean(groupId),
         };
       });
       if (payload.some((item) => !item.company || !item.position)) return json({ error: "公司和岗位不能为空" }, 400);
@@ -318,7 +339,7 @@ export async function POST(request: Request) {
       }
       if (payload.length) {
         const { error } = await supabase.from("applications").upsert(payload, { onConflict: "id" });
-        if (error) return json({ error: error.message }, 400);
+        if (error) return json({ error: error.code === "42703" || error.code === "PGRST204" ? offerDetailsMessage() : error.message }, 400);
       }
       if (workspaceImport) {
         if (!Array.isArray(body.interviews) || body.interviews.length > 1000) {

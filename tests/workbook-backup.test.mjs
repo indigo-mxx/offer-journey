@@ -31,6 +31,14 @@ const SAMPLE = {
       note: "关键岗位，优先级高",
       finalOutcome: "",
       rejectionReason: "",
+      offerReceivedAt: "2025-09-25T02:00:00.000Z",
+      offerDeadline: "2025-09-30T10:00:00.000Z",
+      offerOnboardDate: "2025-10-20",
+      offerCompensation: "35K × 15 薪 + 签字费",
+      offerBenefits: "补充医疗、餐补、住房补贴",
+      offerContact: "王 HR / hr@example.com",
+      offerNote: "答复前确认股票归属周期",
+      offerShared: true,
       visibility: "full",
       groupId: null,
       createdAt: "2025-09-01T08:00:00.000Z",
@@ -157,6 +165,14 @@ test("Excel round-trip preserves Chinese text, dates, tags and linkage with no �
     assert.equal(app.note, "关键岗位，优先级高", "note Chinese intact");
     assert.equal(app.link, "https://example.com/huawei", "link preserved");
     assert.equal(app.salary, "30-40K·15薪", "salary with · intact");
+    assert.ok(sameInstant(app.offerReceivedAt, "2025-09-25T02:00:00.000Z"), "offer received time preserved");
+    assert.ok(sameInstant(app.offerDeadline, "2025-09-30T10:00:00.000Z"), "offer deadline preserved");
+    assert.equal(app.offerOnboardDate, "2025-10-20", "offer onboarding date preserved");
+    assert.equal(app.offerCompensation, "35K × 15 薪 + 签字费", "offer compensation preserved");
+    assert.equal(app.offerBenefits, "补充医疗、餐补、住房补贴", "offer benefits preserved");
+    assert.equal(app.offerContact, "王 HR / hr@example.com", "offer contact preserved");
+    assert.equal(app.offerNote, "答复前确认股票归属周期", "offer note preserved");
+    assert.equal(app.offerShared, true, "offer sharing preference preserved");
     assert.ok(sameInstant(app.updatedAt, "2025-09-10T10:30:00.000Z"), "updatedAt instant preserved");
 
     const appEn = restored.applications.find((item) => item.id === "app-byte");

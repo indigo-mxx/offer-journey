@@ -5,9 +5,9 @@ import type { Application, RecruitmentEventType } from "@/db/schema";
 import { addDays, calendarDays, itemsInRange, localDateKey, scheduleLink } from "@/lib/calendar";
 export { localDateKey } from "@/lib/calendar";
 
-export type CalendarItemKind = "interview" | RecruitmentEventType;
+export type CalendarItemKind = "interview" | "offer" | RecruitmentEventType;
 export type RecruitmentCalendarItem = {
-  source: "interview" | "event";
+  source: "interview" | "event" | "offer";
   id: string;
   applicationId: string;
   kind: CalendarItemKind;
@@ -36,6 +36,7 @@ const FILTERS: Array<{ value: "all" | CalendarItemKind; label: string }> = [
   { value: "interview", label: "面试" },
   { value: "written_test", label: "笔试" },
   { value: "assessment", label: "测评" },
+  { value: "offer", label: "Offer" },
   { value: "deadline", label: "截止事项" },
   { value: "hr_contact", label: "HR 沟通" },
   { value: "other", label: "其他" },
