@@ -137,12 +137,14 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(offerCompensationMigration, /add column if not exists offer_compensation_details jsonb/);
   assert.match(tracker, /查看收入明细/);
   assert.match(tracker, /年实际到账/);
+  assert.match(tracker, /总薪资（公积金 \+ 税后薪资）/);
   assert.match(tracker, /Offer 收入计算器/);
   assert.match(tracker, /changeWorkspaceView\("offerCalculator"\)/);
   assert.match(tracker, /临时计算参数已清空/);
   assert.match(route, /offer_compensation_details/);
   assert.match(offerCalculator, /function annualBonusTax/);
   assert.match(offerCalculator, /annualHousingFundAccount/);
+  assert.match(offerCalculator, /annualTakeHomeWithHousingFund/);
   assert.match(styles, /interview-stage-board/);
   assert.match(styles, /interview-date-chip/);
   assert.match(styles, /stat-card\.is-selected/);

@@ -1266,6 +1266,7 @@ function OfferIncomeCard({
           <article><span>首年总包</span><strong>{formatCny(income.annualTotalPackage)}</strong><small>现金 + 公司公积金 + 股权估值</small></article>
           <article><span>年税前现金</span><strong>{formatCny(income.annualGrossCash)}</strong><small>月均 {formatCny(income.averageMonthlyGross)}</small></article>
           <article className="highlight"><span>年实际到账</span><strong>{formatCny(income.annualTakeHome)}</strong><small>月均 {formatCny(income.averageMonthlyTakeHome)}</small></article>
+          <article className="combined-income"><span>总薪资（公积金 + 税后薪资）</span><strong>{formatCny(income.annualTakeHomeWithHousingFund)}</strong><small>月均综合 {formatCny(income.averageMonthlyTakeHomeWithHousingFund)}</small></article>
           <article><span>年度个税</span><strong>{formatCny(income.annualTax)}</strong><small>综合税负 {income.effectiveTaxRate}%</small></article>
           <article><span>个人五险</span><strong>{formatCny(income.annualEmployeeSocialInsurance)}</strong><small>养老、医疗、失业</small></article>
           <article><span>公积金账户</span><strong>{formatCny(income.annualHousingFundAccount)}</strong><small>个人 + 公司缴存</small></article>

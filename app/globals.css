@@ -2086,9 +2086,11 @@ body::before {
 .offer-income-results { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
 .offer-income-results article { display: grid; gap: 4px; padding: 13px 14px; border: 1px solid #e1e2d8; border-radius: 11px; background: rgba(255, 255, 253, .9); }
 .offer-income-results article.highlight { border-color: rgba(47, 118, 86, .35); background: linear-gradient(135deg, #edf7f1, #f8fbf4); }
+.offer-income-results article.combined-income { border-color: rgba(170, 119, 30, .38); background: linear-gradient(135deg, #fff9e7, #f5edcf); }
 .offer-income-results span { color: #8a897e; font-size: 9px; font-weight: 750; }
 .offer-income-results strong { color: #37483f; font-family: var(--font-serif); font-size: 17px; }
 .offer-income-results .highlight strong { color: #23684d; }
+.offer-income-results .combined-income strong { color: #8a6119; }
 .offer-income-results small { color: #898d87; font-size: 9px; }
 .offer-income-table-wrap { margin-top: 12px; overflow-x: auto; border: 1px solid #e1e2d9; border-radius: 11px; background: #fff; }
 .offer-income-table { width: 100%; min-width: 790px; border-collapse: collapse; font-size: 10px; white-space: nowrap; }

@@ -21,8 +21,10 @@ export type OfferIncomeCalculation = {
   annualEmployeeHousingFund: number;
   annualTakeHome: number;
   annualHousingFundAccount: number;
+  annualTakeHomeWithHousingFund: number;
   averageMonthlyGross: number;
   averageMonthlyTakeHome: number;
+  averageMonthlyTakeHomeWithHousingFund: number;
   effectiveTaxRate: number;
   separateBonusTax: number;
   months: OfferIncomeMonth[];
@@ -195,6 +197,8 @@ export function calculateOfferIncome(input: OfferCompensationDetails): OfferInco
   const annualGrossCash = money(sum("grossCash"));
   const annualTax = money(sum("individualIncomeTax"));
   const annualTakeHome = money(sum("takeHome"));
+  const annualHousingFundAccount = money(sum("housingFundAccount"));
+  const annualTakeHomeWithHousingFund = money(annualTakeHome + annualHousingFundAccount);
   return {
     annualGrossCash,
     annualTotalPackage: money(annualGrossCash + details.equityAnnualValue + employerFund * 12),
@@ -202,9 +206,11 @@ export function calculateOfferIncome(input: OfferCompensationDetails): OfferInco
     annualEmployeeSocialInsurance: money(sum("employeeSocialInsurance")),
     annualEmployeeHousingFund: money(sum("employeeHousingFund")),
     annualTakeHome,
-    annualHousingFundAccount: money(sum("housingFundAccount")),
+    annualHousingFundAccount,
+    annualTakeHomeWithHousingFund,
     averageMonthlyGross: money(annualGrossCash / 12),
     averageMonthlyTakeHome: money(annualTakeHome / 12),
+    averageMonthlyTakeHomeWithHousingFund: money(annualTakeHomeWithHousingFund / 12),
     effectiveTaxRate: annualGrossCash ? money(annualTax / annualGrossCash * 100) : 0,
     separateBonusTax,
     months,
