@@ -1,4 +1,4 @@
-import type { Application, ApplicationStatus, Interview, InterviewExperience, RecruitmentEvent, RecruitmentEventStatus, RecruitmentEventType, Visibility } from "@/db/schema";
+import type { Application, ApplicationStatus, Interview, InterviewExperience, OfferCompensationDetails, RecruitmentEvent, RecruitmentEventStatus, RecruitmentEventType, Visibility } from "@/db/schema";
 import type { Cell, Row, Worksheet } from "exceljs";
 
 export type WorkspaceBackup = {
@@ -165,6 +165,7 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup) {
     { header: "Offer 获得时间", key: "offerReceivedAt", width: 19 }, { header: "Offer 答复截止", key: "offerDeadline", width: 19 }, { header: "预计入职日期", key: "offerOnboardDate", width: 15 },
     { header: "Offer 薪酬", key: "offerCompensation", width: 24 }, { header: "Offer 福利", key: "offerBenefits", width: 30 }, { header: "Offer 联系人", key: "offerContact", width: 20 },
     { header: "Offer 备注", key: "offerNote", width: 34 }, { header: "共享 Offer 详情", key: "offerShared", width: 16 },
+    { header: "Offer 收入计算参数", key: "offerCompensationDetails", width: 24, hidden: true },
     { header: "岗位ID", key: "id", width: 18, hidden: true }, { header: "共享小组ID", key: "groupId", width: 18, hidden: true },
     { header: "创建时间", key: "createdAt", width: 20, hidden: true }, { header: "更新时间", key: "updatedAt", width: 20, hidden: true },
   ], data.applications.map((item) => ({
@@ -173,6 +174,7 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup) {
     finalOutcome: item.finalOutcome ?? "", rejectionReason: item.rejectionReason ?? "", visibility: VISIBILITY_LABELS[item.visibility], id: item.id,
     offerReceivedAt: validDate(item.offerReceivedAt ?? ""), offerDeadline: validDate(item.offerDeadline ?? ""), offerOnboardDate: validDate(item.offerOnboardDate ?? ""),
     offerCompensation: item.offerCompensation ?? "", offerBenefits: item.offerBenefits ?? "", offerContact: item.offerContact ?? "", offerNote: item.offerNote ?? "", offerShared: item.offerShared ? "是" : "否",
+    offerCompensationDetails: item.offerCompensationDetails ? JSON.stringify(item.offerCompensationDetails) : "",
     groupId: item.groupId ?? "", createdAt: validDate(item.createdAt ?? ""), updatedAt: validDate(item.updatedAt),
   })), palette.brand);
   applicationsSheet.getColumn("appliedAt").numFmt = "yyyy-mm-dd";
@@ -332,6 +334,7 @@ export async function readWorkspaceWorkbook(file: File): Promise<WorkspaceBackup
       rejectionReason: excelText(row["拒绝原因"]).trim(), visibility: VISIBILITY_VALUES[excelText(row["公开范围"]).trim()] ?? "private", groupId: excelText(row["共享小组ID"]).trim() || null,
       offerReceivedAt: dateFromExcel(row["Offer 获得时间"]), offerDeadline: dateFromExcel(row["Offer 答复截止"]), offerOnboardDate: dateFromExcel(row["预计入职日期"], true),
       offerCompensation: excelText(row["Offer 薪酬"]).trim(), offerBenefits: excelText(row["Offer 福利"]).trim(), offerContact: excelText(row["Offer 联系人"]).trim(), offerNote: excelText(row["Offer 备注"]).trim(), offerShared: excelText(row["共享 Offer 详情"]).trim() === "是",
+      offerCompensationDetails: (() => { try { const parsed = JSON.parse(excelText(row["Offer 收入计算参数"])); return parsed && typeof parsed === "object" ? parsed as OfferCompensationDetails : undefined; } catch { return undefined; } })(),
       createdAt: dateFromExcel(row["创建时间"]) || now, updatedAt: dateFromExcel(row["更新时间"]) || now, isOwner: true,
     };
   }).filter((item) => item.company && item.position);

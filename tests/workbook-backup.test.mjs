@@ -39,6 +39,7 @@ const SAMPLE = {
       offerContact: "王 HR / hr@example.com",
       offerNote: "答复前确认股票归属周期",
       offerShared: true,
+      offerCompensationDetails: { currency: "CNY", city: "北京", monthlyBaseSalary: 35000, salaryMonths: 15, performanceBonus: 20000, signingBonus: 50000, monthlyAllowance: 1000, otherAnnualCash: 0, equityAnnualValue: 100000, bonusTaxMode: "separate", bonusMonth: 12, signingBonusMonth: 1, socialInsuranceBase: 35000, housingFundBase: 35000, pensionRate: 8, medicalRate: 2, unemploymentRate: 0.5, housingFundRate: 12, employerHousingFundRate: 12, specialDeductionMonthly: 1500, otherDeductionMonthly: 0 },
       visibility: "full",
       groupId: null,
       createdAt: "2025-09-01T08:00:00.000Z",
@@ -173,6 +174,8 @@ test("Excel round-trip preserves Chinese text, dates, tags and linkage with no �
     assert.equal(app.offerContact, "王 HR / hr@example.com", "offer contact preserved");
     assert.equal(app.offerNote, "答复前确认股票归属周期", "offer note preserved");
     assert.equal(app.offerShared, true, "offer sharing preference preserved");
+    assert.equal(app.offerCompensationDetails?.monthlyBaseSalary, 35000, "offer compensation calculator inputs preserved");
+    assert.equal(app.offerCompensationDetails?.housingFundRate, 12, "offer housing fund settings preserved");
     assert.ok(sameInstant(app.updatedAt, "2025-09-10T10:30:00.000Z"), "updatedAt instant preserved");
 
     const appEn = restored.applications.find((item) => item.id === "app-byte");

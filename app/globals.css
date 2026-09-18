@@ -2033,7 +2033,7 @@ body::before {
 .offer-detail-strip button { flex: none; padding: 6px 9px; border: 0; border-radius: 8px; background: #785b20; color: #fffaf0; font-size: 11px; font-weight: 750; cursor: pointer; }
 .offer-detail-strip button:hover { background: #946f24; transform: translateY(-1px); }
 .offer-detail-strip.compact { padding: 8px 9px; }
-.offer-detail-modal { width: min(760px, calc(100vw - 30px)); max-height: min(90vh, 880px); overflow: auto; }
+.offer-detail-modal { width: min(1060px, calc(100vw - 30px)); max-height: min(92vh, 920px); overflow: auto; }
 .offer-detail-head { background: linear-gradient(120deg, #fffdf4, #f5f0da); }
 .offer-modal-kicker { display: inline-flex; margin-bottom: 6px; padding: 4px 8px; border-radius: 999px; background: #72551c; color: #fff8e5; font-size: 9px; font-weight: 850; letter-spacing: .16em; }
 .offer-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; padding: 23px 25px 8px; }
@@ -2061,6 +2061,43 @@ body::before {
 .offer-readonly-body section h3 { margin: 0 0 7px; color: #725a25; font-size: 12px; }
 .offer-readonly-body section p { margin: 0; color: #4d544e; font-size: 13px; line-height: 1.7; white-space: pre-wrap; }
 .offer-shared-by { color: #8a948d; font-size: 11px; }
+.offer-income-card { margin: 14px 25px 0; overflow: hidden; border: 1px solid rgba(177, 133, 43, .28); border-radius: 16px; background: linear-gradient(135deg, #fffdf4 0%, #f4f0de 100%); box-shadow: 0 12px 30px rgba(82, 66, 29, .08); }
+.offer-income-card-head { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px 18px; }
+.offer-income-card-head > div { display: grid; gap: 3px; min-width: 0; }
+.offer-income-card-head > div > span { color: #9a7221; font-size: 9px; font-weight: 850; letter-spacing: .15em; text-transform: uppercase; }
+.offer-income-card-head strong { color: #4c3b18; font-family: var(--font-serif); font-size: 17px; }
+.offer-income-card-head small { color: #80775f; font-size: 11px; line-height: 1.45; }
+.offer-income-card-head button { flex: none; padding: 9px 12px; border: 1px solid rgba(112, 83, 26, .18); border-radius: 10px; background: #72551c; color: #fffaf0; font-size: 11px; font-weight: 780; cursor: pointer; box-shadow: 0 7px 16px rgba(90, 65, 20, .15); }
+.offer-income-card-head button:hover { background: #8a6725; transform: translateY(-1px); }
+.offer-income-expanded { padding: 4px 18px 18px; border-top: 1px solid rgba(177, 133, 43, .15); background: rgba(255, 255, 252, .66); }
+.offer-income-section-head { display: flex; align-items: center; gap: 10px; margin: 18px 0 11px; }
+.offer-income-section-head > span { display: grid; width: 27px; height: 27px; place-items: center; border-radius: 50%; background: #315e4c; color: #fff; font-size: 9px; font-weight: 800; }
+.offer-income-section-head > div { display: grid; gap: 1px; }
+.offer-income-section-head strong { color: #29483c; font-size: 13px; }
+.offer-income-section-head small { color: #7a827b; font-size: 10px; font-weight: 500; }
+.offer-income-section-head.result > span { background: #a47622; }
+.offer-income-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.offer-income-fields label { display: grid; gap: 5px; color: #667068; font-size: 10px; font-weight: 750; }
+.offer-income-fields input, .offer-income-fields select { width: 100%; min-width: 0; height: 38px; padding: 0 10px; border: 1px solid #d8d9ce; border-radius: 9px; outline: 0; background: rgba(255, 255, 253, .94); color: #263c33; font: inherit; font-size: 12px; }
+.offer-income-fields input:focus, .offer-income-fields select:focus { border-color: #60927d; box-shadow: 0 0 0 3px rgba(71, 128, 104, .11); }
+.offer-number-input { position: relative; }
+.offer-number-input input { padding-right: 35px; }
+.offer-number-input em { position: absolute; top: 50%; right: 10px; color: #9b9c90; font-size: 9px; font-style: normal; transform: translateY(-50%); pointer-events: none; }
+.offer-income-results { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+.offer-income-results article { display: grid; gap: 4px; padding: 13px 14px; border: 1px solid #e1e2d8; border-radius: 11px; background: rgba(255, 255, 253, .9); }
+.offer-income-results article.highlight { border-color: rgba(47, 118, 86, .35); background: linear-gradient(135deg, #edf7f1, #f8fbf4); }
+.offer-income-results span { color: #8a897e; font-size: 9px; font-weight: 750; }
+.offer-income-results strong { color: #37483f; font-family: var(--font-serif); font-size: 17px; }
+.offer-income-results .highlight strong { color: #23684d; }
+.offer-income-results small { color: #898d87; font-size: 9px; }
+.offer-income-table-wrap { margin-top: 12px; overflow-x: auto; border: 1px solid #e1e2d9; border-radius: 11px; background: #fff; }
+.offer-income-table { width: 100%; min-width: 790px; border-collapse: collapse; font-size: 10px; white-space: nowrap; }
+.offer-income-table th { padding: 9px 10px; background: #f3f3e9; color: #77796e; font-weight: 750; text-align: right; }
+.offer-income-table th:first-child, .offer-income-table td:first-child { text-align: left; }
+.offer-income-table td { padding: 8px 10px; border-top: 1px solid #eff0e9; color: #606860; text-align: right; }
+.offer-income-table tbody tr:nth-child(even) { background: #fbfbf6; }
+.offer-income-table td strong { color: #27664d; }
+.offer-income-disclaimer { margin: 11px 1px 0; color: #8a8d84; font-size: 9px; line-height: 1.6; }
 .mailbox-settings-modal { width: min(590px, calc(100vw - 30px)); }
 .mailbox-modal-kicker { display: inline-flex; margin-bottom: 6px; padding: 4px 8px; border-radius: 999px; background: #e7f2eb; color: #24664f; font-size: 9px; font-weight: 800; letter-spacing: .1em; }
 .mailbox-settings-body { display: grid; gap: 19px; padding: 22px 24px 8px; }
@@ -2096,6 +2133,10 @@ body::before {
   .offer-calendar-note { margin: 12px 17px 0; }
   .offer-readonly-body { padding: 18px 17px 0; }
   .offer-readonly-body dl { grid-template-columns: 1fr; }
+  .offer-income-card { margin: 12px 17px 0; }
+  .offer-income-card-head { align-items: stretch; flex-direction: column; }
+  .offer-income-card-head button { width: 100%; }
+  .offer-income-fields, .offer-income-results { grid-template-columns: 1fr 1fr; }
   .mailbox-open-button { padding: 0 8px; }
   .mailbox-open-button span { display: none; }
   .mailbox-settings-button { width: 24px; }

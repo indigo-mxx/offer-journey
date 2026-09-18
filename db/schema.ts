@@ -25,6 +25,32 @@ export type ApplicationStatus =
 
 export type Visibility = "private" | "progress" | "full";
 
+export type OfferCompensationDetails = {
+  currency: "CNY";
+  city: string;
+  monthlyBaseSalary: number;
+  salaryMonths: number;
+  probationMonths: number;
+  probationSalaryRate: number;
+  performanceBonus: number;
+  signingBonus: number;
+  monthlyAllowance: number;
+  otherAnnualCash: number;
+  equityAnnualValue: number;
+  bonusTaxMode: "separate" | "combined";
+  bonusMonth: number;
+  signingBonusMonth: number;
+  socialInsuranceBase: number;
+  housingFundBase: number;
+  pensionRate: number;
+  medicalRate: number;
+  unemploymentRate: number;
+  housingFundRate: number;
+  employerHousingFundRate: number;
+  specialDeductionMonthly: number;
+  otherDeductionMonthly: number;
+};
+
 export type Application = {
   id: string;
   company: string;
@@ -49,6 +75,7 @@ export type Application = {
   offerContact?: string;
   offerNote?: string;
   offerShared?: boolean;
+  offerCompensationDetails?: OfferCompensationDetails;
   visibility: Visibility;
   createdAt?: string;
   updatedAt: string;
@@ -207,6 +234,15 @@ export const applications = sqliteTable(
     link: text("link").notNull().default(""),
     salary: text("salary").notNull().default(""),
     note: text("note").notNull().default(""),
+    offerReceivedAt: text("offer_received_at").notNull().default(""),
+    offerDeadline: text("offer_deadline").notNull().default(""),
+    offerOnboardDate: text("offer_onboard_date").notNull().default(""),
+    offerCompensation: text("offer_compensation").notNull().default(""),
+    offerBenefits: text("offer_benefits").notNull().default(""),
+    offerContact: text("offer_contact").notNull().default(""),
+    offerNote: text("offer_note").notNull().default(""),
+    offerShared: integer("offer_shared", { mode: "boolean" }).notNull().default(false),
+    offerCompensationDetails: text("offer_compensation_details", { mode: "json" }).$type<OfferCompensationDetails>(),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
@@ -233,14 +269,6 @@ export const recruitmentEvents = sqliteTable(
     eventUrl: text("event_url").notNull().default(""),
     status: text("status", { enum: ["待进行", "已完成", "已取消"] }).notNull().default("待进行"),
     note: text("note").notNull().default(""),
-    offerReceivedAt: text("offer_received_at").notNull().default(""),
-    offerDeadline: text("offer_deadline").notNull().default(""),
-    offerOnboardDate: text("offer_onboard_date").notNull().default(""),
-    offerCompensation: text("offer_compensation").notNull().default(""),
-    offerBenefits: text("offer_benefits").notNull().default(""),
-    offerContact: text("offer_contact").notNull().default(""),
-    offerNote: text("offer_note").notNull().default(""),
-    offerShared: integer("offer_shared", { mode: "boolean" }).notNull().default(false),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },

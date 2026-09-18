@@ -8,7 +8,8 @@ import { autocompleteScore, matchesFieldsSearch, matchesLiteralSearch, matchesTe
 import { createWorkspaceWorkbook, readWorkspaceWorkbook } from "@/lib/workbook-backup";
 import type { WorkspaceBackup } from "@/lib/workbook-backup";
 import { calendarTimingDefaults, deadlineFromRemainingHours, isAiInterviewRound, supportsCalendarTimingChoice, supportsRemainingHourDeadline } from "@/lib/calendar";
-import type { Application, Interview, InterviewExperience, RecruitmentEvent, RecruitmentEventStatus, RecruitmentEventType, GroupInfo, ApplicationStatus, Visibility } from "@/db/schema";
+import { calculateOfferIncome, emptyOfferCompensationDetails, normalizeOfferCompensationDetails, offerCityRates } from "@/lib/offer-calculator";
+import type { Application, Interview, InterviewExperience, RecruitmentEvent, RecruitmentEventStatus, RecruitmentEventType, GroupInfo, ApplicationStatus, Visibility, OfferCompensationDetails } from "@/db/schema";
 import { RecruitmentCalendar, UpcomingScheduleCard, calendarKindLabel } from "./recruitment-calendar";
 import type { CalendarItemKind, RecruitmentCalendarItem } from "./recruitment-calendar";
 import type { ChatGPTUser } from "./chatgpt-auth";
@@ -95,6 +96,7 @@ interface OfferForm {
   benefits: string;
   contact: string;
   note: string;
+  compensationDetails: OfferCompensationDetails;
   shared: boolean;
   groupId: string;
 }
@@ -338,6 +340,7 @@ const EMPTY_OFFER_FORM: OfferForm = {
   benefits: "",
   contact: "",
   note: "",
+  compensationDetails: emptyOfferCompensationDetails(),
   shared: false,
   groupId: "",
 };
@@ -445,6 +448,12 @@ function emptyCalendarEventForm(date = new Date()): CalendarEventForm {
 }
 
 // ──────────────────────────────────────────────── helpers
+const CNY_FORMATTER = new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", maximumFractionDigits: 0 });
+
+function formatCny(value: number) {
+  return CNY_FORMATTER.format(Number.isFinite(value) ? value : 0);
+}
+
 function formatDate(value: string) {
   if (!value) return "—";
   const date = new Date(`${value}T00:00:00`);
@@ -658,12 +667,13 @@ function normalizeLocal(items: Application[]) {
     offerContact: item.offerContact ?? "",
     offerNote: item.offerNote ?? "",
     offerShared: Boolean(item.offerShared),
+    offerCompensationDetails: normalizeOfferCompensationDetails(item.offerCompensationDetails, item.base, item.salary || item.offerCompensation),
     isOwner: true,
   }));
 }
 
 function hasOfferDetails(item: Application) {
-  return Boolean(item.offerReceivedAt || item.offerDeadline || item.offerOnboardDate || item.offerCompensation || item.offerBenefits || item.offerContact || item.offerNote);
+  return Boolean(item.offerReceivedAt || item.offerDeadline || item.offerOnboardDate || item.offerCompensation || item.offerBenefits || item.offerContact || item.offerNote || item.offerCompensationDetails?.monthlyBaseSalary);
 }
 
 function offerCalendarItems(application: Application, ownerName: string, ownerEmail: string, isOwner: boolean): RecruitmentCalendarItem[] {
@@ -800,6 +810,7 @@ function importedApplication(item: Application, groupIds: Set<string>, fallbackG
     visibility: canShare ? item.visibility : "private" as Visibility,
     groupId,
     offerShared: canShare && item.offerShared === true,
+    offerCompensationDetails: normalizeOfferCompensationDetails(item.offerCompensationDetails, item.base, item.salary || item.offerCompensation),
     isOwner: true,
   };
 }
@@ -1194,6 +1205,82 @@ function DashboardPanel({
   );
 }
 
+function OfferIncomeCard({
+  details,
+  expanded,
+  readOnly = false,
+  onToggle,
+  onChange,
+}: {
+  details: OfferCompensationDetails;
+  expanded: boolean;
+  readOnly?: boolean;
+  onToggle: () => void;
+  onChange?: (details: OfferCompensationDetails) => void;
+}) {
+  const income = calculateOfferIncome(details);
+  const update = <K extends keyof OfferCompensationDetails>(key: K, value: OfferCompensationDetails[K]) => onChange?.({ ...details, [key]: value });
+  const numberInput = (key: keyof OfferCompensationDetails, label: string, suffix = "元", step = 100) => (
+    <label><span>{label}</span><div className="offer-number-input"><input type="number" min="0" step={step} value={Number(details[key]) || 0} onChange={(event) => update(key, Number(event.target.value) as never)} /><em>{suffix}</em></div></label>
+  );
+  const summaryReady = details.monthlyBaseSalary > 0;
+  return (
+    <section className={`offer-income-card ${expanded ? "expanded" : ""}`}>
+      <div className="offer-income-card-head">
+        <div><span>收入测算</span><strong>{summaryReady ? `${formatCny(income.annualTakeHome)} 首年到账` : "补充薪酬结构，自动计算到手收入"}</strong><small>{summaryReady ? `税前现金 ${formatCny(income.annualGrossCash)} · 公积金账户 ${formatCny(income.annualHousingFundAccount)}` : "支持五险一金、累计预扣个税、奖金与签字费"}</small></div>
+        <button type="button" onClick={onToggle}>{expanded ? "收起收入明细" : "查看收入明细"} <span aria-hidden="true">{expanded ? "↑" : "→"}</span></button>
+      </div>
+      {expanded && <div className="offer-income-expanded">
+        {!readOnly && <>
+          <div className="offer-income-section-head"><span>01</span><div><strong>薪酬结构</strong><small>金额均按人民币填写，股票价值计入总包但不计入现金到账。</small></div></div>
+          <div className="offer-income-fields">
+            <label><span>Base 地</span><input value={details.city} list="offer-base-city-options" onChange={(event) => onChange?.({ ...details, city: event.target.value, ...offerCityRates(event.target.value) })} placeholder="例如：北京" /><datalist id="offer-base-city-options">{BASE_OPTIONS.filter((item) => !["全国", "远程"].includes(item)).map((item) => <option key={item} value={item} />)}</datalist></label>
+            {numberInput("monthlyBaseSalary", "月基础工资")}
+            {numberInput("salaryMonths", "薪数", "薪", 0.5)}
+            {numberInput("probationMonths", "试用期月数", "月", 1)}
+            {numberInput("probationSalaryRate", "试用期薪资比例", "%", 1)}
+            {numberInput("monthlyAllowance", "每月固定津贴")}
+            {numberInput("performanceBonus", "年度绩效奖金")}
+            {numberInput("signingBonus", "签字费")}
+            {numberInput("otherAnnualCash", "其他年度现金")}
+            {numberInput("equityAnnualValue", "首年股票 / 期权估值")}
+            <label><span>年终奖计税方式</span><select value={details.bonusTaxMode} onChange={(event) => update("bonusTaxMode", event.target.value as "separate" | "combined")}><option value="separate">全年一次性奖金单独计税</option><option value="combined">并入综合所得</option></select></label>
+            {numberInput("bonusMonth", "奖金发放月份", "月", 1)}
+            {numberInput("signingBonusMonth", "签字费发放月份", "月", 1)}
+          </div>
+          <div className="offer-income-section-head"><span>02</span><div><strong>五险一金与扣除</strong><small>城市会带入常见个人比例；基数和比例均可按 Offer 或当地政策调整。</small></div></div>
+          <div className="offer-income-fields compact">
+            {numberInput("socialInsuranceBase", "社保缴费基数")}
+            {numberInput("housingFundBase", "公积金缴费基数")}
+            {numberInput("pensionRate", "养老个人比例", "%", 0.1)}
+            {numberInput("medicalRate", "医疗个人比例", "%", 0.1)}
+            {numberInput("unemploymentRate", "失业个人比例", "%", 0.1)}
+            {numberInput("housingFundRate", "公积金个人比例", "%", 0.5)}
+            {numberInput("employerHousingFundRate", "公积金公司比例", "%", 0.5)}
+            {numberInput("specialDeductionMonthly", "每月专项附加扣除")}
+            {numberInput("otherDeductionMonthly", "每月其他税后扣款")}
+          </div>
+        </>}
+        <div className="offer-income-section-head result"><span>{readOnly ? "01" : "03"}</span><div><strong>首年收入结果</strong><small>按完整自然年、每月 5000 元基本减除费用和累计预扣法估算。</small></div></div>
+        <div className="offer-income-results">
+          <article><span>首年总包</span><strong>{formatCny(income.annualTotalPackage)}</strong><small>现金 + 公司公积金 + 股权估值</small></article>
+          <article><span>年税前现金</span><strong>{formatCny(income.annualGrossCash)}</strong><small>月均 {formatCny(income.averageMonthlyGross)}</small></article>
+          <article className="highlight"><span>年实际到账</span><strong>{formatCny(income.annualTakeHome)}</strong><small>月均 {formatCny(income.averageMonthlyTakeHome)}</small></article>
+          <article><span>年度个税</span><strong>{formatCny(income.annualTax)}</strong><small>综合税负 {income.effectiveTaxRate}%</small></article>
+          <article><span>个人五险</span><strong>{formatCny(income.annualEmployeeSocialInsurance)}</strong><small>养老、医疗、失业</small></article>
+          <article><span>公积金账户</span><strong>{formatCny(income.annualHousingFundAccount)}</strong><small>个人 + 公司缴存</small></article>
+        </div>
+        <div className="offer-income-table-wrap">
+          <table className="offer-income-table"><thead><tr><th>月份</th><th>税前</th><th>奖金/签字费</th><th>五险</th><th>公积金个人</th><th>个税</th><th>实际到账</th><th>公积金入账</th></tr></thead><tbody>
+            {income.months.map((month) => <tr key={month.month}><td>{month.month} 月</td><td>{formatCny(month.grossCash)}</td><td>{month.bonus ? formatCny(month.bonus) : "—"}</td><td>{formatCny(month.employeeSocialInsurance)}</td><td>{formatCny(month.employeeHousingFund)}</td><td>{formatCny(month.individualIncomeTax)}</td><td><strong>{formatCny(month.takeHome)}</strong></td><td>{formatCny(month.housingFundAccount)}</td></tr>)}
+          </tbody></table>
+        </div>
+        <p className="offer-income-disclaimer">测算用于 Offer 对比。五险一金基数、医保固定扣款、奖金认定及专项扣除会因城市、公司和个人情况变化，请以工资单、当地规则和个税 App 为准。</p>
+      </div>}
+    </section>
+  );
+}
+
 export function RecruitmentTracker({
   user,
   accessToken,
@@ -1243,6 +1330,7 @@ export function RecruitmentTracker({
   const [mailboxDraft, setMailboxDraft] = useState("");
   const [offerApplication, setOfferApplication] = useState<Application | null>(null);
   const [offerForm, setOfferForm] = useState<OfferForm>(EMPTY_OFFER_FORM);
+  const [showOfferIncomeDetails, setShowOfferIncomeDetails] = useState(false);
   const [batchPositions, setBatchPositions] = useState<BatchPositionEntry[]>([{ position: "", base: "" }]);
   const [companyAutocompleteOpen, setCompanyAutocompleteOpen] = useState(false);
   const [positionAutocompleteIndex, setPositionAutocompleteIndex] = useState<number | "edit" | null>(null);
@@ -1532,6 +1620,7 @@ export function RecruitmentTracker({
         offerContact: item.offerContact ?? "",
         offerNote: item.offerNote ?? "",
         offerShared: Boolean(item.offerShared),
+        offerCompensationDetails: normalizeOfferCompensationDetails(item.offerCompensationDetails, item.base, item.salary || item.offerCompensation),
         isOwner: item.isOwner ?? true,
       }));
     const normalizedInterviews = normalizeInterviews(result.interviews);
@@ -1612,6 +1701,7 @@ export function RecruitmentTracker({
               offerContact: item.offerContact ?? "",
               offerNote: item.offerNote ?? "",
               offerShared: Boolean(item.offerShared),
+              offerCompensationDetails: normalizeOfferCompensationDetails(item.offerCompensationDetails, item.base, item.salary || item.offerCompensation),
               isOwner: item.isOwner ?? true,
             }));
             setApplications(cachedApplications);
@@ -2639,14 +2729,17 @@ export function RecruitmentTracker({
     if (item.status !== "Offer") return null;
     const owned = item.isOwner !== false;
     const available = hasOfferDetails(item);
+    const structuredCompensation = item.offerCompensationDetails?.monthlyBaseSalary
+      ? calculateOfferIncome(normalizeOfferCompensationDetails(item.offerCompensationDetails, item.base, item.salary || item.offerCompensation))
+      : null;
     if (!owned && (!item.offerShared || !available)) return null;
     return (
       <div className={`offer-detail-strip ${compact ? "compact" : ""}`}>
         <div>
           <span>{available ? "Offer 详情" : "恭喜拿到 Offer"}</span>
-          <strong>{item.offerDeadline ? `答复截止 ${formatDateTime(item.offerDeadline)}` : item.offerReceivedAt ? `获得于 ${formatDateTime(item.offerReceivedAt)}` : "补全薪酬、截止时间与入职安排"}</strong>
+          <strong>{structuredCompensation ? `首年到账 ${formatCny(structuredCompensation.annualTakeHome)} · 月均 ${formatCny(structuredCompensation.averageMonthlyTakeHome)}` : item.offerDeadline ? `答复截止 ${formatDateTime(item.offerDeadline)}` : item.offerReceivedAt ? `获得于 ${formatDateTime(item.offerReceivedAt)}` : "补全薪酬、截止时间与入职安排"}</strong>
         </div>
-        <button type="button" onClick={() => openOfferDetails(item)}>{owned ? (available ? "查看 / 编辑" : "填写 Offer 详情") : "查看 Offer 详情"} <span aria-hidden="true">→</span></button>
+        <button type="button" onClick={() => openOfferDetails(item)}>{structuredCompensation ? "查看收入明细" : owned ? (available ? "查看 / 编辑" : "填写 Offer 详情") : "查看 Offer 详情"} <span aria-hidden="true">→</span></button>
       </div>
     );
   };
@@ -2896,14 +2989,17 @@ export function RecruitmentTracker({
       benefits: application.offerBenefits ?? "",
       contact: application.offerContact ?? "",
       note: application.offerNote ?? "",
+      compensationDetails: normalizeOfferCompensationDetails(application.offerCompensationDetails, application.base, application.salary || application.offerCompensation),
       shared: application.offerShared === true,
       groupId: application.groupId ?? defaultGroupId,
     });
+    setShowOfferIncomeDetails(false);
   }, [defaultGroupId]);
 
   const closeOfferDetails = useCallback(() => {
     setOfferApplication(null);
     setOfferForm(EMPTY_OFFER_FORM);
+    setShowOfferIncomeDetails(false);
   }, []);
 
   const submitOfferDetails = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
@@ -2927,6 +3023,7 @@ export function RecruitmentTracker({
       offerBenefits: offerForm.benefits.trim(),
       offerContact: offerForm.contact.trim(),
       offerNote: offerForm.note.trim(),
+      offerCompensationDetails: normalizeOfferCompensationDetails(offerForm.compensationDetails, offerApplication.base, offerApplication.salary || offerApplication.offerCompensation),
       offerShared: offerForm.shared,
       visibility: offerForm.shared ? "full" : offerApplication.visibility,
       groupId: offerForm.shared ? groupId : offerApplication.groupId,
@@ -5344,6 +5441,7 @@ export function RecruitmentTracker({
                       <div><dt>联系人</dt><dd>{offerApplication.offerContact || "未填写"}</dd></div>
                     </dl>
                     {offerApplication.offerNote && <section><h3>补充说明</h3><p>{offerApplication.offerNote}</p></section>}
+                    {offerApplication.offerCompensationDetails?.monthlyBaseSalary ? <OfferIncomeCard details={normalizeOfferCompensationDetails(offerApplication.offerCompensationDetails, offerApplication.base, offerApplication.salary || offerApplication.offerCompensation)} expanded={showOfferIncomeDetails} readOnly onToggle={() => setShowOfferIncomeDetails((value) => !value)} /> : null}
                     <p className="offer-shared-by">由 {applicationOwnerName(offerApplication)} 通过共同小组共享 · 只读</p>
                     <div className="form-actions"><button type="button" className="primary-button" onClick={closeOfferDetails}>知道了</button></div>
                   </div>
@@ -5364,6 +5462,7 @@ export function RecruitmentTracker({
                       {offerForm.shared && groups.length > 0 && <label className="full-width"><span>共享到小组</span><DropdownSelect value={offerForm.groupId || defaultGroupId} onChange={(groupId) => setOfferForm((current) => ({ ...current, groupId }))} options={groups.map((group) => ({ value: group.id, label: `${group.name} · ${group.members.length} 人` }))} ariaLabel="选择 Offer 共享小组" /></label>}
                       {offerForm.shared && groups.length === 0 && <div className="share-setup-prompt full-width"><div><strong>还没有共享小组</strong><small>请先保存为自己可见，再到共享管理创建或加入小组。</small></div></div>}
                     </div>
+                    <OfferIncomeCard details={offerForm.compensationDetails} expanded={showOfferIncomeDetails} onToggle={() => setShowOfferIncomeDetails((value) => !value)} onChange={(compensationDetails) => setOfferForm((current) => ({ ...current, compensationDetails }))} />
                     <div className="offer-calendar-note"><span aria-hidden="true">◇</span><div><strong>自动同步日历</strong><small>获得时间、答复截止和预计入职日期会自动生成 Offer 日程，无需重复录入。</small></div></div>
                     <div className="form-actions"><button type="button" className="secondary-button" onClick={closeOfferDetails}>取消</button><button type="submit" className="primary-button" disabled={busy || (offerForm.shared && groups.length === 0)}>{busy ? "保存中…" : offerForm.shared ? "保存并共享" : "保存 Offer 详情"}</button></div>
                   </form>

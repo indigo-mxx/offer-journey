@@ -22,6 +22,40 @@ function visibility(value: unknown): Visibility {
   return value === "progress" || value === "full" ? value : "private";
 }
 
+function offerCompensationDetailsValue(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const input = value as Record<string, unknown>;
+  const number = (key: string, maximum = 100_000_000) => {
+    const parsed = Number(input[key]);
+    return Number.isFinite(parsed) ? Math.max(0, Math.min(maximum, parsed)) : 0;
+  };
+  return {
+    currency: "CNY",
+    city: textValue(input.city, 100),
+    monthlyBaseSalary: number("monthlyBaseSalary"),
+    salaryMonths: Math.max(12, Math.min(24, number("salaryMonths", 24) || 12)),
+    probationMonths: Math.max(0, Math.min(12, Math.round(number("probationMonths", 12)))),
+    probationSalaryRate: number("probationSalaryRate", 100),
+    performanceBonus: number("performanceBonus"),
+    signingBonus: number("signingBonus"),
+    monthlyAllowance: number("monthlyAllowance"),
+    otherAnnualCash: number("otherAnnualCash"),
+    equityAnnualValue: number("equityAnnualValue"),
+    bonusTaxMode: input.bonusTaxMode === "combined" ? "combined" : "separate",
+    bonusMonth: Math.max(1, Math.min(12, Math.round(number("bonusMonth", 12) || 12))),
+    signingBonusMonth: Math.max(1, Math.min(12, Math.round(number("signingBonusMonth", 12) || 1))),
+    socialInsuranceBase: number("socialInsuranceBase"),
+    housingFundBase: number("housingFundBase"),
+    pensionRate: number("pensionRate", 100),
+    medicalRate: number("medicalRate", 100),
+    unemploymentRate: number("unemploymentRate", 100),
+    housingFundRate: number("housingFundRate", 100),
+    employerHousingFundRate: number("employerHousingFundRate", 100),
+    specialDeductionMonthly: number("specialDeductionMonthly"),
+    otherDeductionMonthly: number("otherDeductionMonthly"),
+  };
+}
+
 function profileName(profile: { email?: string | null; display_name?: string | null; username?: string | null } | undefined, fallback = "好友") {
   return profile?.username?.trim()
     || profile?.display_name?.trim()
@@ -46,7 +80,7 @@ function aiInterviewDeadlineMessage() {
 }
 
 function offerDetailsMessage() {
-  return "Offer 详情功能尚未初始化，请先在 Supabase SQL Editor 执行 011_offer_details.sql";
+  return "Offer 收入明细功能尚未初始化，请按顺序在 Supabase SQL Editor 执行 011_offer_details.sql 和 012_offer_compensation_details.sql";
 }
 
 const FINAL_OUTCOME_PREFIX = "【最终结果】";
@@ -156,7 +190,8 @@ export async function GET(request: Request) {
     groupsForUser(supabase, user.id),
   ]);
   if (applicationError || interviewError) {
-    return json({ error: applicationError?.message ?? interviewError?.message ?? "云端同步失败" }, 400);
+    const missingOfferSchema = applicationError?.code === "42703" || applicationError?.code === "PGRST204";
+    return json({ error: missingOfferSchema ? offerDetailsMessage() : applicationError?.message ?? interviewError?.message ?? "云端同步失败" }, 400);
   }
 
   if (experienceError && experienceError.code !== "42P01") return json({ error: experienceError.code === "42703" ? "请先执行 006_share_interview_experiences.sql" : experienceError.message }, 400);
@@ -201,6 +236,7 @@ export async function GET(request: Request) {
       offerContact: canSeeOfferDetails ? row.offer_contact ?? "" : "",
       offerNote: canSeeOfferDetails ? row.offer_note ?? "" : "",
       offerShared: canSeeOfferDetails && row.offer_shared === true,
+      offerCompensationDetails: canSeeOfferDetails ? row.offer_compensation_details ?? {} : {},
       updatedAt: row.updated_at,
     };
   });
@@ -324,6 +360,7 @@ export async function POST(request: Request) {
           offer_contact: textValue(value.offerContact, 300),
           offer_note: textValue(value.offerNote, 4000),
           offer_shared: value.offerShared === true && level === "full" && Boolean(groupId),
+          offer_compensation_details: offerCompensationDetailsValue(value.offerCompensationDetails),
         };
       });
       if (payload.some((item) => !item.company || !item.position)) return json({ error: "公司和岗位不能为空" }, 400);

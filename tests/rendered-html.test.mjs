@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("includes the cloud workspace, access control, and sharing surfaces", async () => {
-  const [page, tracker, calendar, route, schema, hosting, styles, workspaceStyles, experienceSharingMigration, aiInterviewDeadlineMigration, offerDetailsMigration, search] = await Promise.all([
+  const [page, tracker, calendar, route, schema, hosting, styles, workspaceStyles, experienceSharingMigration, aiInterviewDeadlineMigration, offerDetailsMigration, offerCompensationMigration, offerCalculator, search] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/recruitment-tracker.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/recruitment-calendar.tsx", import.meta.url), "utf8"),
@@ -15,6 +15,8 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
     readFile(new URL("../supabase/migrations/006_share_interview_experiences.sql", import.meta.url), "utf8"),
     readFile(new URL("../supabase/migrations/010_ai_interview_deadlines.sql", import.meta.url), "utf8"),
     readFile(new URL("../supabase/migrations/011_offer_details.sql", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/012_offer_compensation_details.sql", import.meta.url), "utf8"),
+    readFile(new URL("../lib/offer-calculator.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/search.ts", import.meta.url), "utf8"),
   ]);
 
@@ -132,6 +134,12 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(route, /canSeeOfferDetails/);
   assert.match(offerDetailsMigration, /add column if not exists offer_received_at/);
   assert.match(offerDetailsMigration, /add column if not exists offer_shared boolean/);
+  assert.match(offerCompensationMigration, /add column if not exists offer_compensation_details jsonb/);
+  assert.match(tracker, /查看收入明细/);
+  assert.match(tracker, /年实际到账/);
+  assert.match(route, /offer_compensation_details/);
+  assert.match(offerCalculator, /function annualBonusTax/);
+  assert.match(offerCalculator, /annualHousingFundAccount/);
   assert.match(styles, /interview-stage-board/);
   assert.match(styles, /interview-date-chip/);
   assert.match(styles, /stat-card\.is-selected/);
