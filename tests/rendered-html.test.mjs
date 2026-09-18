@@ -137,6 +137,9 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(offerCompensationMigration, /add column if not exists offer_compensation_details jsonb/);
   assert.match(tracker, /查看收入明细/);
   assert.match(tracker, /年实际到账/);
+  assert.match(tracker, /Offer 收入计算器/);
+  assert.match(tracker, /changeWorkspaceView\("offerCalculator"\)/);
+  assert.match(tracker, /临时计算参数已清空/);
   assert.match(route, /offer_compensation_details/);
   assert.match(offerCalculator, /function annualBonusTax/);
   assert.match(offerCalculator, /annualHousingFundAccount/);

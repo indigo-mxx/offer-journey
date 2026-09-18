@@ -161,7 +161,7 @@ interface RecoverySnapshot extends WorkspaceBackup {
 }
 
 type ListMode = "companyList" | "companyCards" | "position" | "kanban";
-type WorkspaceView = "calendar" | "mine" | "friends" | "sharing" | "dashboard" | "experiences";
+type WorkspaceView = "calendar" | "mine" | "friends" | "sharing" | "dashboard" | "experiences" | "offerCalculator";
 type NoticeTone = "success" | "error" | "warning" | "info";
 
 const LIST_MODE_STORAGE_KEY = "qiuzhao-list-mode";
@@ -1281,6 +1281,40 @@ function OfferIncomeCard({
   );
 }
 
+function StandaloneOfferCalculator({
+  details,
+  expanded,
+  onChange,
+  onToggle,
+  onReset,
+}: {
+  details: OfferCompensationDetails;
+  expanded: boolean;
+  onChange: (details: OfferCompensationDetails) => void;
+  onToggle: () => void;
+  onReset: () => void;
+}) {
+  return (
+    <section className="standalone-offer-calculator" aria-label="Offer 收入计算器">
+      <header className="standalone-calculator-head">
+        <div>
+          <span>OFFER CALCULATOR</span>
+          <h2>Offer 收入计算器</h2>
+          <p>不需要先创建投递，输入薪酬结构即可临时测算首年收入与每月到账。</p>
+        </div>
+        <button type="button" className="secondary-button" onClick={onReset}>清空重算</button>
+      </header>
+      <div className="standalone-calculator-guide">
+        <span><b>1</b> 填写月薪、薪数与奖金</span>
+        <span><b>2</b> 核对 Base 地和缴费比例</span>
+        <span><b>3</b> 查看全年及逐月明细</span>
+      </div>
+      <OfferIncomeCard details={details} expanded={expanded} onToggle={onToggle} onChange={onChange} />
+      <p className="standalone-calculator-note">本页用于临时试算，不会写入岗位或 Offer 记录。需要长期保存时，请在“我的投递”的 Offer 详情中填写并保存。</p>
+    </section>
+  );
+}
+
 export function RecruitmentTracker({
   user,
   accessToken,
@@ -1331,6 +1365,8 @@ export function RecruitmentTracker({
   const [offerApplication, setOfferApplication] = useState<Application | null>(null);
   const [offerForm, setOfferForm] = useState<OfferForm>(EMPTY_OFFER_FORM);
   const [showOfferIncomeDetails, setShowOfferIncomeDetails] = useState(false);
+  const [standaloneOfferDetails, setStandaloneOfferDetails] = useState<OfferCompensationDetails>(() => emptyOfferCompensationDetails());
+  const [standaloneOfferExpanded, setStandaloneOfferExpanded] = useState(true);
   const [batchPositions, setBatchPositions] = useState<BatchPositionEntry[]>([{ position: "", base: "" }]);
   const [companyAutocompleteOpen, setCompanyAutocompleteOpen] = useState(false);
   const [positionAutocompleteIndex, setPositionAutocompleteIndex] = useState<number | "edit" | null>(null);
@@ -1791,7 +1827,7 @@ export function RecruitmentTracker({
   useEffect(() => {
     try {
       const savedView = localStorage.getItem(WORKSPACE_VIEW_STORAGE_KEY);
-      if (["calendar", "mine", "friends", "sharing", "dashboard", "experiences"].includes(savedView ?? "")) setView(savedView as WorkspaceView);
+      if (["calendar", "mine", "friends", "sharing", "dashboard", "experiences", "offerCalculator"].includes(savedView ?? "")) setView(savedView as WorkspaceView);
     } catch {
       // Keep calendar as the first-visit default.
     }
@@ -4437,6 +4473,12 @@ export function RecruitmentTracker({
           >
             <i className="view-tab-icon" aria-hidden="true">↗</i> 共享管理
           </button>
+          <button
+            className={view === "offerCalculator" ? "active" : ""}
+            onClick={() => { changeWorkspaceView("offerCalculator"); setSelectedApplicationIds([]); }}
+          >
+            <i className="view-tab-icon" aria-hidden="true">¥</i> Offer 计算器
+          </button>
         </nav>
 
         {view === "calendar" ? (
@@ -4710,6 +4752,18 @@ export function RecruitmentTracker({
             range={dashboardRange}
             onRangeChange={setDashboardRange}
             onOpenApplications={() => setView("mine")}
+          />
+        ) : view === "offerCalculator" ? (
+          <StandaloneOfferCalculator
+            details={standaloneOfferDetails}
+            expanded={standaloneOfferExpanded}
+            onChange={setStandaloneOfferDetails}
+            onToggle={() => setStandaloneOfferExpanded((value) => !value)}
+            onReset={() => {
+              setStandaloneOfferDetails(emptyOfferCompensationDetails());
+              setStandaloneOfferExpanded(true);
+              setNotice("临时计算参数已清空");
+            }}
           />
         ) : view === "sharing" && user ? (
           <SharingPanel

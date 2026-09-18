@@ -2098,6 +2098,20 @@ body::before {
 .offer-income-table tbody tr:nth-child(even) { background: #fbfbf6; }
 .offer-income-table td strong { color: #27664d; }
 .offer-income-disclaimer { margin: 11px 1px 0; color: #8a8d84; font-size: 9px; line-height: 1.6; }
+.standalone-offer-calculator { min-height: 620px; padding: 28px; background: radial-gradient(circle at 88% 7%, rgba(178, 126, 39, .11), transparent 28%), linear-gradient(145deg, #f8f7f1, #f1f3ec); }
+.standalone-calculator-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 18px; padding: 7px 4px 0; }
+.standalone-calculator-head > div { display: grid; gap: 5px; }
+.standalone-calculator-head > div > span { color: #a17020; font-size: 9px; font-weight: 900; letter-spacing: .18em; }
+.standalone-calculator-head h2 { margin: 0; color: #244a3c; font-family: var(--font-serif); font-size: 28px; }
+.standalone-calculator-head p { margin: 0; color: #747c75; font-size: 12px; line-height: 1.6; }
+.standalone-calculator-head button { flex: none; }
+.standalone-calculator-guide { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+.standalone-calculator-guide span { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid rgba(43, 89, 70, .1); border-radius: 11px; background: rgba(255, 255, 252, .68); color: #667269; font-size: 10px; font-weight: 650; }
+.standalone-calculator-guide b { display: grid; width: 20px; height: 20px; flex: none; place-items: center; border-radius: 50%; background: #315e4c; color: #fff; font-size: 9px; }
+.standalone-offer-calculator > .offer-income-card { margin: 0; border-radius: 19px; box-shadow: 0 22px 55px rgba(50, 62, 48, .1); }
+.standalone-offer-calculator .offer-income-card-head { padding: 19px 21px; }
+.standalone-offer-calculator .offer-income-expanded { padding-inline: 21px; }
+.standalone-calculator-note { margin: 12px 4px 0; color: #848b84; font-size: 10px; line-height: 1.6; }
 .mailbox-settings-modal { width: min(590px, calc(100vw - 30px)); }
 .mailbox-modal-kicker { display: inline-flex; margin-bottom: 6px; padding: 4px 8px; border-radius: 999px; background: #e7f2eb; color: #24664f; font-size: 9px; font-weight: 800; letter-spacing: .1em; }
 .mailbox-settings-body { display: grid; gap: 19px; padding: 22px 24px 8px; }
@@ -2137,6 +2151,10 @@ body::before {
   .offer-income-card-head { align-items: stretch; flex-direction: column; }
   .offer-income-card-head button { width: 100%; }
   .offer-income-fields, .offer-income-results { grid-template-columns: 1fr 1fr; }
+  .standalone-offer-calculator { padding: 18px 13px; }
+  .standalone-calculator-head { align-items: stretch; flex-direction: column; gap: 12px; }
+  .standalone-calculator-head button { width: 100%; }
+  .standalone-calculator-guide { grid-template-columns: 1fr; }
   .mailbox-open-button { padding: 0 8px; }
   .mailbox-open-button span { display: none; }
   .mailbox-settings-button { width: 24px; }
