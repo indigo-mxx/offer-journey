@@ -2358,6 +2358,15 @@ button.interview-date-chip:hover { border-color: #769abb; box-shadow: 0 7px 17px
 .calendar-event-form-grid input:not([type="checkbox"]) { min-height: 43px; padding: 0 12px; }
 .calendar-event-form-grid textarea { min-height: 82px; padding: 10px 12px; resize: vertical; }
 .calendar-event-title-field, .calendar-event-note { grid-column: 1 / -1; }
+.calendar-experience-action { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 16px; border: 1px solid rgba(37, 119, 89, .2); border-radius: 12px; background: linear-gradient(120deg, #f1f8f3, #eaf5ef); }
+.calendar-experience-action > div { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.calendar-experience-action > div > span { display: grid; width: 34px; height: 34px; flex: none; place-items: center; border-radius: 10px; background: #d8eee1; color: #1f7458; font-size: 17px; }
+.calendar-experience-action p { display: grid; gap: 3px; margin: 0; }
+.calendar-experience-action strong { color: #285c4b; font-size: 12px; }
+.calendar-experience-action small { color: #75877d; font-size: 10px; font-weight: 500; line-height: 1.45; }
+.calendar-experience-action button { flex: none; min-height: 38px; padding: 0 13px; border: 1px solid #237257; border-radius: 9px; background: #27795d; color: #fff; font-size: 11px; font-weight: 760; cursor: pointer; box-shadow: 0 8px 18px rgba(33, 111, 82, .16); }
+.calendar-experience-action button:hover { background: #1d674e; transform: translateY(-1px); }
+.calendar-experience-action button:disabled { cursor: wait; opacity: .6; transform: none; }
 .calendar-all-day-toggle, .calendar-progress-toggle { display: flex; align-items: center; align-self: end; min-height: 43px; gap: 8px; padding: 0 12px; border: 1px solid #dbe5de; border-radius: 9px; background: #f5f9f6; }
 .calendar-all-day-toggle input, .calendar-progress-toggle input { width: 16px; height: 16px; flex: none; accent-color: var(--brand); }
 .calendar-all-day-toggle > span { margin: 0 !important; }
@@ -2428,6 +2437,8 @@ button.interview-date-chip:hover { border-color: #769abb; box-shadow: 0 7px 17px
   .calendar-event-form-grid { grid-template-columns: 1fr; }
   .calendar-record-phase { grid-column: auto; }
   .calendar-event-title-field, .calendar-event-note, .calendar-progress-toggle { grid-column: auto; }
+  .calendar-experience-action { grid-column: auto; align-items: stretch; flex-direction: column; }
+  .calendar-experience-action button { width: 100%; }
   .friend-calendar-summary dl { grid-template-columns: 1fr; }
   .calendar-event-actions { align-items: stretch; flex-direction: column-reverse; }
   .calendar-event-actions > div { width: 100%; }

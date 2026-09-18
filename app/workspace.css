@@ -92,7 +92,7 @@ button:disabled { cursor: not-allowed; }
 .calendar-event-form-grid label > span, .calendar-progress-toggle strong, .calendar-record-phase strong, .calendar-written-test-timing button strong { font-size: 14px; }
 .calendar-record-phase small, .calendar-written-test-timing button small, .calendar-progress-toggle small { font-size: 12px; color: var(--muted); line-height: 1.5; }
 .calendar-event-form-grid input:not([type="checkbox"]), .calendar-event-form-grid textarea { font-size: 16px; }
-.calendar-record-phase, .calendar-written-test-timing button, .calendar-all-day-toggle, .calendar-progress-toggle { border-radius: 7px; }
+.calendar-record-phase, .calendar-written-test-timing button, .calendar-all-day-toggle, .calendar-progress-toggle, .calendar-experience-action { border-radius: 7px; }
 .calendar-todo-head h2 { font-size: 20px; }
 .calendar-todo-head p:not(.section-kicker) { font-size: 14px; }
 .calendar-todo-head > span { background: transparent; border: 0; font-size: 13px; }

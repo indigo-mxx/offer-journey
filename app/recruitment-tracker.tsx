@@ -1265,6 +1265,7 @@ export function RecruitmentTracker({
   const importRef = useRef<HTMLInputElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
   const inviteHandledRef = useRef(false);
+  const calendarExperienceAfterSaveRef = useRef(false);
   const busy = pendingAction !== null;
   const noticeTone = notice ? noticeToneFor(notice) : "info";
   const workspaceCacheKey = user ? `workspace-cache:${user.email}` : null;
@@ -1902,8 +1903,6 @@ export function RecruitmentTracker({
         ),
       )
     : false;
-  const editingCalendarInterviewStoredCompleted = editingCalendarInterview ? !isScheduledInterview(editingCalendarInterview) : false;
-
   const filteredExperiences = useMemo(() => {
     const keyword = experienceQuery.trim();
     return [...experiences]
@@ -3050,6 +3049,8 @@ export function RecruitmentTracker({
 
   const submitCalendarEvent = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const openExperienceAfterSave = calendarExperienceAfterSaveRef.current;
+    calendarExperienceAfterSaveRef.current = false;
     const application = ownApplications.find((item) => item.id === calendarEventForm.applicationId);
     if (!application) {
       setNotice("请选择需要关联的公司和岗位");
@@ -3083,6 +3084,7 @@ export function RecruitmentTracker({
     }
     const now = new Date().toISOString();
     let scheduleSaved = false;
+    let savedInterview: Interview | null = null;
     if (calendarEventForm.kind === "interview") {
       const current = editingCalendarItem?.source === "interview" ? interviews.find((item) => item.id === editingCalendarItem.id) : null;
       const convertedEvent = editingCalendarItem?.source === "event" ? events.find((item) => item.id === editingCalendarItem.id) : null;
@@ -3117,6 +3119,7 @@ export function RecruitmentTracker({
       } else scheduleSaved = true;
       if (convertedEvent) setEvents((items) => items.filter((entry) => entry.id !== convertedEvent.id));
       setInterviews((items) => current ? items.map((entry) => entry.id === item.id ? item : entry) : [...items, item]);
+      savedInterview = item;
     } else {
       if (!RECRUITMENT_EVENT_TYPES.includes(calendarEventForm.kind as RecruitmentEventType)) {
         setNotice("请选择有效的日程类型");
@@ -3179,6 +3182,9 @@ export function RecruitmentTracker({
     closeCalendarEvent();
     const recordLabel = calendarEventForm.phase === "scheduled" ? "日程已约定" : "完成记录已保存";
     setNotice(progressSynced ? `${calendarKindLabel(calendarEventForm.kind)}${recordLabel}` : `${calendarKindLabel(calendarEventForm.kind)}${recordLabel}，但岗位进度同步失败，请稍后重试`);
+    if (openExperienceAfterSave && savedInterview && calendarEventForm.phase === "completed") {
+      openExperienceByInterview(savedInterview);
+    }
   }, [calendarEventForm, calendarItems, closeCalendarEvent, editingCalendarItem, events, interviews, ownApplications, runCloudMutation, updateApplication, user]);
 
   const removeCalendarEvent = useCallback(async () => {
@@ -3333,8 +3339,8 @@ export function RecruitmentTracker({
     setIsExperienceOpen(true);
   }, [ownApplications]);
 
-  const openExperienceEdit = useCallback((item: InterviewExperience) => {
-    const linkedInterview = interviews.find((interview) =>
+  const openExperienceEdit = useCallback((item: InterviewExperience, linkedInterviewOverride?: Interview) => {
+    const linkedInterview = linkedInterviewOverride ?? interviews.find((interview) =>
       (item.interviewId && interview.id === item.interviewId) ||
       (!item.interviewId && item.applicationId && interview.applicationId === item.applicationId && interviewStage(interview.round) === interviewStage(item.round)),
     );
@@ -3954,7 +3960,7 @@ export function RecruitmentTracker({
       (!experience.interviewId && experience.applicationId === interview.applicationId && interviewStage(experience.round) === interviewStage(interview.round)),
     );
     if (linked) {
-      openExperienceEdit(linked);
+      openExperienceEdit(linked, interview);
     } else {
       openExperienceFromInterview(interview);
     }
@@ -6064,11 +6070,25 @@ export function RecruitmentTracker({
                       <span>考试 / 会议链接</span>
                       <input type="url" value={calendarEventForm.eventUrl} onChange={(event) => setCalendarEventForm((current) => ({ ...current, eventUrl: event.target.value }))} placeholder="https://…" maxLength={1000} />
                     </label>
-                    {(calendarEventForm.phase === "completed" || calendarEventForm.kind !== "interview") && (
+                    {calendarEventForm.kind !== "interview" && (
                       <label className="calendar-event-note">
                         <span>{calendarEventForm.phase === "completed" ? "过程记录" : "准备事项"}</span>
                         <textarea value={calendarEventForm.note} onChange={(event) => setCalendarEventForm((current) => ({ ...current, note: event.target.value }))} rows={3} maxLength={3000} placeholder={calendarEventForm.phase === "completed" ? "补充过程、结果或后续行动" : "考试说明或需要携带的材料"} />
                       </label>
+                    )}
+                    {calendarEventForm.phase === "completed" && calendarEventForm.kind === "interview" && (
+                      <div className="calendar-experience-action">
+                        <div>
+                          <span aria-hidden="true">✎</span>
+                          <p><strong>面试过程与复盘</strong><small>题目、回答、过程记录和后续行动统一写入面经库。</small></p>
+                        </div>
+                        <button type="button" disabled={busy} onClick={(event) => {
+                          calendarExperienceAfterSaveRef.current = true;
+                          event.currentTarget.form?.requestSubmit();
+                        }}>
+                          {editingCalendarInterviewHasExperience ? "保存并编辑面经" : "保存并补充面经"} <span aria-hidden="true">→</span>
+                        </button>
+                      </div>
                     )}
                     {(calendarEventForm.kind === "interview" || calendarEventForm.kind === "written_test") && (
                       <label className="calendar-progress-toggle">
@@ -6081,11 +6101,6 @@ export function RecruitmentTracker({
                     <div>
                       {editingCalendarItem && <button type="button" className="danger-button" onClick={() => void removeCalendarEvent()} disabled={busy}>删除日程</button>}
                       {externalHttpUrl(calendarEventForm.eventUrl) && <a className="secondary-button button-link" href={externalHttpUrl(calendarEventForm.eventUrl)} target="_blank" rel="noopener noreferrer">打开链接 ↗</a>}
-                      {editingCalendarInterview && editingCalendarInterviewStoredCompleted && calendarEventForm.phase === "completed" && (
-                        <button type="button" className="secondary-button" disabled={busy} onClick={() => { closeCalendarEvent(); openExperienceByInterview(editingCalendarInterview); }}>
-                          {editingCalendarInterviewHasExperience ? "编辑面经" : "去补充面经"}
-                        </button>
-                      )}
                     </div>
                     <div><button type="button" className="secondary-button" onClick={closeCalendarEvent} disabled={busy}>取消</button><button type="submit" className="primary-button" disabled={busy || calendarApplicationOptions.length === 0}>{busy ? "保存中…" : calendarEventForm.phase === "scheduled" ? "保存约定日程" : "保存完成记录"}</button></div>
                   </footer>
