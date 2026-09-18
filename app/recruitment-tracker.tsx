@@ -370,6 +370,12 @@ const CALENDAR_EVENT_MODES = ["线上", "线下", "电话", "邮件", "其他"];
 const TODO_DISMISSALS_STORAGE_PREFIX = "dismissed-calendar-todos:";
 const PARTICLE_EFFECT_STORAGE_KEY = "offer-journey:particle-effects";
 const PARTICLE_EFFECT_CHANGE_EVENT = "offer-journey:particle-effects-change";
+const MAILBOX_STORAGE_KEY = "offer-journey:default-mailbox";
+const MAILBOX_CHANGE_EVENT = "offer-journey:default-mailbox-change";
+const MAILBOX_PRESETS = [
+  { name: "QQ 邮箱", url: "https://mail.qq.com/", hint: "mail.qq.com" },
+  { name: "163 邮箱", url: "https://mail.163.com/", hint: "mail.163.com" },
+];
 
 function subscribeToParticlePreference(listener: () => void) {
   const notify = () => listener();
@@ -387,6 +393,36 @@ function particlePreferenceSnapshot() {
 }
 
 const particlePreferenceServerSnapshot = () => true;
+
+function subscribeToMailboxPreference(listener: () => void) {
+  const notify = () => listener();
+  window.addEventListener("storage", notify);
+  window.addEventListener(MAILBOX_CHANGE_EVENT, notify);
+  return () => {
+    window.removeEventListener("storage", notify);
+    window.removeEventListener(MAILBOX_CHANGE_EVENT, notify);
+  };
+}
+
+function mailboxPreferenceSnapshot() {
+  try { return window.localStorage.getItem(MAILBOX_STORAGE_KEY) ?? ""; }
+  catch { return ""; }
+}
+
+const mailboxPreferenceServerSnapshot = () => "";
+
+function normalizedMailboxUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  const preset = MAILBOX_PRESETS.find((item) => item.name === trimmed || item.hint === trimmed);
+  const candidate = preset?.url ?? (/^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`);
+  try {
+    const url = new URL(candidate);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.href : "";
+  } catch {
+    return "";
+  }
+}
 
 function emptyCalendarEventForm(date = new Date()): CalendarEventForm {
   return {
@@ -1170,6 +1206,11 @@ export function RecruitmentTracker({
     particlePreferenceSnapshot,
     particlePreferenceServerSnapshot,
   );
+  const mailboxUrl = useSyncExternalStore(
+    subscribeToMailboxPreference,
+    mailboxPreferenceSnapshot,
+    mailboxPreferenceServerSnapshot,
+  );
   const [applications, setApplications] = useState<Application[]>([]);
   const [groups, setGroups] = useState<GroupInfo[]>([]);
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
@@ -1198,6 +1239,8 @@ export function RecruitmentTracker({
   const [editingCompanyName, setEditingCompanyName] = useState<string | null>(null);
   const [companyForm, setCompanyForm] = useState<CompanyFormState>(EMPTY_COMPANY_FORM);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [isMailboxSettingsOpen, setIsMailboxSettingsOpen] = useState(false);
+  const [mailboxDraft, setMailboxDraft] = useState("");
   const [offerApplication, setOfferApplication] = useState<Application | null>(null);
   const [offerForm, setOfferForm] = useState<OfferForm>(EMPTY_OFFER_FORM);
   const [batchPositions, setBatchPositions] = useState<BatchPositionEntry[]>([{ position: "", base: "" }]);
@@ -3974,6 +4017,47 @@ export function RecruitmentTracker({
     setSelectedCompany(null);
   }
 
+  function openMailboxSettings() {
+    setMailboxDraft(mailboxUrl || MAILBOX_PRESETS[0].url);
+    setIsMailboxSettingsOpen(true);
+  }
+
+  function launchMailbox(url: string) {
+    const target = normalizedMailboxUrl(url);
+    if (!target) {
+      setNotice("邮箱网址无效，请重新设置");
+      openMailboxSettings();
+      return;
+    }
+    const opened = window.open(target, "_blank", "noopener,noreferrer");
+    if (!opened) setNotice("浏览器拦截了新窗口，请允许本站打开邮箱");
+  }
+
+  function openDefaultMailbox() {
+    if (!mailboxUrl) {
+      openMailboxSettings();
+      return;
+    }
+    launchMailbox(mailboxUrl);
+  }
+
+  function saveMailboxPreference(openAfterSave: boolean) {
+    const target = normalizedMailboxUrl(mailboxDraft);
+    if (!target) {
+      setNotice("请输入有效的邮箱登录网址，例如 https://mail.qq.com/");
+      return;
+    }
+    try {
+      window.localStorage.setItem(MAILBOX_STORAGE_KEY, target);
+      window.dispatchEvent(new Event(MAILBOX_CHANGE_EVENT));
+      setIsMailboxSettingsOpen(false);
+      setNotice("默认邮箱已保存，下次点击会直接打开");
+      if (openAfterSave) launchMailbox(target);
+    } catch {
+      setNotice("浏览器未允许保存邮箱偏好");
+    }
+  }
+
   function openCompanyEdit(company: string) {
     const companyItems = ownApplications.filter((item) => companyKey(item.company) === companyKey(company));
     const companyTags = [...new Set(companyItems.flatMap((item) => item.industryTags ?? []))];
@@ -4113,6 +4197,12 @@ export function RecruitmentTracker({
           </span>
         </a>
         <div className="top-actions">
+          <div className="mailbox-quick-action">
+            <button type="button" className="mailbox-open-button" onClick={openDefaultMailbox} title={mailboxUrl ? "打开默认邮箱" : "设置并打开邮箱"}>
+              <span aria-hidden="true">✉</span><b>打开邮箱</b>
+            </button>
+            <button type="button" className="mailbox-settings-button" onClick={openMailboxSettings} aria-label="设置默认邮箱" title="设置默认邮箱">⌄</button>
+          </div>
           <button
             type="button"
             className={`effects-toggle${particleEffectsEnabled ? " active" : ""}`}
@@ -4153,6 +4243,42 @@ export function RecruitmentTracker({
           )}
         </div>
       </header>
+
+      {isMailboxSettingsOpen && (
+        <ModalPortal>
+          <div className="modal-overlay modal-overlay-elevated" onClick={() => setIsMailboxSettingsOpen(false)}>
+            <div className="modal mailbox-settings-modal" role="dialog" aria-modal="true" aria-labelledby="mailbox-settings-title" onClick={(event) => event.stopPropagation()}>
+              <header className="modal-head">
+                <div>
+                  <span className="mailbox-modal-kicker">快捷入口</span>
+                  <h2 id="mailbox-settings-title">设置默认邮箱</h2>
+                  <p className="modal-subtitle">保存后，页面顶部的“打开邮箱”会直接进入这个邮箱。</p>
+                </div>
+                <button type="button" className="close-button" onClick={() => setIsMailboxSettingsOpen(false)} aria-label="关闭邮箱设置">×</button>
+              </header>
+              <div className="mailbox-settings-body">
+                <div className="mailbox-presets" role="group" aria-label="常用邮箱">
+                  {MAILBOX_PRESETS.map((preset) => (
+                    <button type="button" key={preset.url} className={normalizedMailboxUrl(mailboxDraft) === preset.url ? "active" : ""} onClick={() => setMailboxDraft(preset.url)}>
+                      <span aria-hidden="true">✉</span><strong>{preset.name}</strong><small>{preset.hint}</small>
+                    </button>
+                  ))}
+                </div>
+                <label className="mailbox-custom-field">
+                  <span>自定义邮箱登录网址</span>
+                  <input type="url" value={mailboxDraft} onChange={(event) => setMailboxDraft(event.target.value)} placeholder="https://mail.example.com/" autoFocus />
+                  <small>可以选择上面的常用邮箱，也可以粘贴公司邮箱或其他 Web 邮箱网址。</small>
+                </label>
+                {mailboxUrl && <p className="mailbox-current"><span>当前默认</span><strong>{mailboxUrl}</strong></p>}
+              </div>
+              <div className="form-actions mailbox-settings-actions">
+                <button type="button" className="secondary-button" onClick={() => saveMailboxPreference(false)}>仅保存</button>
+                <button type="button" className="primary-button" onClick={() => saveMailboxPreference(true)}>保存并打开</button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
 
       <section className="workspace-intro" aria-label="求职工作台">
         <div><h1>我的求职记录</h1><p>{user ? "已连接云端同步" : "保存在当前浏览器"}</p></div>

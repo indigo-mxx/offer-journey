@@ -29,6 +29,12 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(tracker, /processing-overlay/);
   assert.match(tracker, /showProcessingHint/);
   assert.match(tracker, /processing-card/);
+  assert.match(tracker, /打开邮箱/);
+  assert.match(tracker, /MAILBOX_STORAGE_KEY/);
+  assert.match(tracker, /https:\/\/mail\.qq\.com\//);
+  assert.match(tracker, /https:\/\/mail\.163\.com\//);
+  assert.match(tracker, /保存并打开/);
+  assert.match(styles, /\.mailbox-quick-action/);
   assert.match(tracker, /toggleSort/);
   assert.match(tracker, /company-card-grid/);
   assert.match(tracker, /company-overview-card/);

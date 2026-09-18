@@ -864,6 +864,14 @@ body {
   transform: rotate(18deg) scale(1.08);
 }
 .effects-toggle:active { transform: translateY(1px) scale(.97); }
+.mailbox-quick-action {
+  border-color: rgba(224, 190, 126, .28);
+  background: linear-gradient(135deg, rgba(210, 142, 79, .12), rgba(37, 95, 73, .13));
+  box-shadow: inset 0 1px rgba(255, 255, 255, .035), 0 0 18px rgba(215, 155, 75, .06);
+}
+.mailbox-quick-action button { color: #f0dfc1; }
+.mailbox-quick-action button:hover { background: rgba(222, 169, 86, .12); color: #fff4df; }
+.mailbox-settings-button { border-left-color: rgba(224, 190, 126, .22) !important; }
 .brand { color: #f2eadb; }
 .brand strong { color: #f2eadb; }
 .brand small { color: #95a79e; }
