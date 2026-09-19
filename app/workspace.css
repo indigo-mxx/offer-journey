@@ -1424,3 +1424,62 @@ body {
   .experience-batch-share-controls .primary-button,
   .experience-batch-share-controls .secondary-button { flex: 1; }
 }
+
+/* Keep navigation and current filters visible without crowding the records. */
+.topbar { position: relative; }
+.workspace { overflow: clip; }
+.workspace > .view-tabs {
+  position: sticky; top: 0; z-index: 12;
+  background: #f2eee4;
+  box-shadow: 0 4px 12px rgba(36, 54, 43, .06);
+  scroll-padding-inline: 18px;
+}
+.view-tabs button { scroll-margin-inline: 18px; }
+.toolbar-row { gap: 14px; }
+.toolbar-search { flex: 1; min-width: 0; }
+.toolbar-search .search-icon { flex: none; color: #718174; }
+.search-input { min-width: 0; }
+.backup-tools { position: relative; }
+.backup-tools summary {
+  display: flex; align-items: center; gap: 16px; min-height: 40px;
+  padding: 0 14px; border: 1px solid #d7dcd1; border-radius: 8px;
+  background: #fffdf8; color: #4e5e53; font-size: 13px; cursor: pointer; list-style: none;
+}
+.backup-tools summary::-webkit-details-marker { display: none; }
+.backup-tools[open] summary { background: #edf3ed; border-color: #89a28e; }
+.backup-tools-menu {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 15;
+  width: 220px; display: grid; gap: 5px; padding: 10px;
+  border: 1px solid #d9ded3; border-radius: 12px; background: #fffdf8;
+  box-shadow: 0 12px 32px rgba(25, 47, 35, .16);
+}
+.backup-tools-menu p { margin: 4px 8px 8px; color: #748075; font-size: 12px; }
+.backup-tools-menu .secondary-button { justify-content: flex-start; text-align: left; border-color: transparent; background: transparent; box-shadow: none; }
+.backup-tools-menu .secondary-button:hover:not(:disabled) { background: #edf3ed; }
+.active-filter-strip { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 0 22px 16px; }
+.active-filter-strip > span { color: #788176; font-size: 12px; margin-right: 2px; }
+.active-filter-strip button { display: inline-flex; align-items: center; gap: 10px; max-width: 100%; min-height: 32px; padding: 4px 10px; border: 1px solid #cfded2; border-radius: 7px; background: #edf4ed; color: #365c45; font-size: 12px; cursor: pointer; }
+.active-filter-strip button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 250px; }
+.active-filter-strip button b { font-size: 16px; font-weight: 400; }
+.active-filter-strip button:hover { background: #e0eddf; border-color: #8faa95; }
+.active-filter-strip .clear-all-filters { border-color: transparent; background: transparent; color: #6a746b; text-decoration: underline; text-underline-offset: 3px; }
+.backup-tools summary:focus-visible, .active-filter-strip button:focus-visible, .view-tabs button:focus-visible { outline: 2px solid #36785b; outline-offset: -3px; }
+.modal { overscroll-behavior-y: contain; scroll-padding-block: 90px; }
+.modal > .modal-head { position: sticky; top: 0; z-index: 5; background: #fbfaf5; }
+.modal form > .form-actions {
+  position: sticky; bottom: 0; z-index: 4; padding: 14px 0;
+  background: #fbfaf5; box-shadow: 0 -8px 16px rgba(35, 52, 40, .04);
+}
+@media (max-width: 720px) {
+  .toolbar-search { width: 100%; }
+  .toolbar-actions { width: 100%; flex-wrap: wrap; gap: 8px; }
+  .toolbar-actions > .primary-button { flex: 1 0 100%; white-space: nowrap; }
+  .toolbar-actions > .batch-select-button { flex: 1; min-width: 0; }
+  .backup-tools summary { min-height: 42px; }
+  .active-filter-strip { padding: 0 14px 14px; gap: 6px; }
+  .active-filter-strip button { min-height: 36px; }
+  .view-tabs { scrollbar-width: thin; }
+  .modal { max-height: calc(100dvh - 28px); }
+  .modal form > .form-actions { flex-wrap: wrap; gap: 8px; padding-bottom: max(14px, env(safe-area-inset-bottom)); }
+  .modal form > .form-actions > button { flex: 1 1 auto; min-height: 44px; }
+}

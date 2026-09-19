@@ -4794,8 +4794,10 @@ export function RecruitmentTracker({
             <div className="toolbar">
               <div className="toolbar-row">
                 <div className="toolbar-search">
-                  <span className="search-icon">🔍</span>
+                  <svg className="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>
                   <input
+                    type="search"
+                    aria-label="搜索公司、岗位或地点"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="搜索公司、岗位、地点… 支持拼音 / 首字母"
@@ -4815,17 +4817,23 @@ export function RecruitmentTracker({
                       <button className="secondary-button batch-select-button" onClick={toggleFilteredSelection} disabled={filteredIds.length === 0}>
                         {allFilteredSelected ? "取消当前筛选" : `全选当前筛选${filteredIds.length ? `（${filteredIds.length}）` : ""}`}
                       </button>
-                      <button className="secondary-button" onClick={() => void exportData()} disabled={busy}>导出 Excel</button>
-                      <input ref={importRef} type="file" accept=".xlsx,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json" onChange={importData} className="hidden" />
-                      <button className="secondary-button" onClick={() => importRef.current?.click()} disabled={busy}>导入备份</button>
-                      <button
-                        className="secondary-button recovery-button"
-                        onClick={() => recoverySnapshots[0] && openRecoverySnapshot(recoverySnapshots[0])}
-                        disabled={busy || recoverySnapshots.length === 0}
-                        title={recoverySnapshots[0] ? `恢复 ${new Date(recoverySnapshots[0].savedAt).toLocaleString("zh-CN")} 的本地快照` : "产生非空记录后会自动保留本地快照"}
-                      >
-                        本地恢复{recoverySnapshots.length ? ` · ${recoverySnapshots.length}` : ""}
-                      </button>
+                      <details className="backup-tools" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) event.currentTarget.open = false; }} onKeyDown={(event) => { if (event.key === "Escape") { event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }}>
+                        <summary>数据备份 <span aria-hidden="true">⌄</span></summary>
+                        <div className="backup-tools-menu" onClick={(event) => { if ((event.target as HTMLElement).closest("button")) event.currentTarget.closest("details")?.removeAttribute("open"); }}>
+                          <p>导出、导入与本地恢复</p>
+                          <button className="secondary-button" onClick={() => void exportData()} disabled={busy}>导出 Excel</button>
+                          <input ref={importRef} type="file" accept=".xlsx,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json" onChange={importData} className="hidden" />
+                          <button className="secondary-button" onClick={() => importRef.current?.click()} disabled={busy}>导入备份</button>
+                          <button
+                            className="secondary-button recovery-button"
+                            onClick={() => recoverySnapshots[0] && openRecoverySnapshot(recoverySnapshots[0])}
+                            disabled={busy || recoverySnapshots.length === 0}
+                            title={recoverySnapshots[0] ? `恢复 ${new Date(recoverySnapshots[0].savedAt).toLocaleString("zh-CN")} 的本地快照` : "产生非空记录后会自动保留本地快照"}
+                          >
+                            本地恢复{recoverySnapshots.length ? ` · ${recoverySnapshots.length}` : ""}
+                          </button>
+                        </div>
+                      </details>
                     </>
                   )}
                 </div>
@@ -4882,6 +4890,21 @@ export function RecruitmentTracker({
                   </button>
                 </div>
               </div>
+              {activeFilterCount > 0 && <div className="active-filter-strip" aria-label="已选筛选条件">
+                <span>已筛选</span>
+                {[
+                  { value: query.trim(), label: `搜索：${query.trim()}`, clear: () => setQuery("") },
+                  { value: statFilter !== "all" && !(statFilter === "interview" && statusFilter === "面试进行中"), label: `范围：${statFilter === "active" ? "进行中" : statFilter === "offer" ? "Offer" : "面试阶段"}`, clear: () => setStatFilter("all") },
+                  { value: statusFilter !== "全部状态", label: statusFilter, clear: () => { setStatusFilter("全部状态"); if (statFilter === "interview") setStatFilter("all"); } },
+                  { value: batchFilter !== "全部批次", label: batchFilter, clear: () => setBatchFilter("全部批次") },
+                  { value: companyNatureFilter !== "全部单位性质", label: companyNatureFilter, clear: () => setCompanyNatureFilter("全部单位性质") },
+                  { value: industryFilter !== "全部行业方向", label: industryFilter, clear: () => setIndustryFilter("全部行业方向") },
+                  { value: scaleFilter !== "全部规模", label: scaleFilter, clear: () => setScaleFilter("全部规模") },
+                  { value: positionFilter.trim(), label: `岗位：${positionFilter.trim()}`, clear: () => setPositionFilter("") },
+                  { value: locationFilter.trim(), label: `地点：${locationFilter.trim()}`, clear: () => setLocationFilter("") },
+                ].filter((filter) => filter.value).map((filter, index) => <button type="button" key={index} onClick={filter.clear} aria-label={`移除筛选：${filter.label}`} title={filter.label}><span>{filter.label}</span><b aria-hidden="true">×</b></button>)}
+                <button type="button" className="clear-all-filters" onClick={clearFilters}>清除全部</button>
+              </div>}
               {filtersExpanded && <div className="filter-row">
                 <label className="sort-control">
                   <span>排序</span>
