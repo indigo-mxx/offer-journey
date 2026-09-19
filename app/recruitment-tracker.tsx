@@ -1227,8 +1227,8 @@ function OfferIncomeCard({
       housingFundBase: details.housingFundBase === details.monthlyBaseSalary ? Number(value) : details.housingFundBase,
     } : {}),
   });
-  const numberInput = (key: keyof OfferCompensationDetails, label: string, suffix = "元", step = 100) => (
-    <label><span>{label}</span><div className="offer-number-input"><input type="number" min="0" step={step} value={Number(details[key]) || 0} onChange={(event) => update(key, Number(event.target.value) as never)} /><em>{suffix}</em></div></label>
+  const numberInput = (key: keyof OfferCompensationDetails, label: string, suffix = "元", step: number | "any" = "any") => (
+    <label><span>{label}</span><div className="offer-number-input"><input type="number" min="0" step={step} value={Number(details[key]) || 0} onFocus={(event) => { if (Number(event.target.value) === 0) event.target.select(); }} onChange={(event) => update(key, Number(event.target.value) as never)} /><em>{suffix}</em></div></label>
   );
   const summaryReady = details.monthlyBaseSalary > 0;
   return (
@@ -3037,7 +3037,7 @@ export function RecruitmentTracker({
       shared: application.offerShared === true,
       groupId: application.groupId ?? defaultGroupId,
     });
-    setShowOfferIncomeDetails(false);
+    setShowOfferIncomeDetails(Boolean(application.offerCompensationDetails?.monthlyBaseSalary));
   }, [defaultGroupId]);
 
   const closeOfferDetails = useCallback(() => {

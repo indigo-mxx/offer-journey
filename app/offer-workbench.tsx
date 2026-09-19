@@ -20,6 +20,7 @@ export function OfferWorkbench({ ownerKey, applications, details, onRestore, onO
   });
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
+  const [restoreBackup, setRestoreBackup] = useState<{ name: string; details: OfferCompensationDetails } | null>(null);
   const [tab, setTab] = useState<"calculate" | "compare" | "friends">("calculate");
   const [selected, setSelected] = useState<string[]>([]);
   const ownOffers = applications.filter((item) => item.isOwner !== false && item.status === "Offer");
@@ -28,7 +29,7 @@ export function OfferWorkbench({ ownerKey, applications, details, onRestore, onO
   function saveRecord() {
     if (!(details.monthlyBaseSalary > 0)) { setMessage("请先填写月基础工资，再保存本次计算。"); return; }
     const record = { id: crypto.randomUUID(), name: name.trim() || `${details.city || "未填城市"} · ${money(details.monthlyBaseSalary)} × ${details.salaryMonths}薪`, savedAt: new Date().toISOString(), details: normalizeOfferCompensationDetails(details) };
-    const next = [record, ...records].slice(0, 7);
+    const next = [record, ...records.filter((item) => item.name !== record.name || JSON.stringify(item.details) !== JSON.stringify(record.details))].slice(0, 7);
     try { localStorage.setItem(storageKey, JSON.stringify(next)); setRecords(next); setMessage("已保存本次计算，保留最近 7 次记录。"); }
     catch { setMessage("浏览器存储不可用，本次记录未保存。"); }
   }
@@ -57,9 +58,11 @@ export function OfferWorkbench({ ownerKey, applications, details, onRestore, onO
       <section className="offer-history" aria-label="最近七次计算">
         <h3>最近 7 次计算</h3><p>点击保存记录一次方案，刷新后可恢复；历史仅保存在当前浏览器，按账户分别记录。</p>
         <div className="offer-history-save"><input aria-label="计算记录名称" maxLength={80} placeholder="方案名称，例如：杭州 A 公司" value={name} onChange={(event) => setName(event.target.value)} /><button type="button" className="primary-button" onClick={saveRecord}>保存本次计算</button></div>
-        <p role="status">{message}</p>
-        <div className="offer-history-list">{records.map((record) => <button type="button" key={record.id} onClick={() => { onRestore(record.details); setName(record.name); setMessage(`已恢复：${record.name}`); }}><strong>{record.name}</strong><span>年到账 {money(calculateOfferIncome(record.details).annualTakeHome)}</span><small>{new Date(record.savedAt).toLocaleString("zh-CN")} · 点击恢复</small></button>)}</div>
-        {!records.length && <p>还没有保存的计算方案。</p>}
+        <div className="offer-history-feedback"><p role="status">{message}</p>{restoreBackup && <button type="button" onClick={() => { onRestore(restoreBackup.details); setName(restoreBackup.name); setRestoreBackup(null); setMessage("已撤销恢复，返回之前的计算参数。"); }}>撤销恢复</button>}</div>
+        <details className="offer-history-disclosure"><summary>查看历史方案 · {records.length} / 7</summary>
+          <div className="offer-history-list">{records.map((record) => <button type="button" key={record.id} onClick={() => { setRestoreBackup({ name, details: { ...details } }); onRestore({ ...record.details }); setName(record.name); setMessage(`已恢复：${record.name}，可在下方继续调整。`); }}><strong>{record.name}</strong><span>年到账 {money(calculateOfferIncome(record.details).annualTakeHome)}</span><small>{new Date(record.savedAt).toLocaleString("zh-CN")} · 点击恢复</small></button>)}</div>
+          {!records.length && <p>还没有保存的计算方案。</p>}
+        </details>
       </section>{children}
     </> : tab === "compare" ? <section className="offer-comparison">
       <h2>我的 Offer 对比</h2><p>选择已有 Offer，横向对比收入、城市、福利和截止时间。金额采用各方案自己的缴费与扣税参数。</p>

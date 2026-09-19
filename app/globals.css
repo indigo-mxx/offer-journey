@@ -2115,13 +2115,21 @@ body::before {
 .offer-history-list button { display: grid; gap: 8px; text-align: left; padding: 16px; background: #fffdf7; border: 1px solid #dddcc9; border-radius: 12px; color: #305441; cursor: pointer; overflow-wrap: anywhere; }
 .offer-history-list button:hover { border-color: #709981; box-shadow: 0 5px 15px #234c3910; }
 .offer-history-list small { color: #7f857b; }
+.offer-history-feedback { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.offer-history-feedback button { border: 0; background: transparent; color: #285e49; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; padding: 10px 0; }
+.offer-history-disclosure summary { cursor: pointer; padding: 12px 0; color: #496052; font-size: 13px; }
+.offer-history-disclosure[open] summary { margin-bottom: 8px; }
+.offer-workbench button:focus-visible, .offer-history-disclosure summary:focus-visible { outline: 2px solid #285e49; outline-offset: 3px; }
 .offer-choice-list { display: flex; flex-wrap: wrap; gap: 12px; margin: 20px 0; }
 .offer-choice-list label { padding: 12px; background: #fff; border: 1px solid #dfe3d7; border-radius: 10px; color: #365642; }
 .offer-choice-list input { margin-right: 8px; accent-color: #285e49; }
-.offer-comparison-scroll { overflow-x: auto; border: 1px solid #deded1; border-radius: 12px; }
+.offer-comparison-scroll { overflow: auto; max-height: 70vh; border: 1px solid #deded1; border-radius: 12px; }
 .offer-comparison table { border-collapse: collapse; width: 100%; }
 .offer-comparison th, .offer-comparison td { min-width: 180px; max-width: 350px; padding: 15px; text-align: left; border-bottom: 1px solid #e9e7de; color: #415246; white-space: pre-wrap; overflow-wrap: anywhere; }
 .offer-comparison th { background: #f0efe3; }
+.offer-comparison thead th { position: sticky; top: 0; z-index: 2; }
+.offer-comparison tr > th:first-child { position: sticky; left: 0; z-index: 1; min-width: 120px; box-shadow: 1px 0 #deded1; }
+.offer-comparison thead tr > th:first-child { z-index: 3; }
 .offer-comparison th small { display: block; margin: 6px 0; font-weight: normal; }
 .offer-comparison th button { border: 0; border-radius: 6px; padding: 6px 10px; background: #285e49; color: white; cursor: pointer; }
 .offer-comparison tbody tr:nth-child(3), .offer-comparison tbody tr:nth-child(5) { background: #edf5ed; }
