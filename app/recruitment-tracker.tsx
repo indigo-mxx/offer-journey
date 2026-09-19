@@ -4506,6 +4506,7 @@ export function RecruitmentTracker({
               onCreate={(date) => schedulableApplications.length ? openCalendarCreate(date) : ownApplications.length ? setNotice("当前没有可添加日程的进行中岗位") : openCreate()}
               onEdit={openCalendarEdit}
               onCompleteInterview={(calendarItem) => void completeCalendarInterview(calendarItem)}
+              onCompleteEvent={(calendarItem) => void completeCalendarTodo(calendarItem)}
               onAddExperience={(calendarItem) => {
                 const interview = interviews.find((item) => item.id === calendarItem.id);
                 if (interview) openExperienceByInterview(interview);

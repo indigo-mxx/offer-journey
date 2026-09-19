@@ -77,7 +77,7 @@ function useCalendarClock() {
 }
 
 export function RecruitmentCalendar({
-  items, applications, busy, scope, friendCount, onScopeChange, onCreate, onEdit, onCompleteInterview, onAddExperience,
+  items, applications, busy, scope, friendCount, onScopeChange, onCreate, onEdit, onCompleteInterview, onCompleteEvent, onAddExperience,
 }: {
   items: RecruitmentCalendarItem[];
   applications: Application[];
@@ -88,6 +88,7 @@ export function RecruitmentCalendar({
   onCreate?: (date: Date) => void;
   onEdit: (item: RecruitmentCalendarItem) => void;
   onCompleteInterview?: (item: RecruitmentCalendarItem) => void;
+  onCompleteEvent?: (item: RecruitmentCalendarItem) => void;
   onAddExperience?: (item: RecruitmentCalendarItem) => void;
 }) {
   const [cursor, setCursor] = useState(() => new Date());
@@ -360,6 +361,7 @@ export function RecruitmentCalendar({
             </dl>
             <div className="calendar-detail-actions">
               {scope === "mine" && selectedEvent.isOwner && selectedEvent.kind === "interview" && !selectedEvent.completed && <button type="button" className="secondary-button" disabled={busy} onClick={() => onCompleteInterview?.(selectedEvent)}>标记已完成</button>}
+              {scope === "mine" && selectedEvent.isOwner && selectedEvent.kind === "written_test" && !selectedEvent.completed && <button type="button" className="secondary-button" disabled={busy} onClick={() => onCompleteEvent?.(selectedEvent)}>标记完成</button>}
               {scope === "mine" && selectedEvent.isOwner && selectedEvent.kind === "interview" && selectedEvent.completed && <button type="button" className="primary-button" disabled={busy} onClick={() => onAddExperience?.(selectedEvent)}>去补充面经</button>}
               {scope === "mine" && selectedEvent.isOwner && <button type="button" className={selectedEvent.kind === "interview" && selectedEvent.completed ? "secondary-button" : "primary-button"} disabled={busy} onClick={() => onEdit(selectedEvent)}>编辑日程</button>}
               {selectedLink && <a className="secondary-button button-link calendar-detail-open-link" href={selectedLink} target="_blank" rel="noopener noreferrer">打开链接 ↗</a>}
@@ -377,6 +379,11 @@ export function RecruitmentCalendar({
                   ) : (
                     <button type="button" className="complete" disabled={busy} onClick={() => onCompleteInterview?.(item)}>标记完成</button>
                   )}
+                </div>
+              )}
+              {scope === "mine" && item.isOwner && item.kind === "written_test" && !item.completed && (
+                <div className="calendar-panel-quick-actions">
+                  <button type="button" className="complete" disabled={busy} onClick={() => onCompleteEvent?.(item)}>标记完成</button>
                 </div>
               )}
             </article>

@@ -96,6 +96,10 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(calendar, /scheduleLink\(selectedEvent\.eventUrl\) \|\| scheduleLink\(selectedApplication\?\.link/);
   assert.match(calendar, /calendar-detail-open-link/);
   assert.match(calendar, />打开链接 ↗<\/a>/);
+  assert.match(calendar, /selectedEvent\.kind === "written_test" && !selectedEvent\.completed/);
+  assert.match(calendar, /onCompleteEvent\?\.\(selectedEvent\)/);
+  assert.match(calendar, /item\.kind === "written_test" && !item\.completed/);
+  assert.match(tracker, /onCompleteEvent=\{\(calendarItem\) => void completeCalendarTodo\(calendarItem\)\}/);
   assert.match(workspaceStyles, /\.calendar-event \.calendar-event-stage\s*\{[^}]*flex:\s*none[^}]*white-space:\s*nowrap/s);
   assert.match(workspaceStyles, /\.calendar-event \.calendar-event-company\s*\{[^}]*text-overflow:\s*ellipsis/s);
   assert.match(tracker, /calendar-todo-filters/);
