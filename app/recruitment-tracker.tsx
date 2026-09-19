@@ -14,6 +14,7 @@ import { RecruitmentCalendar, UpcomingScheduleCard, calendarKindLabel } from "./
 import type { CalendarItemKind, RecruitmentCalendarItem } from "./recruitment-calendar";
 import type { ChatGPTUser } from "./chatgpt-auth";
 import { PointerAmbience } from "./pointer-ambience";
+import { OfferWorkbench } from "./offer-workbench";
 
 // ──────────────────────────────────────────────── types
 interface Props {
@@ -1219,7 +1220,13 @@ function OfferIncomeCard({
   onChange?: (details: OfferCompensationDetails) => void;
 }) {
   const income = calculateOfferIncome(details);
-  const update = <K extends keyof OfferCompensationDetails>(key: K, value: OfferCompensationDetails[K]) => onChange?.({ ...details, [key]: value });
+  const update = <K extends keyof OfferCompensationDetails>(key: K, value: OfferCompensationDetails[K]) => onChange?.({
+    ...details, [key]: value,
+    ...(key === "monthlyBaseSalary" ? {
+      socialInsuranceBase: details.socialInsuranceBase === details.monthlyBaseSalary ? Number(value) : details.socialInsuranceBase,
+      housingFundBase: details.housingFundBase === details.monthlyBaseSalary ? Number(value) : details.housingFundBase,
+    } : {}),
+  });
   const numberInput = (key: keyof OfferCompensationDetails, label: string, suffix = "元", step = 100) => (
     <label><span>{label}</span><div className="offer-number-input"><input type="number" min="0" step={step} value={Number(details[key]) || 0} onChange={(event) => update(key, Number(event.target.value) as never)} /><em>{suffix}</em></div></label>
   );
@@ -1231,7 +1238,7 @@ function OfferIncomeCard({
         <button type="button" onClick={onToggle}>{expanded ? "收起收入明细" : "查看收入明细"} <span aria-hidden="true">{expanded ? "↑" : "→"}</span></button>
       </div>
       {expanded && <div className="offer-income-expanded">
-        {!readOnly && <>
+        <fieldset className="offer-income-inputs" disabled={readOnly}>
           <div className="offer-income-section-head"><span>01</span><div><strong>薪酬结构</strong><small>金额均按人民币填写，股票价值计入总包但不计入现金到账。</small></div></div>
           <div className="offer-income-fields">
             <label><span>Base 地</span><input value={details.city} list="offer-base-city-options" onChange={(event) => onChange?.({ ...details, city: event.target.value, ...offerCityRates(event.target.value) })} placeholder="例如：北京" /><datalist id="offer-base-city-options">{BASE_OPTIONS.filter((item) => !["全国", "远程"].includes(item)).map((item) => <option key={item} value={item} />)}</datalist></label>
@@ -1260,7 +1267,7 @@ function OfferIncomeCard({
             {numberInput("specialDeductionMonthly", "每月专项附加扣除")}
             {numberInput("otherDeductionMonthly", "每月其他税后扣款")}
           </div>
-        </>}
+        </fieldset>
         <div className="offer-income-section-head result"><span>{readOnly ? "01" : "03"}</span><div><strong>首年收入结果</strong><small>按完整自然年、每月 5000 元基本减除费用和累计预扣法估算。</small></div></div>
         <div className="offer-income-results">
           <article><span>首年总包</span><strong>{formatCny(income.annualTotalPackage)}</strong><small>现金 + 公司公积金 + 股权估值</small></article>
@@ -1311,7 +1318,7 @@ function StandaloneOfferCalculator({
         <span><b>3</b> 查看全年及逐月明细</span>
       </div>
       <OfferIncomeCard details={details} expanded={expanded} onToggle={onToggle} onChange={onChange} />
-      <p className="standalone-calculator-note">本页用于临时试算，不会写入岗位或 Offer 记录。需要长期保存时，请在“我的投递”的 Offer 详情中填写并保存。</p>
+      <p className="standalone-calculator-note">可在上方保存本次计算，保留最近 7 次方案。需要关联岗位或共享给好友时，请在该岗位的 Offer 详情中保存。</p>
     </section>
   );
 }
@@ -4755,6 +4762,7 @@ export function RecruitmentTracker({
             onOpenApplications={() => setView("mine")}
           />
         ) : view === "offerCalculator" ? (
+          <OfferWorkbench key={user?.email || "local"} ownerKey={user?.email || "local"} applications={applications} details={standaloneOfferDetails} onRestore={(details) => { setStandaloneOfferDetails(details); setStandaloneOfferExpanded(true); }} onOpen={openOfferDetails}>
           <StandaloneOfferCalculator
             details={standaloneOfferDetails}
             expanded={standaloneOfferExpanded}
@@ -4766,6 +4774,7 @@ export function RecruitmentTracker({
               setNotice("临时计算参数已清空");
             }}
           />
+          </OfferWorkbench>
         ) : view === "sharing" && user ? (
           <SharingPanel
             groups={groups}

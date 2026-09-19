@@ -2100,6 +2100,32 @@ body::before {
 .offer-income-table tbody tr:nth-child(even) { background: #fbfbf6; }
 .offer-income-table td strong { color: #27664d; }
 .offer-income-disclaimer { margin: 11px 1px 0; color: #8a8d84; font-size: 9px; line-height: 1.6; }
+.offer-income-inputs { min-width: 0; padding: 0; margin: 0; border: 0; }
+.offer-income-inputs:disabled input, .offer-income-inputs:disabled select { opacity: 1; color: #344c40; -webkit-text-fill-color: #344c40; }
+.offer-workbench { background: #faf8f1; }
+.offer-workbench-tabs { display: flex; gap: 8px; padding: 20px 24px; overflow-x: auto; border-bottom: 1px solid #e6e0d4; }
+.offer-workbench-tabs button { flex: none; border: 1px solid #d8dfd6; border-radius: 24px; padding: 10px 16px; background: #fffdf8; color: #496052; cursor: pointer; }
+.offer-workbench-tabs button[aria-pressed="true"] { background: #285e49; border-color: #285e49; color: white; }
+.offer-history, .offer-comparison { padding: 24px; }
+.offer-history h3, .offer-comparison h2 { margin: 0 0 10px; color: #28503e; }
+.offer-history p, .offer-comparison p { color: #6f796f; font-size: 13px; line-height: 1.7; }
+.offer-history-save { display: flex; gap: 10px; flex-wrap: wrap; }
+.offer-history-save input { flex: 1; min-width: 180px; padding: 12px; border: 1px solid #d9ddd2; border-radius: 10px; background: #fff; color: #284634; }
+.offer-history-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+.offer-history-list button { display: grid; gap: 8px; text-align: left; padding: 16px; background: #fffdf7; border: 1px solid #dddcc9; border-radius: 12px; color: #305441; cursor: pointer; overflow-wrap: anywhere; }
+.offer-history-list button:hover { border-color: #709981; box-shadow: 0 5px 15px #234c3910; }
+.offer-history-list small { color: #7f857b; }
+.offer-choice-list { display: flex; flex-wrap: wrap; gap: 12px; margin: 20px 0; }
+.offer-choice-list label { padding: 12px; background: #fff; border: 1px solid #dfe3d7; border-radius: 10px; color: #365642; }
+.offer-choice-list input { margin-right: 8px; accent-color: #285e49; }
+.offer-comparison-scroll { overflow-x: auto; border: 1px solid #deded1; border-radius: 12px; }
+.offer-comparison table { border-collapse: collapse; width: 100%; }
+.offer-comparison th, .offer-comparison td { min-width: 180px; max-width: 350px; padding: 15px; text-align: left; border-bottom: 1px solid #e9e7de; color: #415246; white-space: pre-wrap; overflow-wrap: anywhere; }
+.offer-comparison th { background: #f0efe3; }
+.offer-comparison th small { display: block; margin: 6px 0; font-weight: normal; }
+.offer-comparison th button { border: 0; border-radius: 6px; padding: 6px 10px; background: #285e49; color: white; cursor: pointer; }
+.offer-comparison tbody tr:nth-child(3), .offer-comparison tbody tr:nth-child(5) { background: #edf5ed; }
+@media (max-width: 600px) { .offer-history, .offer-comparison { padding: 16px; } .offer-workbench-tabs { padding: 14px; } }
 .standalone-offer-calculator { min-height: 620px; padding: 28px; background: radial-gradient(circle at 88% 7%, rgba(178, 126, 39, .11), transparent 28%), linear-gradient(145deg, #f8f7f1, #f1f3ec); }
 .standalone-calculator-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 18px; padding: 7px 4px 0; }
 .standalone-calculator-head > div { display: grid; gap: 5px; }
