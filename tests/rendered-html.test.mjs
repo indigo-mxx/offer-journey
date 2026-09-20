@@ -70,6 +70,16 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(tracker, /选择面经共享范围/);
   assert.match(tracker, /批量设置面经共享/);
   assert.match(tracker, /一键全选/);
+  assert.match(tracker, /SHARING_PREFERENCES_STORAGE_PREFIX/);
+  assert.match(tracker, /applicationVisibility: canShare \? \(saved\.applicationVisibility \?\? "full"\)/);
+  assert.match(tracker, /experienceVisibility: canShare \? \(saved\.experienceVisibility \?\? "full"\)/);
+  assert.match(tracker, /offerShared: canShare \? \(saved\.offerShared \?\? true\)/);
+  assert.match(tracker, /rememberSharing\(\{ experienceVisibility: experienceForm\.visibility/);
+  assert.match(tracker, /experience-company-grid/);
+  assert.match(tracker, /experienceCompanyGroups\.map/);
+  assert.match(tracker, /按面试时间从近到远/);
+  assert.match(tracker, /aria-label=\{`查看完整面经：\$\{experience\.title\}`\}/);
+  assert.match(styles, /\.experience-view-button/);
   assert.ok(tracker.indexOf("experience-batch-bar") < tracker.indexOf("{filteredExperiences.length"), "batch sharing controls render in the experience library");
   assert.match(tracker, /updateExperienceVisibilityBatch/);
   assert.match(tracker, /linkedInterviewForExperience\(b, interviews\)\?\.scheduledAt/);
@@ -78,7 +88,7 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(tracker, /只读 · 来自共同小组/);
   assert.match(tracker, /查看完整面经/);
   assert.match(tracker, /共同小组中共享的完整面试记录/);
-  assert.match(tracker, /setViewingFriendExperience\(experience\)/);
+  assert.match(tracker, /setViewingExperience\(experience\)/);
   assert.match(styles, /\.experience-detail-section p[^}]*white-space: pre-wrap/);
   assert.match(route, /experienceGroupId/);
   assert.match(experienceSharingMigration, /public\.is_group_member\(group_id\)/);

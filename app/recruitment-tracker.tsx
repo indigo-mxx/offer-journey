@@ -102,6 +102,13 @@ interface OfferForm {
   groupId: string;
 }
 
+interface SharingPreferences {
+  applicationVisibility?: Visibility;
+  experienceVisibility?: "private" | "full";
+  offerShared?: boolean;
+  groupId?: string;
+}
+
 interface CalendarEventForm {
   phase: "scheduled" | "completed";
   kind: CalendarItemKind;
@@ -372,6 +379,7 @@ const RECRUITMENT_EVENT_TYPES: RecruitmentEventType[] = ["written_test", "assess
 const RECRUITMENT_EVENT_STATUSES: RecruitmentEventStatus[] = ["待进行", "已完成", "已取消"];
 const CALENDAR_EVENT_MODES = ["线上", "线下", "电话", "邮件", "其他"];
 const TODO_DISMISSALS_STORAGE_PREFIX = "dismissed-calendar-todos:";
+const SHARING_PREFERENCES_STORAGE_PREFIX = "offer-journey:sharing-preferences:";
 const PARTICLE_EFFECT_STORAGE_KEY = "offer-journey:particle-effects";
 const PARTICLE_EFFECT_CHANGE_EVENT = "offer-journey:particle-effects-change";
 const MAILBOX_STORAGE_KEY = "offer-journey:default-mailbox";
@@ -1421,7 +1429,7 @@ export function RecruitmentTracker({
   const [selectedExperienceIds, setSelectedExperienceIds] = useState<string[]>([]);
   const [experienceShareGroupId, setExperienceShareGroupId] = useState("");
   const [isExperienceOpen, setIsExperienceOpen] = useState(false);
-  const [viewingFriendExperience, setViewingFriendExperience] = useState<InterviewExperience | null>(null);
+  const [viewingExperience, setViewingExperience] = useState<InterviewExperience | null>(null);
   const [isCalendarEventOpen, setIsCalendarEventOpen] = useState(false);
   const [editingCalendarItem, setEditingCalendarItem] = useState<RecruitmentCalendarItem | null>(null);
   const [viewingFriendCalendarItem, setViewingFriendCalendarItem] = useState<RecruitmentCalendarItem | null>(null);
@@ -1467,6 +1475,25 @@ export function RecruitmentTracker({
   );
 
   const defaultGroupId = activeGroupId || groups[0]?.id || "";
+  const sharingPreferencesStorageKey = `${SHARING_PREFERENCES_STORAGE_PREFIX}${recoveryOwnerKey}`;
+  const preferredSharing = useCallback(() => {
+    let saved: SharingPreferences = {};
+    try { saved = JSON.parse(localStorage.getItem(sharingPreferencesStorageKey) ?? "{}") as SharingPreferences; } catch { /* use defaults */ }
+    const availableGroupId = groups.some((group) => group.id === saved.groupId) ? saved.groupId! : defaultGroupId;
+    const canShare = Boolean(availableGroupId);
+    return {
+      applicationVisibility: canShare ? (saved.applicationVisibility ?? "full") : "private" as Visibility,
+      experienceVisibility: canShare ? (saved.experienceVisibility ?? "full") : "private" as "private" | "full",
+      offerShared: canShare ? (saved.offerShared ?? true) : false,
+      groupId: availableGroupId,
+    };
+  }, [defaultGroupId, groups, sharingPreferencesStorageKey]);
+  const rememberSharing = useCallback((changes: SharingPreferences) => {
+    try {
+      const current = JSON.parse(localStorage.getItem(sharingPreferencesStorageKey) ?? "{}") as SharingPreferences;
+      localStorage.setItem(sharingPreferencesStorageKey, JSON.stringify({ ...current, ...changes }));
+    } catch { /* preference storage is optional */ }
+  }, [sharingPreferencesStorageKey]);
 
   useEffect(() => {
     if (!groups.length) {
@@ -2093,6 +2120,18 @@ export function RecruitmentTracker({
         return (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "");
       });
   }, [experiences, experienceQuery, experienceApplicationFilter, experienceScope, interviews]);
+
+  const experienceCompanyGroups = useMemo(() => {
+    const grouped = new Map<string, { company: string; experiences: InterviewExperience[] }>();
+    filteredExperiences.forEach((experience) => {
+      const company = experience.company.trim() || "未填写公司";
+      const key = companyKey(company);
+      const current = grouped.get(key);
+      if (current) current.experiences.push(experience);
+      else grouped.set(key, { company, experiences: [experience] });
+    });
+    return [...grouped.values()];
+  }, [filteredExperiences]);
 
   const selectableExperienceIds = useMemo(
     () => filteredExperiences.filter((item) => item.isOwner !== false).map((item) => item.id),
@@ -3023,6 +3062,8 @@ export function RecruitmentTracker({
   );
 
   const openOfferDetails = useCallback((application: Application) => {
+    const preferred = preferredSharing();
+    const existingDetails = Boolean(application.offerReceivedAt || application.offerDeadline || application.offerOnboardDate || application.offerCompensation || application.offerBenefits || application.offerContact || application.offerNote);
     setSelectedCompany(null);
     setOfferApplication(application);
     setOfferForm({
@@ -3034,11 +3075,11 @@ export function RecruitmentTracker({
       contact: application.offerContact ?? "",
       note: application.offerNote ?? "",
       compensationDetails: normalizeOfferCompensationDetails(application.offerCompensationDetails, application.base, application.salary || application.offerCompensation),
-      shared: application.offerShared === true,
-      groupId: application.groupId ?? defaultGroupId,
+      shared: existingDetails ? application.offerShared === true : preferred.offerShared,
+      groupId: application.groupId ?? preferred.groupId,
     });
     setShowOfferIncomeDetails(Boolean(application.offerCompensationDetails?.monthlyBaseSalary));
-  }, [defaultGroupId]);
+  }, [preferredSharing]);
 
   const closeOfferDetails = useCallback(() => {
     setOfferApplication(null);
@@ -3073,10 +3114,11 @@ export function RecruitmentTracker({
       groupId: offerForm.shared ? groupId : offerApplication.groupId,
     });
     if (saved) {
+      rememberSharing({ offerShared: offerForm.shared, groupId: offerForm.shared ? groupId : offerForm.groupId });
       closeOfferDetails();
       setNotice(offerForm.shared ? "Offer 详情已保存并共享，相关日期已同步到日历" : "Offer 详情已保存，相关日期已同步到日历");
     }
-  }, [closeOfferDetails, defaultGroupId, offerApplication, offerForm, updateApplication]);
+  }, [closeOfferDetails, defaultGroupId, offerApplication, offerForm, rememberSharing, updateApplication]);
 
   const openCalendarCreate = useCallback((date = new Date(), applicationId = "", kind: CalendarItemKind = "written_test") => {
     const form = emptyCalendarEventForm(date);
@@ -3517,11 +3559,12 @@ export function RecruitmentTracker({
 
   const openExperienceCreate = useCallback((applicationId = "", round = "") => {
     const application = ownApplications.find((item) => item.id === applicationId);
-    setExperienceForm({ ...EMPTY_EXPERIENCE, applicationId, round, company: application?.company ?? "", position: application?.position ?? "" });
+    const preferred = preferredSharing();
+    setExperienceForm({ ...EMPTY_EXPERIENCE, applicationId, round, company: application?.company ?? "", position: application?.position ?? "", visibility: preferred.experienceVisibility, groupId: preferred.groupId });
     setExperienceScope("mine");
     setEditingExperienceId(null);
     setIsExperienceOpen(true);
-  }, [ownApplications]);
+  }, [ownApplications, preferredSharing]);
 
   const openExperienceEdit = useCallback((item: InterviewExperience, linkedInterviewOverride?: Interview) => {
     const linkedInterview = linkedInterviewOverride ?? interviews.find((interview) =>
@@ -3897,7 +3940,8 @@ export function RecruitmentTracker({
         companyScale: source.companyScale ?? "",
       });
     } else {
-      setForm({ ...EMPTY_FORM, groupId: defaultGroupId });
+      const preferred = preferredSharing();
+      setForm({ ...EMPTY_FORM, visibility: preferred.applicationVisibility, groupId: preferred.groupId });
     }
     setEditingId(null);
     setIsFormOpen(true);
@@ -4043,7 +4087,10 @@ export function RecruitmentTracker({
         }));
       saved = items.length === 1 ? await addApplication(items[0]) : await addApplications(items);
     }
-    if (saved) closeForm();
+    if (saved) {
+      rememberSharing({ applicationVisibility: form.visibility, groupId: form.visibility === "private" ? form.groupId : shareGroupId });
+      closeForm();
+    }
   }
 
   function closeExperienceForm() {
@@ -4100,7 +4147,10 @@ export function RecruitmentTracker({
     const saved = editingExperienceId
       ? await updateExperience(editingExperienceId, changes)
       : await addExperience({ id: crypto.randomUUID(), ...changes, createdAt: now, updatedAt: now });
-    if (saved) closeExperienceForm();
+    if (saved) {
+      rememberSharing({ experienceVisibility: experienceForm.visibility, groupId: experienceForm.visibility === "full" ? experienceForm.groupId : undefined });
+      closeExperienceForm();
+    }
   }
 
   function selectExperienceApplication(applicationId: string) {
@@ -4117,6 +4167,7 @@ export function RecruitmentTracker({
 
   function openExperienceFromInterview(interview: Interview) {
     const application = ownApplications.find((item) => item.id === interview.applicationId);
+    const preferred = preferredSharing();
     setExperienceForm({
       ...EMPTY_EXPERIENCE,
       applicationId: interview.applicationId,
@@ -4132,6 +4183,8 @@ export function RecruitmentTracker({
       title: `${application?.company ?? "\u672c\u6b21"}${interview.round ? ` \u00b7 ${interview.round}` : ""}\u9762\u7ecf`,
       content: interview.summary,
       takeaway: interview.nextSteps,
+      visibility: preferred.experienceVisibility,
+      groupId: preferred.groupId,
     });
     setEditingExperienceId(null);
     setIsExperienceOpen(true);
@@ -4683,21 +4736,18 @@ export function RecruitmentTracker({
                 {!experiences.length && <button type="button" className="secondary-button" onClick={() => openExperienceCreate()}>{"\u5199\u4e00\u7bc7\u9762\u7ecf"}</button>}
               </div>
             ) : (
-              <div className="experience-grid">
-                {filteredExperiences.map((experience) => (
+              <div className="experience-company-grid">
+                {experienceCompanyGroups.map((companyGroup) => (
+                  <section className="experience-company-card" key={companyKey(companyGroup.company)}>
+                    <header className="experience-company-card-head">
+                      <div><span aria-hidden="true">{companyGroup.company.slice(0, 1)}</span><div><h3>{companyGroup.company}</h3><small>按面试时间从近到远</small></div></div>
+                      <strong>{companyGroup.experiences.length} 篇面经</strong>
+                    </header>
+                    <div className="experience-grid">
+                {companyGroup.experiences.map((experience) => (
                   <article
-                    className={`experience-card ${selectedExperienceIds.includes(experience.id) ? "selected" : ""} ${experience.isOwner === false ? "is-openable" : ""}`}
+                    className={`experience-card ${selectedExperienceIds.includes(experience.id) ? "selected" : ""}`}
                     key={experience.id}
-                    role={experience.isOwner === false ? "button" : undefined}
-                    tabIndex={experience.isOwner === false ? 0 : undefined}
-                    aria-label={experience.isOwner === false ? `查看${experience.ownerName || "好友"}分享的面经：${experience.title}` : undefined}
-                    onClick={experience.isOwner === false ? () => setViewingFriendExperience(experience) : undefined}
-                    onKeyDown={experience.isOwner === false ? (event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        setViewingFriendExperience(experience);
-                      }
-                    } : undefined}
                   >
                     {experienceSelectionMode && experience.isOwner !== false && (
                       <label className="experience-card-select">
@@ -4740,17 +4790,21 @@ export function RecruitmentTracker({
                     <footer>
                       {experience.isOwner !== false ? (
                         <>
+                          <button type="button" className="experience-view-button" aria-label={`查看完整面经：${experience.title}`} onClick={() => setViewingExperience(experience)}>查看 <span aria-hidden="true">→</span></button>
                           <button type="button" className="text-button" onClick={() => openExperienceEdit(experience)}>{"\u7f16\u8f91"}</button>
                           <button type="button" className="text-button danger-text" onClick={() => void removeExperience(experience)}>{"\u5220\u9664"}</button>
                         </>
                       ) : (
                         <>
                           <span className="experience-readonly">只读 · 来自共同小组</span>
-                          <span className="experience-open-hint">查看完整面经 <span aria-hidden="true">→</span></span>
+                          <button type="button" className="experience-view-button" aria-label={`查看完整面经：${experience.title}`} onClick={() => setViewingExperience(experience)}>查看 <span aria-hidden="true">→</span></button>
                         </>
                       )}
                     </footer>
                   </article>
+                ))}
+                    </div>
+                  </section>
                 ))}
               </div>
             )}
@@ -6026,30 +6080,31 @@ export function RecruitmentTracker({
           </ModalPortal>
         )}
 
-        {viewingFriendExperience && (() => {
-          const linkedInterview = linkedInterviewForExperience(viewingFriendExperience, interviews);
+        {viewingExperience && (() => {
+          const linkedInterview = linkedInterviewForExperience(viewingExperience, interviews);
+          const isOwnExperience = viewingExperience.isOwner !== false;
           return (
             <ModalPortal>
-              <div className="modal-overlay modal-overlay-elevated" onClick={() => setViewingFriendExperience(null)}>
-                <div className="modal experience-detail-modal" role="dialog" aria-modal="true" aria-labelledby="friend-experience-title" onClick={(event) => event.stopPropagation()}>
+              <div className="modal-overlay modal-overlay-elevated" onClick={() => setViewingExperience(null)}>
+                <div className="modal experience-detail-modal" role="dialog" aria-modal="true" aria-labelledby="experience-detail-title" onClick={(event) => event.stopPropagation()}>
                   <div className="modal-head experience-detail-head">
                     <div>
                       <div className="experience-detail-owner">
-                        <span>{viewingFriendExperience.ownerName || "好友"} 分享</span>
-                        <span>只读</span>
+                        <span>{isOwnExperience ? "我的面经" : `${viewingExperience.ownerName || "好友"} 分享`}</span>
+                        <span>{isOwnExperience ? (viewingExperience.visibility === "full" ? "已共享" : "仅自己") : "只读"}</span>
                       </div>
-                      <h2 id="friend-experience-title">{viewingFriendExperience.title}</h2>
-                      <p className="modal-subtitle">共同小组中共享的完整面试记录</p>
+                      <h2 id="experience-detail-title">{viewingExperience.title}</h2>
+                      <p className="modal-subtitle">{isOwnExperience ? "完整面试记录与复盘" : "共同小组中共享的完整面试记录"}</p>
                     </div>
-                    <button type="button" className="close-button" onClick={() => setViewingFriendExperience(null)} aria-label="关闭">×</button>
+                    <button type="button" className="close-button" onClick={() => setViewingExperience(null)} aria-label="关闭">×</button>
                   </div>
                   <div className="experience-detail-body">
                     <div className="experience-detail-summary">
-                      {viewingFriendExperience.round && <span className="experience-round">{viewingFriendExperience.round}</span>}
-                      {(viewingFriendExperience.company || viewingFriendExperience.position) && (
-                        <strong>{[viewingFriendExperience.company, viewingFriendExperience.position].filter(Boolean).join(" · ")}</strong>
+                      {viewingExperience.round && <span className="experience-round">{viewingExperience.round}</span>}
+                      {(viewingExperience.company || viewingExperience.position) && (
+                        <strong>{[viewingExperience.company, viewingExperience.position].filter(Boolean).join(" · ")}</strong>
                       )}
-                      <time>{formatDateTime(viewingFriendExperience.updatedAt)} 更新</time>
+                      <time>{formatDateTime(viewingExperience.updatedAt)} 更新</time>
                     </div>
                     {linkedInterview && (
                       <div className={`experience-interview-meta experience-detail-interview result-${linkedInterview.result || "待定"}`}>
@@ -6058,24 +6113,25 @@ export function RecruitmentTracker({
                         {linkedInterview.format && <span className="eim-format">{linkedInterview.format}</span>}
                       </div>
                     )}
-                    {viewingFriendExperience.tags.length > 0 && (
+                    {viewingExperience.tags.length > 0 && (
                       <div className="experience-tags" aria-label="面经标签">
-                        {viewingFriendExperience.tags.map((tag) => <span key={tag}>{tag}</span>)}
+                        {viewingExperience.tags.map((tag) => <span key={tag}>{tag}</span>)}
                       </div>
                     )}
                     <section className="experience-detail-section">
                       <h3>面试内容</h3>
-                      <p>{viewingFriendExperience.content}</p>
+                      <p>{viewingExperience.content}</p>
                     </section>
-                    {viewingFriendExperience.takeaway && (
+                    {viewingExperience.takeaway && (
                       <section className="experience-detail-section experience-detail-takeaway">
                         <h3>复盘要点</h3>
-                        <p>{viewingFriendExperience.takeaway}</p>
+                        <p>{viewingExperience.takeaway}</p>
                       </section>
                     )}
                   </div>
                   <div className="form-actions experience-detail-actions">
-                    <button type="button" className="primary-button" onClick={() => setViewingFriendExperience(null)}>看完了</button>
+                    {isOwnExperience && <button type="button" className="secondary-button" onClick={() => { const experience = viewingExperience; setViewingExperience(null); openExperienceEdit(experience); }}>编辑面经</button>}
+                    <button type="button" className="primary-button" onClick={() => setViewingExperience(null)}>看完了</button>
                   </div>
                 </div>
               </div>
