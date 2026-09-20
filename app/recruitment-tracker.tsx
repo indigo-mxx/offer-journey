@@ -378,6 +378,7 @@ const INTERVIEW_RESULTS = ["待定", "通过", "未通过", "未参加"];
 const RECRUITMENT_EVENT_TYPES: RecruitmentEventType[] = ["written_test", "assessment", "deadline", "hr_contact", "other"];
 const RECRUITMENT_EVENT_STATUSES: RecruitmentEventStatus[] = ["待进行", "已完成", "已取消"];
 const CALENDAR_EVENT_MODES = ["线上", "线下", "电话", "邮件", "其他"];
+const CALENDAR_TIME_PRESETS = ["09:00", "10:00", "14:00", "15:00", "18:00", "19:00"];
 const TODO_DISMISSALS_STORAGE_PREFIX = "dismissed-calendar-todos:";
 const SHARING_PREFERENCES_STORAGE_PREFIX = "offer-journey:sharing-preferences:";
 const PARTICLE_EFFECT_STORAGE_KEY = "offer-journey:particle-effects";
@@ -3234,6 +3235,25 @@ export function RecruitmentTracker({
       allDay: false,
       endsAt: "",
     }));
+  }, []);
+
+  const setCalendarClockTime = useCallback((time: string) => {
+    if (!/^\d{2}:\d{2}$/.test(time)) return;
+    setCalendarRemainingHours("");
+    setCalendarEventForm((current) => {
+      const date = current.startsAt.slice(0, 10) || dateTimeLocalValue(new Date().toISOString()).slice(0, 10);
+      return { ...current, startsAt: `${date}T${time}`, allDay: false };
+    });
+  }, []);
+
+  const shiftCalendarClockTime = useCallback((minutes: number) => {
+    setCalendarRemainingHours("");
+    setCalendarEventForm((current) => {
+      const date = new Date(current.startsAt);
+      if (Number.isNaN(date.getTime())) return current;
+      date.setMinutes(date.getMinutes() + minutes);
+      return { ...current, startsAt: dateTimeLocalValue(date.toISOString()), allDay: false };
+    });
   }, []);
 
   const closeCalendarEvent = useCallback(() => {
@@ -6402,6 +6422,42 @@ export function RecruitmentTracker({
                         required
                       />
                     </label>
+                    {!calendarEventForm.allDay && (
+                      <div className="calendar-time-assist">
+                        <div className="calendar-time-direct">
+                          <label>
+                            <span>直接输入几点几分</span>
+                            <input
+                              type="time"
+                              step="60"
+                              value={calendarEventForm.startsAt.slice(11, 16)}
+                              onInput={(event) => setCalendarClockTime(event.currentTarget.value)}
+                              aria-label="直接输入日程时间"
+                            />
+                          </label>
+                          <div className="calendar-time-stepper" role="group" aria-label="微调日程时间">
+                            <button type="button" onClick={() => shiftCalendarClockTime(-15)}>−15 分钟</button>
+                            <button type="button" onClick={() => shiftCalendarClockTime(15)}>＋15 分钟</button>
+                          </div>
+                        </div>
+                        <div className="calendar-time-presets" role="group" aria-label="选择常用时间">
+                          <span>常用时间</span>
+                          <div>
+                            {CALENDAR_TIME_PRESETS.map((time) => (
+                              <button
+                                key={time}
+                                type="button"
+                                className={calendarEventForm.startsAt.slice(11, 16) === time ? "active" : ""}
+                                onClick={() => setCalendarClockTime(time)}
+                                aria-pressed={calendarEventForm.startsAt.slice(11, 16) === time}
+                              >
+                                {time}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     {calendarEventForm.phase === "completed" && calendarEventForm.timingType !== "deadline" && (
                       <label>
                         <span>结束{calendarEventForm.allDay ? "日期" : "时间"}</span>

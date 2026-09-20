@@ -131,6 +131,10 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(tracker, /interviewStage\(interview\.round\) === "AI面"\) continue/);
   assert.match(tracker, /剩余时间（小时，可选）/);
   assert.match(tracker, /applyCalendarRemainingHours\("72"\)/);
+  assert.match(tracker, /直接输入几点几分/);
+  assert.match(tracker, /shiftCalendarClockTime\(-15\)/);
+  assert.match(tracker, /CALENDAR_TIME_PRESETS\.map/);
+  assert.match(styles, /\.calendar-time-assist/);
   assert.match(tracker, /syncStatus: item\.eventType === "written_test"/);
   assert.match(tracker, /calendarExperienceAfterSaveRef/);
   assert.match(tracker, /保存并补充面经/);

@@ -2498,6 +2498,16 @@ button.interview-date-chip:hover { border-color: #769abb; box-shadow: 0 7px 17px
 .calendar-event-form-grid input:not([type="checkbox"]), .calendar-event-form-grid textarea { width: 100%; border: 1px solid var(--line); border-radius: 9px; background: #fff; color: var(--ink); }
 .calendar-event-form-grid input:not([type="checkbox"]) { min-height: 43px; padding: 0 12px; }
 .calendar-event-form-grid textarea { min-height: 82px; padding: 10px 12px; resize: vertical; }
+.calendar-time-assist { grid-column: 1 / -1; display: grid; gap: 11px; margin-top: -4px; padding: 12px; border: 1px solid #d8e4dc; border-radius: 12px; background: linear-gradient(135deg, rgba(245,250,247,.98), rgba(238,246,241,.86)); box-shadow: inset 0 1px 0 rgba(255,255,255,.9); }
+.calendar-time-direct { display: grid; grid-template-columns: minmax(180px, .72fr) minmax(240px, 1fr); align-items: end; gap: 12px; }
+.calendar-time-direct label > span, .calendar-time-presets > span { display: block; margin-bottom: 7px; color: #5e7066; font-size: 10px; font-weight: 780; }
+.calendar-time-direct input { min-height: 39px !important; border-color: #c8d9cf !important; background: rgba(255,255,255,.94) !important; font-variant-numeric: tabular-nums; font-weight: 760; letter-spacing: .04em; }
+.calendar-time-stepper { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 7px; }
+.calendar-time-stepper button, .calendar-time-presets button { min-height: 39px; border: 1px solid #c9dacf; border-radius: 9px; background: rgba(255,255,255,.86); color: #3f6554; font-size: 10px; font-weight: 780; cursor: pointer; transition: border-color .16s ease, background .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease; }
+.calendar-time-stepper button:hover, .calendar-time-presets button:hover { border-color: #77a08b; background: #fff; color: #1f6d50; transform: translateY(-1px); box-shadow: 0 5px 12px rgba(39,96,70,.09); }
+.calendar-time-presets > div { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 7px; }
+.calendar-time-presets button { min-height: 34px; font-variant-numeric: tabular-nums; }
+.calendar-time-presets button.active { border-color: #2b7c5e; background: #2b765b; color: #fff; box-shadow: 0 6px 13px rgba(35,107,79,.18); }
 .calendar-event-title-field, .calendar-event-note { grid-column: 1 / -1; }
 .calendar-experience-action { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 16px; border: 1px solid rgba(37, 119, 89, .2); border-radius: 12px; background: linear-gradient(120deg, #f1f8f3, #eaf5ef); }
 .calendar-experience-action > div { display: flex; align-items: center; gap: 11px; min-width: 0; }
@@ -2577,6 +2587,9 @@ button.interview-date-chip:hover { border-color: #769abb; box-shadow: 0 7px 17px
   .upcoming-schedule-card > div > button:last-child { border-bottom: 0; }
   .calendar-event-form-grid { grid-template-columns: 1fr; }
   .calendar-record-phase { grid-column: auto; }
+  .calendar-time-assist { grid-column: auto; }
+  .calendar-time-direct { grid-template-columns: 1fr; }
+  .calendar-time-presets > div { grid-template-columns: repeat(3, minmax(0,1fr)); }
   .calendar-event-title-field, .calendar-event-note, .calendar-progress-toggle { grid-column: auto; }
   .calendar-experience-action { grid-column: auto; align-items: stretch; flex-direction: column; }
   .calendar-experience-action button { width: 100%; }
