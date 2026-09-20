@@ -5421,10 +5421,8 @@ export function RecruitmentTracker({
                         <th><button className="sort-button" onClick={() => toggleSort("company")}>公司 {sortIndicator("company")}</button></th>
                       <th><button className="sort-button" onClick={() => toggleSort("position")}>岗位 {sortIndicator("position")}</button></th>
                       <th>地点</th>
-                      <th>批次</th>
                       <th><button className="sort-button" onClick={() => toggleSort("appliedAt")}>投递日期 {sortIndicator("appliedAt")}</button></th>
                       <th><button className="sort-button" onClick={() => toggleSort("status")}>面试进度 {sortIndicator("status")}</button></th>
-                      <th>公开状态</th>
                       {view === "friends" && <th>岗位链接</th>}
                       {view === "mine" && <th>操作</th>}
                     </tr>
@@ -5432,7 +5430,7 @@ export function RecruitmentTracker({
                   <tbody>
                     {filtered.length === 0 ? (
                         <tr>
-                          <td colSpan={view === "mine" ? 9 : 8} className="empty-row">
+                          <td colSpan={view === "mine" ? 7 : 6} className="empty-row">
                             <div className="empty-state">
                               <span>{activeFilterCount > 0 ? "⌕" : "＋"}</span>
                               <h3>{activeFilterCount > 0 ? "没有符合条件的记录" : "还没有投递记录"}</h3>
@@ -5462,9 +5460,8 @@ export function RecruitmentTracker({
                             </button>
                             {view === "friends" && <span className="friend-owner-badge">{applicationOwnerName(item)}</span>}
                           </td>
-                          <td data-label="岗位">{item.position}</td>
-                          <td className="cell-muted" data-label="地点">{item.base || "—"}</td>
-                          <td data-label="批次"><span className="batch-tag">{item.batch}</span></td>
+                          <td className="position-detail-position" data-label="岗位" title={item.position}>{item.position}</td>
+                          <td className="cell-muted position-detail-location" data-label="地点" title={item.base || "地点待定"}>{item.base || "—"}</td>
                           <td className="cell-muted" data-label="投递日期">{formatDate(item.appliedAt)}</td>
                           <td data-label="面试进度"><div className="status-result-cell">{renderStatusControl(item)}
                             {item.finalOutcome && <small>最终：{item.finalOutcome}</small>}
@@ -5473,7 +5470,6 @@ export function RecruitmentTracker({
                             {renderOfferAction(item, true)}
                             {(INTERVIEW_STATUSES.includes(item.status) || experiences.some((experience) => experience.applicationId === item.id)) && renderExperienceLink(item, true)}
                           </div></td>
-                          <td data-label="公开状态"><span className={`privacy-tag ${item.visibility}`}>{visibilityLabel(item.visibility)}</span></td>
                           {view === "friends" && <td data-label="岗位链接"><PositionLinkAction application={item} /></td>}
                           {view === "mine" && (
                             <td className="cell-actions" data-label="操作">

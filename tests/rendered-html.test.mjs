@@ -42,6 +42,9 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(tracker, /company-overview-card/);
   assert.match(tracker, /company-merge-table/);
   assert.match(tracker, /position-detail-table/);
+  assert.match(tracker, /position-detail-position/);
+  assert.match(tracker, /colSpan=\{view === "mine" \? 7 : 6\}/);
+  assert.match(styles, /\.position-detail-position, \.position-detail-location/);
   assert.match(tracker, /application\.isOwner === false/);
   assert.match(styles, /position-detail-actions/);
   assert.match(styles, /max-width: 1280px/);
