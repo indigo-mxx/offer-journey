@@ -169,10 +169,12 @@ interface RecoverySnapshot extends WorkspaceBackup {
 }
 
 type ListMode = "companyList" | "companyCards" | "position" | "kanban";
+type ExperienceViewMode = "cards" | "list" | "timeline";
 type WorkspaceView = "calendar" | "mine" | "friends" | "sharing" | "dashboard" | "experiences" | "offerCalculator";
 type NoticeTone = "success" | "error" | "warning" | "info";
 
 const LIST_MODE_STORAGE_KEY = "qiuzhao-list-mode";
+const EXPERIENCE_VIEW_MODE_STORAGE_KEY = "qiuzhao-experience-view-mode";
 const WORKSPACE_VIEW_STORAGE_KEY = "qiuzhao-workspace-view";
 const CLOUD_REQUEST_TIMEOUT_MS = 35_000;
 const CLOUD_RETRY_DELAY_MS = 900;
@@ -205,6 +207,11 @@ const LIST_MODE_OPTIONS: Array<{
   { value: "companyCards", icon: "▦", label: "公司卡片", description: "查看公司资料与岗位进度" },
   { value: "position", icon: "≡", label: "岗位明细", description: "逐条查看每个投递岗位" },
   { value: "kanban", icon: "◫", label: "进度看板", description: "按求职阶段推进流程" },
+];
+const EXPERIENCE_VIEW_MODE_OPTIONS: Array<{ value: ExperienceViewMode; icon: string; label: string; description: string }> = [
+  { value: "cards", icon: "▦", label: "公司卡片", description: "按公司分组浏览完整摘要" },
+  { value: "list", icon: "≡", label: "紧凑列表", description: "快速扫视标题、时间与结果" },
+  { value: "timeline", icon: "◷", label: "面试时间线", description: "按公司回看历次面试记录" },
 ];
 
 function noticeToneFor(message: string): NoticeTone {
@@ -1426,6 +1433,7 @@ export function RecruitmentTracker({
   const [experienceQuery, setExperienceQuery] = useState("");
   const [experienceApplicationFilter, setExperienceApplicationFilter] = useState("");
   const [experienceScope, setExperienceScope] = useState<"all" | "mine" | "friends">("mine");
+  const [experienceViewMode, setExperienceViewMode] = useState<ExperienceViewMode>("cards");
   const [experienceSelectionMode, setExperienceSelectionMode] = useState(false);
   const [selectedExperienceIds, setSelectedExperienceIds] = useState<string[]>([]);
   const [experienceShareGroupId, setExperienceShareGroupId] = useState("");
@@ -1609,6 +1617,15 @@ export function RecruitmentTracker({
     setListMode(mode);
     try {
       localStorage.setItem(LIST_MODE_STORAGE_KEY, mode);
+    } catch {
+      // The preference is optional; the selected view still works for this visit.
+    }
+  }, []);
+
+  const changeExperienceViewMode = useCallback((mode: ExperienceViewMode) => {
+    setExperienceViewMode(mode);
+    try {
+      localStorage.setItem(EXPERIENCE_VIEW_MODE_STORAGE_KEY, mode);
     } catch {
       // The preference is optional; the selected view still works for this visit.
     }
@@ -1877,6 +1894,17 @@ export function RecruitmentTracker({
       }
     } catch {
       // Keep the compact company list when browser storage is unavailable.
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const savedMode = localStorage.getItem(EXPERIENCE_VIEW_MODE_STORAGE_KEY);
+      if (EXPERIENCE_VIEW_MODE_OPTIONS.some((option) => option.value === savedMode)) {
+        setExperienceViewMode(savedMode as ExperienceViewMode);
+      }
+    } catch {
+      // Keep company cards as the first-visit default.
     }
   }, []);
 
@@ -4717,6 +4745,24 @@ export function RecruitmentTracker({
                 <span><b>{new Set(experiences.map((item) => item.company).filter(Boolean)).size}</b> {"\u5bb6\u516c\u53f8"}</span>
               </div>
             </div>
+            <div className="view-mode-panel experience-view-mode-panel">
+              <div className="view-mode-heading"><strong>显示方式</strong></div>
+              <div className="view-mode-options" role="group" aria-label="面经显示方式">
+                {EXPERIENCE_VIEW_MODE_OPTIONS.map((option) => (
+                  <button
+                    type="button"
+                    key={option.value}
+                    className={`view-mode-button ${experienceViewMode === option.value ? "active" : ""}`}
+                    aria-pressed={experienceViewMode === option.value}
+                    title={option.description}
+                    onClick={() => changeExperienceViewMode(option.value)}
+                  >
+                    <i className="view-mode-icon" aria-hidden="true">{option.icon}</i>
+                    <span className="view-mode-copy"><strong>{option.label}</strong></span>
+                  </button>
+                ))}
+              </div>
+            </div>
             {experienceSelectionMode && (
               <div className="experience-batch-bar" aria-label="批量设置面经共享范围">
                 <button
@@ -4756,7 +4802,7 @@ export function RecruitmentTracker({
                 {!experiences.length && <button type="button" className="secondary-button" onClick={() => openExperienceCreate()}>{"\u5199\u4e00\u7bc7\u9762\u7ecf"}</button>}
               </div>
             ) : (
-              <div className="experience-company-grid">
+              <div className={`experience-company-grid experience-view-${experienceViewMode}`}>
                 {experienceCompanyGroups.map((companyGroup) => (
                   <section className="experience-company-card" key={companyKey(companyGroup.company)}>
                     <header className="experience-company-card-head">

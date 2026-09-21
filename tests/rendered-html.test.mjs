@@ -65,6 +65,11 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(route, /saveApplication/);
   assert.match(route, /deleteApplication/);
   assert.match(tracker, /experience-library/);
+  assert.match(tracker, /EXPERIENCE_VIEW_MODE_OPTIONS/);
+  assert.match(tracker, /qiuzhao-experience-view-mode/);
+  assert.match(tracker, /面经显示方式/);
+  assert.match(styles, /\.experience-view-list/);
+  assert.match(styles, /\.experience-view-timeline/);
   assert.match(tracker, /openExperienceFromInterview/);
   assert.match(tracker, /saveExperience/);
   assert.match(tracker, /experience-interview-meta/);
