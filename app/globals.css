@@ -391,7 +391,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .company-merge-meta .company-nature-tag { background: #153f35; color: #fff; font-weight: 700; }
 .company-merge-meta .company-subtype-tag { background: #e9f2ea; color: #27634f; font-weight: 650; }
 .kanban-board-wrap { overflow-x: auto; padding: 18px; background: #f7f7f3; }
-.kanban-board { min-width: 1120px; display: grid; grid-template-columns: repeat(5, minmax(205px, 1fr)); gap: 12px; align-items: start; }
+.kanban-board { min-width: 1330px; display: grid; grid-template-columns: repeat(6, minmax(205px, 1fr)); gap: 12px; align-items: start; }
 .kanban-column { overflow: hidden; border: 1px solid #dde4dd; border-radius: 13px; background: rgba(255,255,255,.62); }
 .kanban-column-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 13px 14px; border-bottom: 1px solid #e5e9e4; background: #f3f6f3; }
 .kanban-column-head strong, .kanban-column-head small { display: block; }
@@ -399,6 +399,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .kanban-column-head small { margin-top: 3px; color: var(--muted); font-size: 9px; }
 .kanban-column-head > span { min-width: 24px; padding: 3px 6px; border-radius: 999px; background: #e4ebe5; color: #52655a; font-size: 10px; font-weight: 750; text-align: center; }
 .kanban-interview .kanban-column-head { background: #eef3f8; }
+.kanban-intent .kanban-column-head { background: #f7f1df; }
 .kanban-offer .kanban-column-head { background: #edf6ef; }
 .kanban-closed .kanban-column-head { background: #f5f1ef; }
 .kanban-card-list { display: grid; gap: 9px; max-height: 610px; overflow-y: auto; padding: 10px; }
@@ -656,6 +657,7 @@ tbody tr:hover { background: #fcfbf8; }
 }
 .status-select.interview { border-color: #d4ddea; background: #edf2f8; color: #46698f; }
 .status-select.test { border-color: #ead9bc; background: #faf2e5; color: #9a651d; }
+.status-select.intent { border-color: #ddc991; background: #f8f0d9; color: #86651c; }
 .status-select.offer { border-color: #b9d7c8; background: #e3f2ea; color: #1d7252; }
 .status-select.closed { border-color: #ddd9d7; background: #f0efed; color: #85827e; }
 .status-badge {
@@ -672,6 +674,7 @@ tbody tr:hover { background: #fcfbf8; }
 }
 .status-badge.interview { border-color: #d4ddea; background: #edf2f8; color: #46698f; }
 .status-badge.test { border-color: #ead9bc; background: #faf2e5; color: #9a651d; }
+.status-badge.intent { min-width: 150px; border-color: #ddc991; background: #f8f0d9; color: #86651c; }
 .status-badge.offer { border-color: #b9d7c8; background: #e3f2ea; color: #1d7252; }
 .status-badge.closed { border-color: #ddd9d7; background: #f0efed; color: #85827e; }
 .privacy-tag {
@@ -841,10 +844,12 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px
 .inline-status-editor .select-trigger { min-height: 34px; padding-inline: 8px; border-color: #d7d8cf; border-radius: 7px; font-size: 11px; }
 .inline-status-editor .select-trigger i { height: 22px; }
 .select-field.status-select { min-width: 100px; max-width: 130px; padding: 0; border: 0; background: transparent; }
+.select-field.status-select.intent { min-width: 160px; max-width: 180px; }
 .status-select .select-trigger { min-height: 33px; padding: 0 7px 0 8px; border: 1px solid #d7ddd8; border-radius: 7px; background: #f0f4f1; color: #3d5549; font-size: 12px; font-weight: 700; }
 .status-select .select-trigger i { height: 22px; border-left-color: rgba(61,85,73,.12); }
 .status-select.interview .select-trigger { border-color: #d4ddea; background: #edf2f8; color: #46698f; }
 .status-select.test .select-trigger { border-color: #ead9bc; background: #faf2e5; color: #9a651d; }
+.status-select.intent .select-trigger { border-color: #ddc991; background: #f8f0d9; color: #86651c; }
 .status-select.offer .select-trigger { border-color: #b9d7c8; background: #e3f2ea; color: #1d7252; }
 .status-select.closed .select-trigger { border-color: #ddd9d7; background: #f0efed; color: #85827e; }
 .choice-field { display: grid; gap: 7px; }
@@ -1567,6 +1572,7 @@ body::before {
 .company-overview-card:nth-child(3n + 2) { animation-delay: 55ms; }
 .company-overview-card:nth-child(3n) { animation-delay: 110ms; }
 .company-overview-card.offer { --card-accent: #2e9a62; }
+.company-overview-card.intent { --card-accent: #b58a32; }
 .company-overview-card.interview { --card-accent: #557fa7; }
 .company-overview-card.closed { --card-accent: #a58178; }
 .company-overview-card:hover { z-index: 2; border-color: color-mix(in srgb, var(--card-accent) 35%, transparent); transform: translateY(-6px); box-shadow: 0 24px 48px rgba(27,64,45,.13), inset 0 1px rgba(255,255,255,.9); }

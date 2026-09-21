@@ -54,7 +54,7 @@ const SAMPLE = {
       industryTags: ["软件"],
       companyScale: "超大型",
       batch: "提前批",
-      status: "简历筛选",
+      status: "已意向，待谈薪/签约",
       appliedAt: "2025-08-20",
       channel: "内推",
       link: "",
@@ -177,6 +177,7 @@ test("Excel round-trip preserves Chinese text, dates, tags and linkage with no �
     assert.equal(app.offerCompensationDetails?.monthlyBaseSalary, 35000, "offer compensation calculator inputs preserved");
     assert.equal(app.offerCompensationDetails?.housingFundRate, 12, "offer housing fund settings preserved");
     assert.ok(sameInstant(app.updatedAt, "2025-09-10T10:30:00.000Z"), "updatedAt instant preserved");
+    assert.equal(restored.applications.find((item) => item.id === "app-byte")?.status, "已意向，待谈薪/签约", "intent status survives backup round-trip");
 
     const appEn = restored.applications.find((item) => item.id === "app-byte");
     assert.ok(appEn, "app-byte id preserved");

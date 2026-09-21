@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("includes the cloud workspace, access control, and sharing surfaces", async () => {
-  const [page, tracker, calendar, route, schema, hosting, styles, workspaceStyles, experienceSharingMigration, aiInterviewDeadlineMigration, offerDetailsMigration, offerCompensationMigration, offerCalculator, search] = await Promise.all([
+  const [page, tracker, calendar, route, schema, hosting, styles, workspaceStyles, experienceSharingMigration, aiInterviewDeadlineMigration, offerDetailsMigration, offerCompensationMigration, offerCalculator, search, workbook] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/recruitment-tracker.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/recruitment-calendar.tsx", import.meta.url), "utf8"),
@@ -18,6 +18,7 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
     readFile(new URL("../supabase/migrations/012_offer_compensation_details.sql", import.meta.url), "utf8"),
     readFile(new URL("../lib/offer-calculator.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/search.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/workbook-backup.ts", import.meta.url), "utf8"),
   ]);
 
   assert.match(page, /SupabaseShell/);
@@ -144,6 +145,10 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(calendar, /agenda-event-complete/);
   assert.match(tracker, /schedule-chip-complete/);
   assert.match(tracker, /company-timeline-complete/);
+  assert.match(schema, /"已意向，待谈薪\/签约"/);
+  assert.match(tracker, /key: "intent", label: "待谈薪\/签约"/);
+  assert.match(tracker, /status === INTENT_STATUS/);
+  assert.match(workbook, /"已意向，待谈薪\/签约"/);
   assert.match(tracker, /直接输入几点几分/);
   assert.match(tracker, /shiftCalendarClockTime\(-15\)/);
   assert.match(tracker, /CALENDAR_TIME_PRESETS\.map/);

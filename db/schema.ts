@@ -19,6 +19,7 @@ export type ApplicationStatus =
   | "三面"
   | "终面"
   | "HR面"
+  | "已意向，待谈薪/签约"
   | "Offer"
   | "已拒绝"
   | "流程结束";

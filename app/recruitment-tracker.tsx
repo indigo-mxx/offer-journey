@@ -256,15 +256,17 @@ function ModalPortal({ children }: { children: ReactNode }) {
 }
 
 // ──────────────────────────────────────────────── constants
-const STATUSES: ApplicationStatus[] = ["准备投递", "简历投递", "已投递", "简历筛选", "笔试", "AI面", "一面", "二面", "三面", "终面", "HR面", "Offer", "已拒绝", "流程结束"];
+const INTENT_STATUS: ApplicationStatus = "已意向，待谈薪/签约";
+const STATUSES: ApplicationStatus[] = ["准备投递", "简历投递", "已投递", "简历筛选", "笔试", "AI面", "一面", "二面", "三面", "终面", "HR面", INTENT_STATUS, "Offer", "已拒绝", "流程结束"];
 const INTERVIEW_STATUSES: ApplicationStatus[] = ["AI面", "一面", "二面", "三面", "终面", "HR面"];
 const CLOSED_STATUSES: ApplicationStatus[] = ["已拒绝", "流程结束"];
 const RESUME_STATUSES: ApplicationStatus[] = ["准备投递", "简历投递", "已投递", "简历筛选"];
-const QUICK_STATUS_FILTERS = ["全部状态", "简历阶段", "笔试", "面试进行中", "Offer", "流程已结束"];
+const QUICK_STATUS_FILTERS = ["全部状态", "简历阶段", "笔试", "面试进行中", "待谈薪/签约", "Offer", "流程已结束"];
 const KANBAN_COLUMNS: { key: string; label: string; hint: string; statuses: ApplicationStatus[] }[] = [
   { key: "resume", label: "简历阶段", hint: "准备、投递与筛选", statuses: RESUME_STATUSES },
   { key: "test", label: "笔试", hint: "测评与笔试", statuses: ["笔试"] },
   { key: "interview", label: "面试中", hint: "AI 面至 HR 面", statuses: INTERVIEW_STATUSES },
+  { key: "intent", label: "待谈薪/签约", hint: "已获录用意向", statuses: [INTENT_STATUS] },
   { key: "offer", label: "Offer", hint: "已获得录用", statuses: ["Offer"] },
   { key: "closed", label: "已结束", hint: "拒绝或主动终止", statuses: CLOSED_STATUSES },
 ];
@@ -578,6 +580,7 @@ function matchesStatusFilter(status: ApplicationStatus, filter: string) {
   if (filter === "全部状态") return true;
   if (filter === "简历阶段") return RESUME_STATUSES.includes(status);
   if (filter === "面试进行中") return INTERVIEW_STATUSES.includes(status);
+  if (filter === "待谈薪/签约") return status === INTENT_STATUS;
   if (filter === "流程已结束") return CLOSED_STATUSES.includes(status);
   return status === filter;
 }
@@ -596,6 +599,7 @@ function tagsWithClassification(companyNature: string, companySubtype: string, i
 
 function statusTone(status: ApplicationStatus) {
   if (status === "Offer") return "offer";
+  if (status === INTENT_STATUS) return "intent";
   if (["AI面", "一面", "二面", "三面", "终面", "HR面"].includes(status)) return "interview";
   if (status === "笔试") return "test";
   if (["已拒绝", "流程结束"].includes(status)) return "closed";
@@ -1109,8 +1113,8 @@ function DashboardPanel({
       offerRate: percentage(offers),
       funnel: [
         { label: "岗位记录", count: total, hint: "全部状态" },
-        { label: "进入笔试", count: applications.filter((item) => item.status === "笔试" || INTERVIEW_STATUSES.includes(item.status) || item.status === "Offer").length, hint: "笔试及后续阶段" },
-        { label: "进入面试", count: applications.filter((item) => INTERVIEW_STATUSES.includes(item.status) || item.status === "Offer").length, hint: "AI 面至 Offer" },
+        { label: "进入笔试", count: applications.filter((item) => item.status === "笔试" || INTERVIEW_STATUSES.includes(item.status) || item.status === INTENT_STATUS || item.status === "Offer").length, hint: "笔试及后续阶段" },
+        { label: "进入面试", count: applications.filter((item) => INTERVIEW_STATUSES.includes(item.status) || item.status === INTENT_STATUS || item.status === "Offer").length, hint: "AI 面至 Offer" },
         { label: "获得 Offer", count: offers, hint: "录用结果" },
       ],
       statuses: KANBAN_COLUMNS.map((column) => ({ label: column.label, count: applications.filter((item) => column.statuses.includes(item.status)).length })),
@@ -2890,8 +2894,8 @@ export function RecruitmentTracker({
           );
         })}
         {view === "mine" && !CLOSED_STATUSES.includes(item.status) && (
-          <button type="button" className="schedule-chip add" onClick={() => openCalendarCreate(new Date(), item.id, INTERVIEW_STATUSES.includes(item.status) ? "interview" : "written_test")}>
-            <strong>＋ 添加日程</strong><span>笔试 / 测评 / 面试</span>
+          <button type="button" className="schedule-chip add" onClick={() => openCalendarCreate(new Date(), item.id, item.status === INTENT_STATUS ? "hr_contact" : INTERVIEW_STATUSES.includes(item.status) ? "interview" : "written_test")}>
+            <strong>＋ 添加日程</strong><span>面试 / 测评 / 沟通</span>
           </button>
         )}
       </div>
@@ -5328,6 +5332,8 @@ export function RecruitmentTracker({
                       {companyGrouped.map((group) => {
                         const cardTone = group.statuses.includes("Offer")
                           ? "offer"
+                          : group.statuses.includes(INTENT_STATUS)
+                            ? "intent"
                           : group.statuses.some((status) => INTERVIEW_STATUSES.includes(status))
                             ? "interview"
                             : group.statuses.every((status) => ["已拒绝", "流程结束"].includes(status))
@@ -5346,7 +5352,7 @@ export function RecruitmentTracker({
                               </button>
                               <div className="company-card-tools">
                                 <span className="company-card-stage">
-                                  {cardTone === "offer" ? "已获 Offer" : cardTone === "interview" ? "面试推进中" : cardTone === "closed" ? "流程已结束" : "持续跟进"}
+                                  {cardTone === "offer" ? "已获 Offer" : cardTone === "intent" ? "待谈薪 / 签约" : cardTone === "interview" ? "面试推进中" : cardTone === "closed" ? "流程已结束" : "持续跟进"}
                                 </span>
                                 {view === "mine" && (
                                   <label className="company-card-selector" title="选择该公司的全部岗位">
@@ -5449,7 +5455,7 @@ export function RecruitmentTracker({
                               </div>
                               {renderScheduleStrip(item, true)}
                               {renderOfferAction(item, true)}
-                              {(INTERVIEW_STATUSES.includes(item.status) || experiences.some((experience) => experience.applicationId === item.id)) && renderExperienceLink(item, true)}
+                              {(INTERVIEW_STATUSES.includes(item.status) || item.status === INTENT_STATUS || experiences.some((experience) => experience.applicationId === item.id)) && renderExperienceLink(item, true)}
                               <div className="kanban-card-foot">
                                 {renderStatusControl(item, true)}
                                 <PositionLinkAction application={item} compact />
@@ -5519,7 +5525,7 @@ export function RecruitmentTracker({
                             {item.rejectionReason && <small>原因：{item.rejectionReason}</small>}
                             {renderScheduleStrip(item, true)}
                             {renderOfferAction(item, true)}
-                            {(INTERVIEW_STATUSES.includes(item.status) || experiences.some((experience) => experience.applicationId === item.id)) && renderExperienceLink(item, true)}
+                            {(INTERVIEW_STATUSES.includes(item.status) || item.status === INTENT_STATUS || experiences.some((experience) => experience.applicationId === item.id)) && renderExperienceLink(item, true)}
                           </div></td>
                           {view === "friends" && <td data-label="岗位链接"><PositionLinkAction application={item} /></td>}
                           {view === "mine" && (
@@ -6722,7 +6728,7 @@ export function RecruitmentTracker({
                         )}
                         {renderScheduleStrip(item, true)}
                         {renderOfferAction(item, true)}
-                        {(INTERVIEW_STATUSES.includes(item.status) || experiences.some((experience) => experience.applicationId === item.id)) && renderExperienceLink(item, true)}
+                        {(INTERVIEW_STATUSES.includes(item.status) || item.status === INTENT_STATUS || experiences.some((experience) => experience.applicationId === item.id)) && renderExperienceLink(item, true)}
                       </div></td>
                       {view === "friends" && <td data-label="岗位链接"><PositionLinkAction application={item} /></td>}
                       <td className="cell-actions" data-label="操作">
