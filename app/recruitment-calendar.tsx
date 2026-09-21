@@ -46,6 +46,14 @@ export function calendarKindLabel(kind: CalendarItemKind) {
   return FILTERS.find((item) => item.value === kind)?.label ?? "其他";
 }
 
+export function calendarItemCanComplete(item: RecruitmentCalendarItem) {
+  return item.isOwner
+    && (item.kind === "interview" || item.kind === "written_test" || item.kind === "assessment")
+    && !item.completed
+    && item.status !== "已完成"
+    && item.status !== "已取消";
+}
+
 function formatEventTime(item: RecruitmentCalendarItem) {
   if (item.allDay) return item.timingType === "deadline" ? "截止" : "全天";
   const date = new Date(item.startsAt);
@@ -202,15 +210,20 @@ export function RecruitmentCalendar({
     return ` event-${item.kind}${state}`;
   };
   const statusLabel = (item: RecruitmentCalendarItem) => item.completed && item.status !== "已完成" ? `已完成 · ${item.status}` : item.status;
+  const completeItem = (item: RecruitmentCalendarItem) => item.source === "interview" ? onCompleteInterview?.(item) : onCompleteEvent?.(item);
   const createOnDay = (key: string) => onCreate?.(new Date(key + "T09:00:00"));
   const emptyTitle = hasFilters ? "没有符合条件的日程" : scope === "friends" ? "这个月暂无共享日程" : "这个月还没有安排";
   const renderAgendaEvent = (item: RecruitmentCalendarItem) => (
-    <button type="button" className={"agenda-event" + eventClass(item)} key={itemKey(item)}
-      onClick={(event) => openDetails(item, event.currentTarget)}>
-      <time dateTime={item.startsAt}>{formatEventTime(item)}</time>
-      <span><strong>{item.company} · {item.title}</strong><small>{scope === "friends" ? item.ownerName + " · " : ""}{calendarKindLabel(item.kind)} · {item.position}</small></span>
-      <i>{statusLabel(item)}</i>
-    </button>
+    <div className="agenda-event-row" key={itemKey(item)}>
+      <button type="button" className={"agenda-event" + eventClass(item)} onClick={(event) => openDetails(item, event.currentTarget)}>
+        <time dateTime={item.startsAt}>{formatEventTime(item)}</time>
+        <span><strong>{item.company} · {item.title}</strong><small>{scope === "friends" ? item.ownerName + " · " : ""}{calendarKindLabel(item.kind)} · {item.position}</small></span>
+        <i>{statusLabel(item)}</i>
+      </button>
+      {scope === "mine" && calendarItemCanComplete(item) && (
+        <button type="button" className="agenda-event-complete" disabled={busy} onClick={() => completeItem(item)}>标记完成</button>
+      )}
+    </div>
   );
 
   return (
@@ -360,8 +373,7 @@ export function RecruitmentCalendar({
               {scope === "friends" && <div><dt>来自</dt><dd>{selectedEvent.ownerName} · 只读</dd></div>}
             </dl>
             <div className="calendar-detail-actions">
-              {scope === "mine" && selectedEvent.isOwner && selectedEvent.kind === "interview" && !selectedEvent.completed && <button type="button" className="secondary-button" disabled={busy} onClick={() => onCompleteInterview?.(selectedEvent)}>标记已完成</button>}
-              {scope === "mine" && selectedEvent.isOwner && selectedEvent.kind === "written_test" && !selectedEvent.completed && <button type="button" className="secondary-button" disabled={busy} onClick={() => onCompleteEvent?.(selectedEvent)}>标记完成</button>}
+              {scope === "mine" && calendarItemCanComplete(selectedEvent) && <button type="button" className="secondary-button" disabled={busy} onClick={() => completeItem(selectedEvent)}>标记完成</button>}
               {scope === "mine" && selectedEvent.isOwner && selectedEvent.kind === "interview" && selectedEvent.completed && <button type="button" className="primary-button" disabled={busy} onClick={() => onAddExperience?.(selectedEvent)}>去补充面经</button>}
               {scope === "mine" && selectedEvent.isOwner && <button type="button" className={selectedEvent.kind === "interview" && selectedEvent.completed ? "secondary-button" : "primary-button"} disabled={busy} onClick={() => onEdit(selectedEvent)}>编辑日程</button>}
               {selectedLink && <a className="secondary-button button-link calendar-detail-open-link" href={selectedLink} target="_blank" rel="noopener noreferrer">打开链接 ↗</a>}
@@ -372,7 +384,7 @@ export function RecruitmentCalendar({
                 <div><time dateTime={item.startsAt}>{formatEventTime(item)}</time><span>{statusLabel(item)}</span></div>
                 <strong>{item.company}</strong><span>{item.title}</span><small>{scope === "friends" ? item.ownerName + " · " : ""}{calendarKindLabel(item.kind)} · {item.position}</small>
               </button>
-              {scope === "mine" && item.isOwner && item.kind === "interview" && (
+              {scope === "mine" && item.isOwner && item.kind === "interview" && (item.completed || calendarItemCanComplete(item)) && (
                 <div className="calendar-panel-quick-actions">
                   {item.completed ? (
                     <button type="button" className="experience" disabled={busy} onClick={() => onAddExperience?.(item)}>去补充面经</button>
@@ -381,9 +393,9 @@ export function RecruitmentCalendar({
                   )}
                 </div>
               )}
-              {scope === "mine" && item.isOwner && item.kind === "written_test" && !item.completed && (
+              {scope === "mine" && item.kind !== "interview" && calendarItemCanComplete(item) && (
                 <div className="calendar-panel-quick-actions">
-                  <button type="button" className="complete" disabled={busy} onClick={() => onCompleteEvent?.(item)}>标记完成</button>
+                  <button type="button" className="complete" disabled={busy} onClick={() => completeItem(item)}>标记完成</button>
                 </div>
               )}
             </article>

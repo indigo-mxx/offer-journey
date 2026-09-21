@@ -114,9 +114,9 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(calendar, /scheduleLink\(selectedEvent\.eventUrl\) \|\| scheduleLink\(selectedApplication\?\.link/);
   assert.match(calendar, /calendar-detail-open-link/);
   assert.match(calendar, />打开链接 ↗<\/a>/);
-  assert.match(calendar, /selectedEvent\.kind === "written_test" && !selectedEvent\.completed/);
-  assert.match(calendar, /onCompleteEvent\?\.\(selectedEvent\)/);
-  assert.match(calendar, /item\.kind === "written_test" && !item\.completed/);
+  assert.match(calendar, /calendarItemCanComplete\(selectedEvent\)/);
+  assert.match(calendar, /completeItem\(selectedEvent\)/);
+  assert.match(calendar, /item\.kind !== "interview" && calendarItemCanComplete\(item\)/);
   assert.match(tracker, /onCompleteEvent=\{\(calendarItem\) => void completeCalendarTodo\(calendarItem\)\}/);
   assert.match(workspaceStyles, /\.calendar-event \.calendar-event-stage\s*\{[^}]*flex:\s*none[^}]*white-space:\s*nowrap/s);
   assert.match(workspaceStyles, /\.calendar-event \.calendar-event-company\s*\{[^}]*text-overflow:\s*ellipsis/s);
@@ -139,6 +139,11 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(tracker, /interviewStage\(interview\.round\) === "AI面"\) continue/);
   assert.match(tracker, /剩余时间（小时，可选）/);
   assert.match(tracker, /applyCalendarRemainingHours\("72"\)/);
+  assert.match(calendar, /calendarItemCanComplete/);
+  assert.match(calendar, /item\.kind === "assessment"/);
+  assert.match(calendar, /agenda-event-complete/);
+  assert.match(tracker, /schedule-chip-complete/);
+  assert.match(tracker, /company-timeline-complete/);
   assert.match(tracker, /直接输入几点几分/);
   assert.match(tracker, /shiftCalendarClockTime\(-15\)/);
   assert.match(tracker, /CALENDAR_TIME_PRESETS\.map/);

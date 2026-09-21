@@ -10,7 +10,7 @@ import type { WorkspaceBackup } from "@/lib/workbook-backup";
 import { calendarTimingDefaults, deadlineFromRemainingHours, isAiInterviewRound, supportsCalendarTimingChoice, supportsRemainingHourDeadline } from "@/lib/calendar";
 import { calculateOfferIncome, emptyOfferCompensationDetails, normalizeOfferCompensationDetails, offerCityRates } from "@/lib/offer-calculator";
 import type { Application, Interview, InterviewExperience, RecruitmentEvent, RecruitmentEventStatus, RecruitmentEventType, GroupInfo, ApplicationStatus, Visibility, OfferCompensationDetails } from "@/db/schema";
-import { RecruitmentCalendar, UpcomingScheduleCard, calendarKindLabel } from "./recruitment-calendar";
+import { RecruitmentCalendar, UpcomingScheduleCard, calendarItemCanComplete, calendarKindLabel } from "./recruitment-calendar";
 import type { CalendarItemKind, RecruitmentCalendarItem } from "./recruitment-calendar";
 import type { ChatGPTUser } from "./chatgpt-auth";
 import { PointerAmbience } from "./pointer-ambience";
@@ -2878,10 +2878,15 @@ export function RecruitmentTracker({
         {visible.map((entry) => {
           const done = calendarItemCompleted(entry);
           return (
-            <button type="button" className={`schedule-chip event-${entry.kind} ${done ? "completed" : "pending"}`} key={`${entry.source}-${entry.id}`} onClick={() => openCalendarEdit(entry)}>
-              <strong>{done ? `${calendarKindLabel(entry.kind)}已完成` : `${calendarKindLabel(entry.kind)} · ${formatDateTime(entry.startsAt)}`}</strong>
-              <span>{done ? `${formatDateTime(entry.startsAt)} · ${entry.title}` : entry.title}</span>
-            </button>
+            <div className="schedule-chip-entry" key={`${entry.source}-${entry.id}`}>
+              <button type="button" className={`schedule-chip event-${entry.kind} ${done ? "completed" : "pending"}`} onClick={() => openCalendarEdit(entry)}>
+                <strong>{done ? `${calendarKindLabel(entry.kind)}已完成` : `${calendarKindLabel(entry.kind)} · ${formatDateTime(entry.startsAt)}`}</strong>
+                <span>{done ? `${formatDateTime(entry.startsAt)} · ${entry.title}` : entry.title}</span>
+              </button>
+              {view === "mine" && calendarItemCanComplete(entry) && (
+                <button type="button" className="schedule-chip-complete" disabled={busy} onClick={() => void (entry.source === "interview" ? completeCalendarInterview(entry) : completeCalendarTodo(entry))}>标记完成</button>
+              )}
+            </div>
           );
         })}
         {view === "mine" && !CLOSED_STATUSES.includes(item.status) && (
@@ -6616,6 +6621,9 @@ export function RecruitmentTracker({
                         <i aria-hidden="true" />
                         <div>
                           <span>{event.type}</span><strong>{event.title}</strong><small>{event.detail}</small>
+                          {view === "mine" && event.calendarItem && calendarItemCanComplete(event.calendarItem) && (
+                            <button type="button" className="company-timeline-complete" disabled={busy} onClick={() => void (event.calendarItem!.source === "interview" ? completeCalendarInterview(event.calendarItem!) : completeCalendarTodo(event.calendarItem!))}>标记完成</button>
+                          )}
                           {view === "mine" && event.calendarItem && <button type="button" onClick={() => { closeCompany(); openCalendarEdit(event.calendarItem!); }}>编辑日程</button>}
                           {view === "mine" && event.interview && <button type="button" onClick={() => { closeCompany(); openExperienceByInterview(event.interview!); }}>编辑面经</button>}
                         </div>

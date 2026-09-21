@@ -2497,6 +2497,11 @@ button.interview-date-chip:hover { border-color: #769abb; box-shadow: 0 7px 17px
 .event-dot { width: 8px; height: 8px; border: 0; border-radius: 50%; padding: 0; }
 
 .schedule-chip-strip { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.schedule-chip-entry { max-width: 185px; display: grid; align-content: start; }
+.schedule-chip-entry .schedule-chip { width: 100%; max-width: none; }
+.schedule-chip-complete { min-height: 25px; margin-top: -1px; border: 1px solid #b9d2c2; border-radius: 0 0 7px 7px; background: #edf7f0; color: #316b4d; font-size: 9px; font-weight: 800; }
+.schedule-chip-complete:hover:not(:disabled) { border-color: #78a088; background: #e4f2e9; }
+.schedule-chip-complete:disabled { cursor: wait; opacity: .55; }
 .schedule-chip { max-width: 185px; display: inline-grid; gap: 2px; min-height: 27px; padding: 4px 7px; overflow: hidden; border: 1px solid; border-radius: 7px; font-size: 9px; text-align: left; }
 .schedule-chip time { flex: none; font-weight: 800; }
 .schedule-chip strong, .schedule-chip span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
