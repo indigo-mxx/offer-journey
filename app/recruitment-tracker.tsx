@@ -657,6 +657,14 @@ function safeExperiences(value: unknown): value is InterviewExperience[] {
   return Array.isArray(value) && value.every((item) => item && typeof item === "object" && typeof item.id === "string" && typeof item.title === "string" && typeof item.content === "string");
 }
 
+function failedInterviewOutcome(round: string) {
+  const stage = interviewStage(round);
+  if (stage === "AI面") return "AI 面挂";
+  if (stage === "HR面") return "HR 面挂";
+  if (stage === "其他") return "其他";
+  return `${stage}挂`;
+}
+
 function linkedInterviewForExperience(item: InterviewExperience, interviews: Interview[]) {
   return interviews.find((interview) =>
     interview.id === item.interviewId ||
@@ -2699,6 +2707,16 @@ export function RecruitmentTracker({
     [applications, user, runCloudMutation],
   );
 
+  const endApplicationAfterFailedInterview = useCallback(async (applicationId: string, round: string) => {
+    const application = applications.find((item) => item.id === applicationId);
+    if (!application) return false;
+    return updateApplication(applicationId, {
+      status: "流程结束",
+      finalOutcome: failedInterviewOutcome(round),
+      rejectionReason: "",
+    });
+  }, [applications, updateApplication]);
+
   const removeApplication = useCallback(
     async (item: Application) => {
       if (!confirm(`确定删除 ${item.company} - ${item.position} 的投递记录吗？`)) return;
@@ -3025,10 +3043,11 @@ export function RecruitmentTracker({
         if (!saved) return false;
       }
       setInterviews((prev) => prev.map((item) => (item.id === id ? next : item)));
+      if (next.result === "未通过" && !(await endApplicationAfterFailedInterview(next.applicationId, next.round))) return false;
       setNotice("面试修改已保存");
       return true;
     },
-    [interviews, user, runCloudMutation],
+    [endApplicationAfterFailedInterview, interviews, user, runCloudMutation],
   );
 
   // 面经表单保存时，按需创建或更新关联面试场次。
@@ -3080,9 +3099,10 @@ export function RecruitmentTracker({
         if (!saved) return "";
       }
       setInterviews((prev) => [...prev, item]);
+      if (item.result === "未通过" && !(await endApplicationAfterFailedInterview(item.applicationId, item.round))) return "";
       return item.id;
     },
-    [interviews, user, runCloudMutation, updateInterview],
+    [endApplicationAfterFailedInterview, interviews, user, runCloudMutation, updateInterview],
   );
 
   const removeInterview = useCallback(
@@ -3402,6 +3422,7 @@ export function RecruitmentTracker({
       } else scheduleSaved = true;
       if (convertedEvent) setEvents((items) => items.filter((entry) => entry.id !== convertedEvent.id));
       setInterviews((items) => current ? items.map((entry) => entry.id === item.id ? item : entry) : [...items, item]);
+      if (item.result === "未通过" && !(await endApplicationAfterFailedInterview(item.applicationId, item.round))) return;
       savedInterview = item;
     } else {
       if (!RECRUITMENT_EVENT_TYPES.includes(calendarEventForm.kind as RecruitmentEventType)) {
@@ -3457,18 +3478,23 @@ export function RecruitmentTracker({
       if (stage !== "其他") targetStatus = stage;
     }
     let progressSynced = true;
-    if (scheduleSaved && calendarEventForm.syncStatus && targetStatus && ![...CLOSED_STATUSES, "Offer"].includes(application.status)) {
+    const failedInterview = calendarEventForm.kind === "interview" && calendarEventForm.phase === "completed" && calendarEventForm.status === "未通过";
+    if (scheduleSaved && !failedInterview && calendarEventForm.syncStatus && targetStatus && ![...CLOSED_STATUSES, "Offer"].includes(application.status)) {
       const currentIndex = STATUSES.indexOf(application.status);
       const targetIndex = STATUSES.indexOf(targetStatus);
       if (targetIndex > currentIndex) progressSynced = await updateApplication(application.id, { status: targetStatus, finalOutcome: "", rejectionReason: "" });
     }
     closeCalendarEvent();
     const recordLabel = calendarEventForm.phase === "scheduled" ? "日程已约定" : "完成记录已保存";
-    setNotice(progressSynced ? `${calendarKindLabel(calendarEventForm.kind)}${recordLabel}` : `${calendarKindLabel(calendarEventForm.kind)}${recordLabel}，但岗位进度同步失败，请稍后重试`);
+    setNotice(progressSynced
+      ? failedInterview
+        ? "面试完成记录已保存，岗位流程已自动终止"
+        : `${calendarKindLabel(calendarEventForm.kind)}${recordLabel}`
+      : `${calendarKindLabel(calendarEventForm.kind)}${recordLabel}，但岗位进度同步失败，请稍后重试`);
     if (openExperienceAfterSave && savedInterview && calendarEventForm.phase === "completed") {
       openExperienceByInterview(savedInterview);
     }
-  }, [calendarEventForm, calendarItems, closeCalendarEvent, editingCalendarItem, events, interviews, ownApplications, runCloudMutation, updateApplication, user]);
+  }, [calendarEventForm, calendarItems, closeCalendarEvent, editingCalendarItem, endApplicationAfterFailedInterview, events, interviews, ownApplications, runCloudMutation, updateApplication, user]);
 
   const removeCalendarEvent = useCallback(async () => {
     if (!editingCalendarItem || !confirm(`确定删除这条${calendarKindLabel(editingCalendarItem.kind)}日程吗？`)) return;
@@ -3520,7 +3546,7 @@ export function RecruitmentTracker({
       endedAt: interview.endedAt || completedAt,
       result: !interview.result || interview.result === "未开始" ? "待定" : interview.result,
     });
-    if (saved) setNotice("面试已标记完成，可以去补充面经");
+    if (saved) setNotice(interview.result === "未通过" ? "面试已标记完成，岗位流程已自动终止" : "面试已标记完成，可以去补充面经");
   }, [interviews, updateInterview]);
 
   const dismissCalendarTodo = useCallback(async (todo: CalendarTodoEntry) => {
@@ -4207,6 +4233,7 @@ export function RecruitmentTracker({
     if (saved) {
       rememberSharing({ experienceVisibility: experienceForm.visibility, groupId: experienceForm.visibility === "full" ? experienceForm.groupId : undefined });
       closeExperienceForm();
+      if (experienceForm.result === "未通过" && experienceForm.applicationId) setNotice("面经已保存，岗位流程已自动终止");
     }
   }
 
@@ -4615,6 +4642,7 @@ export function RecruitmentTracker({
               onScopeChange={setCalendarScope}
               onCreate={(date) => schedulableApplications.length ? openCalendarCreate(date) : ownApplications.length ? setNotice("当前没有可添加日程的进行中岗位") : openCreate()}
               onEdit={openCalendarEdit}
+              onOpenApplication={(application) => openEdit(application)}
               onCompleteInterview={(calendarItem) => void completeCalendarInterview(calendarItem)}
               onCompleteEvent={(calendarItem) => void completeCalendarTodo(calendarItem)}
               onAddExperience={(calendarItem) => {
@@ -6529,6 +6557,7 @@ export function RecruitmentTracker({
                       <label className="calendar-interview-result-field">
                         <span>面试结果</span>
                         <DropdownSelect value={calendarEventForm.status === "未开始" ? "待定" : calendarEventForm.status} onChange={(status) => setCalendarEventForm((current) => ({ ...current, status }))} options={INTERVIEW_RESULTS.map((status) => ({ value: status, label: status }))} ariaLabel="选择面试结果" />
+                        {calendarEventForm.status === "未通过" && <small>保存后，该岗位会自动设为“流程结束”，并记录本轮未通过。</small>}
                       </label>
                     )}
                     {calendarEventForm.phase === "scheduled" && calendarEventForm.kind !== "interview" && (

@@ -85,7 +85,7 @@ function useCalendarClock() {
 }
 
 export function RecruitmentCalendar({
-  items, applications, busy, scope, friendCount, onScopeChange, onCreate, onEdit, onCompleteInterview, onCompleteEvent, onAddExperience,
+  items, applications, busy, scope, friendCount, onScopeChange, onCreate, onEdit, onOpenApplication, onCompleteInterview, onCompleteEvent, onAddExperience,
 }: {
   items: RecruitmentCalendarItem[];
   applications: Application[];
@@ -95,6 +95,7 @@ export function RecruitmentCalendar({
   onScopeChange: (scope: "mine" | "friends") => void;
   onCreate?: (date: Date) => void;
   onEdit: (item: RecruitmentCalendarItem) => void;
+  onOpenApplication?: (application: Application) => void;
   onCompleteInterview?: (item: RecruitmentCalendarItem) => void;
   onCompleteEvent?: (item: RecruitmentCalendarItem) => void;
   onAddExperience?: (item: RecruitmentCalendarItem) => void;
@@ -377,6 +378,7 @@ export function RecruitmentCalendar({
               {scope === "mine" && selectedEvent.isOwner && selectedEvent.kind === "interview" && selectedEvent.completed && <button type="button" className="primary-button" disabled={busy} onClick={() => onAddExperience?.(selectedEvent)}>去补充面经</button>}
               {scope === "mine" && selectedEvent.isOwner && <button type="button" className={selectedEvent.kind === "interview" && selectedEvent.completed ? "secondary-button" : "primary-button"} disabled={busy} onClick={() => onEdit(selectedEvent)}>编辑日程</button>}
               {selectedLink && <a className="secondary-button button-link calendar-detail-open-link" href={selectedLink} target="_blank" rel="noopener noreferrer">打开链接 ↗</a>}
+              {scope === "mine" && selectedEvent.isOwner && selectedApplication && onOpenApplication && <button type="button" className="secondary-button calendar-detail-position" disabled={busy} onClick={() => onOpenApplication(selectedApplication)}>修改 / 查看岗位投递信息</button>}
             </div>
           </div> : selectedItems.length ? <div className="calendar-panel-list">{selectedItems.map((item) => (
             <article className="calendar-panel-item" key={itemKey(item)}>

@@ -115,6 +115,8 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(calendar, /scheduleLink\(selectedEvent\.eventUrl\) \|\| scheduleLink\(selectedApplication\?\.link/);
   assert.match(calendar, /calendar-detail-open-link/);
   assert.match(calendar, />打开链接 ↗<\/a>/);
+  assert.match(calendar, /修改 \/ 查看岗位投递信息/);
+  assert.match(tracker, /onOpenApplication=\{\(application\) => openEdit\(application\)\}/);
   assert.match(calendar, /calendarItemCanComplete\(selectedEvent\)/);
   assert.match(calendar, /completeItem\(selectedEvent\)/);
   assert.match(calendar, /item\.kind !== "interview" && calendarItemCanComplete\(item\)/);
@@ -145,6 +147,9 @@ test("includes the cloud workspace, access control, and sharing surfaces", async
   assert.match(calendar, /agenda-event-complete/);
   assert.match(tracker, /schedule-chip-complete/);
   assert.match(tracker, /company-timeline-complete/);
+  assert.match(tracker, /endApplicationAfterFailedInterview/);
+  assert.match(tracker, /status: "流程结束"/);
+  assert.match(tracker, /failedInterviewOutcome\(round\)/);
   assert.match(schema, /"已意向，待谈薪\/签约"/);
   assert.match(tracker, /key: "intent", label: "待谈薪\/签约"/);
   assert.match(tracker, /status === INTENT_STATUS/);
