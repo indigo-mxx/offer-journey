@@ -1091,6 +1091,7 @@ function DashboardPanel({
     const active = applications.filter((item) => ![...CLOSED_STATUSES, "Offer"].includes(item.status)).length;
     const interview = applications.filter((item) => INTERVIEW_STATUSES.includes(item.status)).length;
     const offers = applications.filter((item) => item.status === "Offer").length;
+    const intents = applications.filter((item) => item.status === INTENT_STATUS).length;
     const progressed = applications.filter((item) => !RESUME_STATUSES.includes(item.status)).length;
     const companyCount = new Set(applications.map((item) => companyKey(item.company))).size;
     const sharedCount = applications.filter((item) => item.visibility !== "private").length;
@@ -1118,7 +1119,7 @@ function DashboardPanel({
       companyCount,
       sharedCount,
       responseRate: percentage(progressed),
-      offerRate: percentage(offers),
+      offerRate: percentage(offers + intents),
       funnel: [
         { label: "岗位记录", count: total, hint: "全部状态" },
         { label: "进入笔试", count: applications.filter((item) => item.status === "笔试" || INTERVIEW_STATUSES.includes(item.status) || item.status === INTENT_STATUS || item.status === "Offer").length, hint: "笔试及后续阶段" },
@@ -1184,7 +1185,7 @@ function DashboardPanel({
           <article><span>岗位投递</span><strong>{dashboard.total}</strong><small>{dashboard.companyCount} 家公司</small></article>
           <article><span>活跃流程</span><strong>{dashboard.active}</strong><small>仍在持续推进</small></article>
           <article><span>面试阶段</span><strong>{dashboard.interview}</strong><small>AI 面至 HR 面</small></article>
-          <article><span>Offer</span><strong>{dashboard.offers}</strong><small>Offer 率 {dashboard.offerRate}%</small></article>
+          <article><span>Offer</span><strong>{dashboard.offers}</strong><small>Offer 率 {dashboard.offerRate}%（含意向）</small></article>
           <article><span>流程推进率</span><strong>{dashboard.responseRate}%</strong><small>已走出简历阶段</small></article>
           <article><span>已共享记录</span><strong>{dashboard.sharedCount}</strong><small>可与搭子同步进展</small></article>
         </div>
