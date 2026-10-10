@@ -310,7 +310,7 @@ export function RecruitmentCalendar({
                       const dayItems = itemsByDay.get(key) ?? [];
                       const selected = key === selectedDay;
                       const outside = mode === "month" && day.getMonth() !== cursor.getMonth();
-                      const limit = mode === "week" ? 6 : 3;
+                      const limit = 6;
                       const tabStop = selected || (!days.some((date) => localDateKey(date) === selectedDay) && key === localDateKey(days[0]));
                       return (
                         <article className={"calendar-day" + (outside ? " outside" : "") + (key === todayKey ? " today" : "") + (selected ? " selected" : "")}
