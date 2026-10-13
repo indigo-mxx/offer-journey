@@ -243,3 +243,69 @@ test("readWorkspaceWorkbook drops interviews/experiences missing the required fi
   assert.equal(restored.interviews.length, 0, "interview without scheduledAt is dropped");
   assert.equal(restored.experiences.length, 0, "experience without content is dropped");
 });
+
+test("export groups experiences and combines schedules without duplicating restored interviews", async () => {
+  const second = { ...SAMPLE.interviews[0], id: "int-tech1-repeat", scheduledAt: "2025-09-16T06:00:00.000Z", endedAt: "", result: "未通过" };
+  const event = { id: "event-test", applicationId: "app-byte", eventType: "written_test", timingType: "deadline", title: "笔试", startsAt: "2025-09-18T10:00:00.000Z", endsAt: "", allDay: false, mode: "线上", location: "", eventUrl: "https://example.com/test", status: "待进行", note: "", createdAt: "2025-09-01T00:00:00.000Z", updatedAt: "2025-09-01T00:00:00.000Z" };
+  const assessment = { ...event, id: "event-assessment", applicationId: "app-huawei", eventType: "assessment", title: "测评", startsAt: "2025-09-14T10:00:00.000Z" };
+  const experience = { ...SAMPLE.experiences[0], id: "exp-repeat", interviewId: second.id, title: "复试记录" };
+  const data = { ...SAMPLE, interviews: [second, ...SAMPLE.interviews], events: [event, assessment], experiences: [experience, SAMPLE.experiences[1], SAMPLE.experiences[0]] };
+  const exceljs = await import("exceljs");
+  const Workbook = exceljs.Workbook ?? exceljs.default.Workbook;
+  function records(sheet) {
+    const headers = [];
+    sheet.getRow(4).eachCell((cell, index) => { headers[index] = cell.text; });
+    return Array.from({ length: sheet.rowCount - 4 }, (_, index) => Object.fromEntries(headers.flatMap((header, column) => header ? [[header, sheet.getRow(index + 5).getCell(column).value]] : [])));
+  }
+  for (const scheduleSort of ["position", "time"]) {
+    const blob = await createWorkspaceWorkbook(data, { scheduleSort });
+    const buffer = await blob.arrayBuffer();
+    const workbook = new Workbook();
+    await workbook.xlsx.load(buffer);
+    const schedules = records(workbook.getWorksheet("日程安排"));
+    assert.equal(schedules.find((row) => row["日程ID"] === event.id)["开始时间"].getUTCHours(), 18, "Excel displays Beijing wall time");
+    assert.equal(schedules.length, 5, "all interviews, written tests and assessments appear once");
+    assert.equal(schedules.filter((row) => row["类型"] === "面试").length, 3);
+    assert.ok(schedules.some((row) => row["类型"] === "测评"));
+    assert.ok(schedules.some((row) => row["类型"] === "笔试"));
+    if (scheduleSort === "time") {
+      const times = schedules.map((row) => row["开始时间"].getTime());
+      assert.deepEqual(times, [...times].sort((a, b) => a - b));
+    } else {
+      const ids = schedules.map((row) => row["岗位ID"]);
+      const huaweiIndexes = ids.flatMap((id, index) => id === "app-huawei" ? [index] : []);
+      assert.equal(huaweiIndexes.at(-1) - huaweiIndexes[0] + 1, huaweiIndexes.length, "all schedules for one position stay adjacent");
+    }
+    const apps = records(workbook.getWorksheet("岗位记录"));
+    const summary = apps.find((row) => row["岗位ID"] === "app-huawei")["一面时间与结果"];
+    assert.equal(apps.find((row) => row["岗位ID"] === "app-huawei")["二面时间与结果"], "", "missing rounds stay blank");
+    assert.match(summary, /2025\/09\/15 22:30 · 通过/);
+    assert.match(summary, /2025\/09\/16 14:00 · 未通过/);
+    const experiences = records(workbook.getWorksheet("面经库"));
+    assert.deepEqual(experiences.filter((row) => row["岗位ID"] === "app-huawei").map((row) => row["通过与否"]), ["通过", "未通过"]);
+    assert.equal(experiences.find((row) => row["面经ID"] === "exp-general")["通过与否"], "未关联结果");
+    assert.equal(workbook.getWorksheet("面经库").views[0].xSplit, 2);
+    assert.ok(workbook.getWorksheet("面经库").getRow(5).height >= 44);
+    const restored = await readWorkspaceWorkbook(new File([buffer], "backup.xlsx"));
+    assert.equal(restored.interviews.length, 3);
+    assert.equal(restored.events.length, 2, "interview summary rows do not become duplicated events");
+    assert.equal(restored.events.find((item) => item.id === event.id).eventUrl, event.eventUrl);
+    assert.equal(restored.events.find((item) => item.id === event.id).startsAt, event.startsAt, "Beijing display dates restore the original instant");
+    if (scheduleSort === "time") {
+      // Legacy files use unshifted UTC Excel serials and have no v6 timezone marker.
+      workbook.getWorksheet("使用说明").getCell("B6").value = "";
+      const legacySheet = workbook.getWorksheet("面试安排");
+      let startColumn, idColumn;
+      legacySheet.getRow(4).eachCell((cell, index) => {
+        if (cell.text === "开始时间") startColumn = index;
+        if (cell.text === "面试ID") idColumn = index;
+      });
+      legacySheet.eachRow((row, number) => {
+        if (number >= 5 && row.getCell(idColumn).value === second.id) row.getCell(startColumn).value = new Date(second.scheduledAt);
+      });
+      const legacy = await readWorkspaceWorkbook(new File([await workbook.xlsx.writeBuffer()], "old-backup.xlsx"));
+      assert.equal(legacy.interviews.find((item) => item.id === second.id).scheduledAt, second.scheduledAt, "legacy timestamps remain compatible");
+    }
+  }
+  assert.equal(data.interviews[0].id, second.id, "sorting does not mutate source data");
+});

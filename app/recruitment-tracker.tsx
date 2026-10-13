@@ -1464,6 +1464,7 @@ export function RecruitmentTracker({
   const [experienceForm, setExperienceForm] = useState(EMPTY_EXPERIENCE);
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [importMode, setImportMode] = useState<"merge" | "replace">("merge");
+  const [exportScheduleSort, setExportScheduleSort] = useState<"position" | "time">("position");
   const [recoverySnapshots, setRecoverySnapshots] = useState<RecoverySnapshot[]>([]);
   const [groupName, setGroupName] = useState("秋招搭子小组");
   const [inviteCode, setInviteCode] = useState("");
@@ -3762,11 +3763,11 @@ export function RecruitmentTracker({
         experiences: experiences.filter((item) => item.isOwner !== false && (!item.applicationId || ownIds.has(item.applicationId))),
         events: events.filter((item) => item.isOwner !== false && ownIds.has(item.applicationId)),
       };
-      const blob = await createWorkspaceWorkbook(backup);
+      const blob = await createWorkspaceWorkbook(backup, { scheduleSort: exportScheduleSort });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `秋招同行录_完整备份_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.download = `秋招同行录_完整备份_${exportScheduleSort === "time" ? "按时间" : "按岗位"}_${new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" })}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
       setRecoverySnapshots(await saveRecoverySnapshot(recoveryOwnerKey, backup));
@@ -3776,7 +3777,7 @@ export function RecruitmentTracker({
     } finally {
       setPendingAction(null);
     }
-  }, [events, experiences, interviews, ownApplications, recoveryOwnerKey]);
+  }, [events, experiences, exportScheduleSort, interviews, ownApplications, recoveryOwnerKey]);
 
   const importData = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -4980,6 +4981,14 @@ export function RecruitmentTracker({
                         <summary>数据备份 <span aria-hidden="true">⌄</span></summary>
                         <div className="backup-tools-menu" onClick={(event) => { if ((event.target as HTMLElement).closest("button")) event.currentTarget.closest("details")?.removeAttribute("open"); }}>
                           <p>导出、导入与本地恢复</p>
+                          <label className="backup-export-sort">
+                            <span>Excel 日程排列</span>
+                            <select value={exportScheduleSort} onChange={(event) => setExportScheduleSort(event.target.value as "position" | "time")} aria-label="Excel 日程排列">
+                              <option value="position">按公司 / 岗位归档</option>
+                              <option value="time">按时间从早到晚</option>
+                            </select>
+                          </label>
+                          <small className="backup-export-hint">导出全部岗位、面试、日程与面经。面经始终按岗位和轮次排列。</small>
                           <button className="secondary-button" onClick={() => void exportData()} disabled={busy}>导出 Excel</button>
                           <input ref={importRef} type="file" accept=".xlsx,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json" onChange={importData} className="hidden" />
                           <button className="secondary-button" onClick={() => importRef.current?.click()} disabled={busy}>导入备份</button>
