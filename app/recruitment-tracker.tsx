@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { autocompleteScore, matchesFieldsSearch, matchesLiteralSearch, matchesTextSearch, matchingAutocompleteOptions } from "@/lib/search";
 import { createWorkspaceWorkbook, readWorkspaceWorkbook } from "@/lib/workbook-backup";
+import { calculateRecruitmentAnalytics } from "@/lib/recruitment-analytics";
 import type { WorkspaceBackup } from "@/lib/workbook-backup";
 import { calendarTimingDefaults, deadlineFromRemainingHours, isAiInterviewRound, supportsCalendarTimingChoice, supportsRemainingHourDeadline } from "@/lib/calendar";
 import { calculateOfferIncome, emptyOfferCompensationDetails, normalizeOfferCompensationDetails, offerCityRates } from "@/lib/offer-calculator";
@@ -267,7 +268,7 @@ const KANBAN_COLUMNS: { key: string; label: string; hint: string; statuses: Appl
   { key: "test", label: "笔试", hint: "测评与笔试", statuses: ["笔试"] },
   { key: "interview", label: "面试中", hint: "AI 面至 HR 面", statuses: INTERVIEW_STATUSES },
   { key: "intent", label: "待谈薪/签约", hint: "已获录用意向", statuses: [INTENT_STATUS] },
-  { key: "offer", label: "Offer", hint: "已获得录用", statuses: ["Offer"] },
+  { key: "offer", label: "正式 Offer", hint: "已获得录用", statuses: ["Offer"] },
   { key: "closed", label: "已结束", hint: "拒绝或主动终止", statuses: CLOSED_STATUSES },
 ];
 
@@ -1076,11 +1077,15 @@ function DropdownSelect({
 
 function DashboardPanel({
   applications,
+  interviews, events, experiences,
   range,
   onRangeChange,
   onOpenApplications,
 }: {
   applications: Application[];
+  interviews: Interview[];
+  events: RecruitmentEvent[];
+  experiences: InterviewExperience[];
   range: DashboardRange;
   onRangeChange: (range: DashboardRange) => void;
   onOpenApplications: () => void;
@@ -1088,11 +1093,8 @@ function DashboardPanel({
   const dashboard = useMemo(() => {
     const total = applications.length;
     const percentage = (count: number) => total ? Math.round((count / total) * 100) : 0;
-    const active = applications.filter((item) => ![...CLOSED_STATUSES, "Offer"].includes(item.status)).length;
-    const interview = applications.filter((item) => INTERVIEW_STATUSES.includes(item.status)).length;
-    const offers = applications.filter((item) => item.status === "Offer").length;
-    const intents = applications.filter((item) => item.status === INTENT_STATUS).length;
-    const progressed = applications.filter((item) => !RESUME_STATUSES.includes(item.status)).length;
+    const history = calculateRecruitmentAnalytics(applications, interviews, events, experiences);
+    const { active, interview, offers, progressed } = history;
     const companyCount = new Set(applications.map((item) => companyKey(item.company))).size;
     const sharedCount = applications.filter((item) => item.visibility !== "private").length;
 
@@ -1112,6 +1114,7 @@ function DashboardPanel({
     });
 
     return {
+      ...history,
       total,
       active,
       interview,
@@ -1119,12 +1122,12 @@ function DashboardPanel({
       companyCount,
       sharedCount,
       responseRate: percentage(progressed),
-      offerRate: percentage(offers + intents),
+      offerRate: history.offerRate,
       funnel: [
         { label: "岗位记录", count: total, hint: "全部状态" },
-        { label: "进入笔试", count: applications.filter((item) => item.status === "笔试" || INTERVIEW_STATUSES.includes(item.status) || item.status === INTENT_STATUS || item.status === "Offer").length, hint: "笔试及后续阶段" },
-        { label: "进入面试", count: applications.filter((item) => INTERVIEW_STATUSES.includes(item.status) || item.status === INTENT_STATUS || item.status === "Offer").length, hint: "AI 面至 Offer" },
-        { label: "获得 Offer", count: offers, hint: "录用结果" },
+        { label: "进入测评 / 笔试", count: history.written, hint: "累计有安排、记录或笔试结果的岗位" },
+        { label: "进入面试", count: interview, hint: "累计岗位，包含已结束流程" },
+        { label: "获得 Offer（含意向）", count: offers, hint: `正式 Offer ${history.formalOffers} · 待谈薪意向 ${history.intents}` },
       ],
       statuses: KANBAN_COLUMNS.map((column) => ({ label: column.label, count: applications.filter((item) => column.statuses.includes(item.status)).length })),
       trend: sixMonths,
@@ -1140,7 +1143,7 @@ function DashboardPanel({
         outcomes: rank(applications.filter((item) => CLOSED_STATUSES.includes(item.status)).map((item) => item.finalOutcome || item.rejectionReason || "未注明")),
       },
     };
-  }, [applications]);
+  }, [applications, interviews, events, experiences]);
 
   const maxTrend = Math.max(...dashboard.trend.map((item) => item.count), 1);
   const maxFunnel = Math.max(dashboard.total, 1);
@@ -1164,7 +1167,7 @@ function DashboardPanel({
       <header className="dashboard-head">
         <div>
           <h2>投递数据看板</h2>
-          <p>从投递节奏、流程推进和目标覆盖三个角度，查看当前求职进展。</p>
+          <p>按投递日期选择统计范围，累计包含该范围内岗位的全部面试与结果，包含已结束流程。</p>
         </div>
         <div className="dashboard-actions">
           <div className="dashboard-range" aria-label="统计时间范围">
@@ -1184,15 +1187,15 @@ function DashboardPanel({
         <div className="dashboard-kpis">
           <article><span>岗位投递</span><strong>{dashboard.total}</strong><small>{dashboard.companyCount} 家公司</small></article>
           <article><span>活跃流程</span><strong>{dashboard.active}</strong><small>仍在持续推进</small></article>
-          <article><span>面试阶段</span><strong>{dashboard.interview}</strong><small>AI 面至 HR 面</small></article>
-          <article><span>Offer</span><strong>{dashboard.offers}</strong><small>Offer 率 {dashboard.offerRate}%（含意向）</small></article>
+          <article><span>累计进入面试</span><strong>{dashboard.interview}</strong><small>按岗位去重，包含已结束流程</small></article>
+          <article><span>Offer（含意向）</span><strong>{dashboard.offers}</strong><small>正式 {dashboard.formalOffers} · 意向 {dashboard.intents}<br />Offer 率 {dashboard.offerRate}%</small></article>
           <article><span>流程推进率</span><strong>{dashboard.responseRate}%</strong><small>已走出简历阶段</small></article>
-          <article><span>已共享记录</span><strong>{dashboard.sharedCount}</strong><small>可与搭子同步进展</small></article>
+          <article><span>面试通过率</span><strong>{dashboard.passRate === null ? "—" : `${dashboard.passRate}%`}</strong><small>通过 {dashboard.passed} / 有明确结果 {dashboard.resolved} 场</small></article>
         </div>
 
         <div className="dashboard-grid dashboard-grid-primary">
           <article className="dashboard-card dashboard-funnel-card">
-            <div className="dashboard-card-head"><div><span>流程转化</span><h3>从投递到 Offer</h3></div><small>按当前记录状态计算</small></div>
+            <div className="dashboard-card-head"><div><span>累计经历</span><h3>投递与录用进展</h3></div><small>按历史记录与最终结果计算</small></div>
             <div className="dashboard-funnel-list">
               {dashboard.funnel.map((step) => (
                 <div className="dashboard-funnel-row" key={step.label}>
@@ -1210,6 +1213,24 @@ function DashboardPanel({
                 <div key={item.label}><span>{item.label}</span><strong>{item.count}</strong></div>
               ))}
             </div>
+          </article>
+        </div>
+
+        <div className="dashboard-grid dashboard-grid-primary">
+          <article className="dashboard-card">
+            <div className="dashboard-card-head"><div><span>历史面试结果</span><h3>各轮面试通过率</h3></div><small>通过 ÷（通过 + 未通过）</small></div>
+            <p className="dashboard-metric-note">待定 / 未开始 {dashboard.pending} 场，未参加 {dashboard.absent} 场，不计入通过率。仅统计明确填写的场次结果。</p>
+            <div className="dashboard-rounds-scroll"><table className="dashboard-rounds-table"><thead><tr><th>轮次</th><th>场次</th><th>通过</th><th>未通过</th><th>通过率</th></tr></thead><tbody>{dashboard.stages.map((item) => <tr key={item.stage}><th>{item.stage}</th><td>{item.total}</td><td>{item.passed}</td><td>{item.failed}</td><td>{item.rate === null ? "—" : `${item.rate}%`}</td></tr>)}</tbody></table></div>
+          </article>
+          <article className="dashboard-card">
+            <div className="dashboard-card-head"><div><span>录用反馈</span><h3>OC / 意向与 Offer</h3></div><small>按岗位去重</small></div>
+            <div className="dashboard-status-list">
+              <div><span>已获 OC / 意向（含正式 Offer）</span><strong>{dashboard.offers}</strong></div>
+              <div><span>待谈薪 / 签约意向</span><strong>{dashboard.intents}</strong></div>
+              <div><span>正式 Offer</span><strong>{dashboard.formalOffers}</strong></div>
+              <div><span>尚无 OC / 意向记录</span><strong>{dashboard.total - dashboard.offers}</strong></div>
+            </div>
+            <p className="dashboard-metric-note">OC 按已意向或已获得 Offer 统计。有 Offer 获得时间的已结束岗位也计入。历史记录缺失时无法还原已走过的阶段，可补充面试或最终结果。</p>
           </article>
         </div>
 
@@ -2249,19 +2270,16 @@ export function RecruitmentTracker({
   );
 
   const stats = useMemo(() => {
-    const total = ownApplications.length;
-    const active = ownApplications.filter((a) => !["已拒绝", "流程结束", "Offer"].includes(a.status)).length;
-    const interview = ownApplications.filter((a) => INTERVIEW_STATUSES.includes(a.status)).length;
-    const offers = ownApplications.filter((a) => a.status === "Offer").length;
-    return { total, active, interview, offers };
-  }, [ownApplications]);
+    return calculateRecruitmentAnalytics(ownApplications, interviews, events, experiences);
+  }, [ownApplications, interviews, events, experiences]);
 
   const filtered = useMemo(() => {
     const source = view === "friends" ? friendApplications : ownApplications;
+    const history = calculateRecruitmentAnalytics(source, interviews, events, experiences);
     let items = source;
     if (statFilter === "active") items = items.filter((item) => !["\u5df2\u62d2\u7edd", "\u6d41\u7a0b\u7ed3\u675f", "Offer"].includes(item.status));
-    if (statFilter === "interview") items = items.filter((item) => INTERVIEW_STATUSES.includes(item.status));
-    if (statFilter === "offer") items = items.filter((item) => item.status === "Offer");
+    if (statFilter === "interview") items = items.filter((item) => history.interviewIds.has(item.id));
+    if (statFilter === "offer") items = items.filter((item) => history.offerIds.has(item.id));
     if (query.trim()) {
       const q = query.trim();
       items = items.filter((item) => matchesFieldsSearch([item.company, item.position, item.base ?? ""], q));
@@ -2277,7 +2295,7 @@ export function RecruitmentTracker({
       const result = compareApplications(a, b, sortKey);
       return sortDirection === "asc" ? result : -result;
     });
-  }, [query, statusFilter, statFilter, batchFilter, companyNatureFilter, industryFilter, scaleFilter, positionFilter, locationFilter, view, ownApplications, friendApplications, sortKey, sortDirection]);
+  }, [query, statusFilter, statFilter, batchFilter, companyNatureFilter, industryFilter, scaleFilter, positionFilter, locationFilter, view, ownApplications, friendApplications, sortKey, sortDirection, interviews, events, experiences]);
 
   const activeFilterCount = useMemo(() => [
     query.trim(),
@@ -2290,7 +2308,7 @@ export function RecruitmentTracker({
     positionFilter.trim(),
     locationFilter.trim(),
   ].filter(Boolean).length, [query, statusFilter, statFilter, batchFilter, companyNatureFilter, industryFilter, scaleFilter, positionFilter, locationFilter]);
-  const interviewWorkspaceActive = statFilter === "interview" || statusFilter === "面试进行中";
+  const interviewWorkspaceActive = statusFilter === "面试进行中";
 
   const quickStatusCounts = useMemo(() => {
     const source = view === "friends" ? friendApplications : ownApplications;
@@ -2360,17 +2378,17 @@ export function RecruitmentTracker({
     const total = filtered.length;
     const companyCount = new Set(filtered.map((item) => companyKey(item.company))).size;
     const interviewCount = filtered.filter((item) => INTERVIEW_STATUSES.includes(item.status)).length;
-    const offerCount = filtered.filter((item) => item.status === "Offer").length;
+    const offerCount = calculateRecruitmentAnalytics(filtered, interviews, events, experiences).offers;
     const sharedCount = filtered.filter((item) => item.visibility !== "private").length;
     const rate = (count: number) => total ? Math.round((count / total) * 100) : 0;
 
     return [
       { label: "公司总数", value: companyCount, unit: "家", detail: `覆盖 ${total} 个岗位`, progress: total ? 100 : 0, color: "#5c9874" },
       { label: "面试进行中", value: interviewCount, unit: "个", detail: `占全部岗位 ${rate(interviewCount)}%`, progress: rate(interviewCount), color: "#6589b2" },
-      { label: "已拿 Offer", value: offerCount, unit: "个", detail: `占全部岗位 ${rate(offerCount)}%`, progress: rate(offerCount), color: "#d49743" },
+      { label: "Offer（含意向）", value: offerCount, unit: "个", detail: `占全部岗位 ${rate(offerCount)}%`, progress: rate(offerCount), color: "#d49743" },
       { label: "已共享给搭子", value: sharedCount, unit: "个", detail: `占全部岗位 ${rate(sharedCount)}%`, progress: rate(sharedCount), color: "#9b6b9c" },
     ];
-  }, [filtered]);
+  }, [filtered, interviews, events, experiences]);
 
   const actionReminders = useMemo(() => {
     const now = Date.now();
@@ -3997,7 +4015,7 @@ export function RecruitmentTracker({
     setView("mine");
     setSelectedApplicationIds([]);
     setStatFilter(filter);
-    setStatusFilter(filter === "interview" ? "\u9762\u8bd5\u8fdb\u884c\u4e2d" : filter === "offer" ? "Offer" : "\u5168\u90e8\u72b6\u6001");
+    setStatusFilter("全部状态");
   }, [clearFilters]);
   // ────────────────────────────────── form
   function openCreate(source?: Application) {
@@ -4578,11 +4596,11 @@ export function RecruitmentTracker({
         </button>
         <button type="button" className={["stat-card", statFilter === "interview" ? "is-selected" : ""].filter(Boolean).join(" ")} onClick={() => openStatFilter("interview")} aria-pressed={statFilter === "interview"} aria-label={"\u67e5\u770b\u9762\u8bd5\u9636\u6bb5\u6295\u9012"}>
           <span className="stat-icon amber">◌</span>
-          <div><small>面试阶段</small><strong>{stats.interview}</strong><span>个待跟进</span></div>
+          <div><small>累计进入面试</small><strong>{stats.interview}</strong><span>包含已结束流程</span></div>
         </button>
         <button type="button" className={["stat-card", "highlight", statFilter === "offer" ? "is-selected" : ""].filter(Boolean).join(" ")} onClick={() => openStatFilter("offer")} aria-pressed={statFilter === "offer"} aria-label={"\u67e5\u770b Offer \u6295\u9012"}>
           <span className="stat-icon green">✓</span>
-          <div><small>Offer</small><strong>{stats.offers}</strong><span>已获得</span></div>
+          <div><small>Offer（含意向）</small><strong>{stats.offers}</strong><span>正式 {stats.formalOffers} · 意向 {stats.intents}</span></div>
         </button>
       </section>
 
@@ -4917,6 +4935,9 @@ export function RecruitmentTracker({
         ) : view === "dashboard" ? (
           <DashboardPanel
             applications={dashboardApplications}
+            interviews={interviews}
+            events={events}
+            experiences={experiences}
             range={dashboardRange}
             onRangeChange={setDashboardRange}
             onOpenApplications={() => setView("mine")}
@@ -5041,7 +5062,7 @@ export function RecruitmentTracker({
                         setStatFilter(filter === "面试进行中" ? "interview" : "all");
                       }}
                     >
-                      {filter === "全部状态" ? "全部" : filter}
+                      {filter === "全部状态" ? "全部" : filter === "Offer" ? "正式 Offer" : filter}
                       <span>{quickStatusCounts.get(filter) ?? 0}</span>
                     </button>
                   ))}
@@ -5062,7 +5083,7 @@ export function RecruitmentTracker({
                 <span>已筛选</span>
                 {[
                   { value: query.trim(), label: `搜索：${query.trim()}`, clear: () => setQuery("") },
-                  { value: statFilter !== "all" && !(statFilter === "interview" && statusFilter === "面试进行中"), label: `范围：${statFilter === "active" ? "进行中" : statFilter === "offer" ? "Offer" : "面试阶段"}`, clear: () => setStatFilter("all") },
+                  { value: statFilter !== "all" && !(statFilter === "interview" && statusFilter === "面试进行中"), label: `范围：${statFilter === "active" ? "进行中" : statFilter === "offer" ? "Offer（含意向）" : "累计进入面试"}`, clear: () => setStatFilter("all") },
                   { value: statusFilter !== "全部状态", label: statusFilter, clear: () => { setStatusFilter("全部状态"); if (statFilter === "interview") setStatFilter("all"); } },
                   { value: batchFilter !== "全部批次", label: batchFilter, clear: () => setBatchFilter("全部批次") },
                   { value: companyNatureFilter !== "全部单位性质", label: companyNatureFilter, clear: () => setCompanyNatureFilter("全部单位性质") },
