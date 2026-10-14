@@ -116,6 +116,7 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup, options: Wo
   workbook.subject = "岗位、日程、面试与面经完整恢复备份";
   workbook.company = "MXX Career Studio";
   workbook.calcProperties.fullCalcOnLoad = true;
+  const guide = workbook.addWorksheet("使用说明", { views: [{ showGridLines: false }] });
 
   const palette = {
     ink: "FF173D31",
@@ -135,6 +136,7 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup, options: Wo
 
   function addDataSheet(name: string, title: string, subtitle: string, columns: Array<{ header: string; key: string; width: number; hidden?: boolean }>, rows: Record<string, unknown>[], accent: string) {
     const sheet = workbook.addWorksheet(name, { views: [{ state: "frozen", xSplit: 2, ySplit: 4, showGridLines: false }] });
+    sheet.properties.tabColor = { argb: accent };
     sheet.mergeCells(1, 1, 1, columns.length);
     sheet.getCell("A1").value = title;
     sheet.getCell("A1").font = { name: "Microsoft YaHei", size: 20, bold: true, color: { argb: palette.white } };
@@ -166,7 +168,7 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup, options: Wo
         cell.border = { bottom: { style: "hair", color: { argb: palette.line } } };
       });
     }
-    const tableRows = rows.length ? rows.map((row) => columns.map((column) => row[column.key] ?? "")) : [columns.map(() => "")];
+    const tableRows = rows.length ? rows.map((row) => columns.map((column) => row[column.key] === "" ? null : row[column.key] ?? null)) : [columns.map(() => null)];
     sheet.addTable({
       name: `${name.replace(/[^a-zA-Z0-9]/g, "") || `Sheet${workbook.worksheets.length}`}Table`,
       ref: "A4",
@@ -187,6 +189,17 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup, options: Wo
       });
       row.height = Math.min(240, Math.max(28, lines * 15 + 10));
     });
+    columns.forEach((column, index) => {
+      if (column.hidden) return;
+      const cell = headerRow.getCell(index + 1);
+      if (/时间|日期|形式|地点|链接/.test(column.header)) {
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: palette.blueSoft } };
+        cell.font = { name: "Microsoft YaHei", size: 10, bold: true, color: { argb: palette.blue } };
+      } else if (/内容|复盘|过程|后续/.test(column.header)) {
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: palette.amberSoft } };
+        cell.font = { name: "Microsoft YaHei", size: 10, bold: true, color: { argb: "FF886126" } };
+      }
+    });
     return sheet;
   }
 
@@ -202,8 +215,6 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup, options: Wo
       || a.applicationId.localeCompare(b.applicationId);
   };
   const compareTime = (a: string, b: string) => (validDate(a)?.getTime() ?? Infinity) - (validDate(b)?.getTime() ?? Infinity);
-  const sortedInterviews = [...data.interviews].sort((a, b) =>
-    (options.scheduleSort === "time" ? compareTime(a.scheduledAt, b.scheduledAt) || comparePosition(a, b) : comparePosition(a, b) || compareTime(a.scheduledAt, b.scheduledAt)) || a.id.localeCompare(b.id));
   const linkedInterview = (item: InterviewExperience) => {
     const explicit = interviewById.get(item.interviewId ?? "");
     if (explicit && (!item.applicationId || explicit.applicationId === item.applicationId)) return explicit;
@@ -271,17 +282,9 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup, options: Wo
     return nature === "民企" ? "私企" : nature || "未标注";
   }));
   addRank("流程结论", statisticsApplications.filter((item) => ["已拒绝", "流程结束"].includes(item.status)).map((item) => item.finalOutcome || item.rejectionReason || "未注明"));
-  const statisticsDetailSheet = addDataSheet("统计明细", "投递统计明细", `统计范围：${options.statisticsRangeLabel ?? "全部投递"}。累计历史记录包含已结束流程；空白比例表示暂无明确结果。此表为导出时的统计快照。`, [
-    { header: "分类", key: "section", width: 23 }, { header: "统计项目", key: "metric", width: 36 },
-    { header: "数量", key: "count", width: 12 }, { header: "通过", key: "passed", width: 12 },
-    { header: "未通过", key: "failed", width: 12 }, { header: "比例 / 通过率", key: "ratio", width: 18 },
-    { header: "统计口径", key: "note", width: 62 },
-  ], statisticsRows, palette.brand);
-  statisticsDetailSheet.getColumn("ratio").numFmt = "0%";
-  for (const key of ["count", "passed", "failed"]) statisticsDetailSheet.getColumn(key).numFmt = "0";
-  const statisticsSheet = addExcelDashboard(workbook, statisticsRows, options.statisticsRangeLabel ?? "全部投递");
+  addExcelDashboard(workbook, statisticsRows, options.statisticsRangeLabel ?? "全部投递");
 
-  const applicationsSheet = addDataSheet("岗位记录", "岗位记录", "各轮面试时间为北京时间汇总（只读）；同轮多场全部保留。明细请编辑“面试安排”，隐藏列用于恢复关联。", [
+  const applicationsSheet = addDataSheet("岗位记录", "岗位记录", "各轮面试时间为北京时间汇总（只读）；同轮多场全部保留。面试过程与结果请编辑“面经库”，隐藏列用于恢复关联。", [
     { header: "公司", key: "company", width: 18 }, { header: "岗位", key: "position", width: 24 }, { header: "Base", key: "base", width: 12 },
     { header: "行业标签", key: "industryTags", width: 24 }, { header: "公司规模", key: "companyScale", width: 14 }, { header: "批次", key: "batch", width: 12 },
     { header: "当前进度", key: "status", width: 24 }, { header: "投递日期", key: "appliedAt", width: 13 }, { header: "投递渠道", key: "channel", width: 16 },
@@ -318,29 +321,9 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup, options: Wo
     cell.font = { ...bodyFont, color: { argb: palette.blue }, underline: true };
   });
 
-  const interviewsSheet = addDataSheet("面试安排", "面试安排", `每行一场面试，${sortLabel}。本表是面试恢复来源；日程安排中的面试行为只读汇总。`, [
-    { header: "公司", key: "company", width: 18 }, { header: "岗位", key: "position", width: 24 }, { header: "轮次", key: "round", width: 14 },
-    { header: "时间类型", key: "timingType", width: 14 }, { header: "开始时间", key: "scheduledAt", width: 19 }, { header: "结束时间", key: "endedAt", width: 19 }, { header: "形式", key: "format", width: 14 },
-    { header: "结果", key: "result", width: 12 }, { header: "地点", key: "location", width: 18 }, { header: "会议链接", key: "eventUrl", width: 34 }, { header: "面试官", key: "interviewer", width: 16 }, { header: "总结", key: "summary", width: 36 },
-    { header: "后续安排", key: "nextSteps", width: 30 }, { header: "岗位ID", key: "applicationId", width: 18, hidden: true },
-    { header: "面试ID", key: "id", width: 18, hidden: true }, { header: "创建时间", key: "createdAt", width: 20, hidden: true }, { header: "更新时间", key: "updatedAt", width: 20, hidden: true },
-  ], sortedInterviews.map((item) => {
-    const application = appById.get(item.applicationId);
-    return { company: application?.company ?? "", position: application?.position ?? "", round: item.round, timingType: item.timingType === "deadline" ? "截止时间" : "指定时间", scheduledAt: exportDate(item.scheduledAt), endedAt: exportDate(item.endedAt), format: item.format, result: item.result, location: item.location ?? "", eventUrl: item.eventUrl ?? "", interviewer: item.interviewer, summary: item.summary, nextSteps: item.nextSteps, applicationId: item.applicationId, id: item.id, createdAt: exportDate(item.createdAt ?? ""), updatedAt: exportDate(item.updatedAt) };
-  }), palette.blue);
-  interviewsSheet.getColumn("scheduledAt").numFmt = "yyyy-mm-dd hh:mm";
-  interviewsSheet.getColumn("endedAt").numFmt = "yyyy-mm-dd hh:mm";
-  interviewsSheet.getColumn("createdAt").numFmt = "yyyy-mm-dd hh:mm";
-  interviewsSheet.getColumn("updatedAt").numFmt = "yyyy-mm-dd hh:mm";
-  interviewsSheet.getColumn("eventUrl").eachCell((cell: Cell, rowNumber: number) => {
-    if (rowNumber <= 4 || !cell.text) return;
-    cell.value = { text: cell.text, hyperlink: cell.text, tooltip: "打开面试链接" };
-    cell.font = { ...bodyFont, color: { argb: palette.blue }, underline: true };
-  });
-
   const scheduleRows = [
     ...recruitmentEvents.map((item) => ({
-      ...item, source: "event", startsAtText: item.startsAt, result: "", round: "",
+      ...item, source: "event", startsAtText: item.startsAt, result: "", round: "", interviewBackup: "",
       company: appById.get(item.applicationId)?.company ?? "", position: appById.get(item.applicationId)?.position ?? "",
       eventType: EVENT_TYPE_LABELS[item.eventType], timingType: item.timingType === "deadline" ? "截止时间" : "指定时间",
       startsAt: exportDate(item.startsAt), endsAt: exportDate(item.endsAt), allDay: item.allDay ? "是" : "否",
@@ -348,6 +331,7 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup, options: Wo
     })),
     ...data.interviews.map((item) => ({
       id: item.id, applicationId: item.applicationId, source: "interview", startsAtText: item.scheduledAt,
+      interviewBackup: JSON.stringify(item),
       company: appById.get(item.applicationId)?.company ?? "", position: appById.get(item.applicationId)?.position ?? "",
       eventType: "面试", title: item.round, round: item.round, result: item.result,
       timingType: item.timingType === "deadline" ? "截止时间" : "指定时间",
@@ -356,13 +340,25 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup, options: Wo
       status: item.endedAt || ["通过", "未通过", "未参加"].includes(item.result) ? "已完成" : "待进行",
       createdAt: exportDate(item.createdAt ?? ""), updatedAt: exportDate(item.updatedAt),
     })),
+    ...data.applications.flatMap((item) => [
+      ["received", "收到 Offer", item.offerReceivedAt, false],
+      ["deadline", "Offer 答复截止", item.offerDeadline, false],
+      ["onboard", "预计入职", item.offerOnboardDate, true],
+    ].filter(([, , date]) => typeof date === "string" && validDate(date)).map(([suffix, title, date, allDay]) => ({
+      id: `${item.id}:offer:${suffix}`, applicationId: item.id, source: "offer", startsAtText: String(date), interviewBackup: "",
+      company: item.company, position: item.position, eventType: "Offer", title: String(title), round: "", result: "",
+      timingType: suffix === "deadline" ? "截止时间" : "指定时间", startsAt: allDay ? validDate(String(date)) : exportDate(String(date)), endsAt: null,
+      allDay: allDay ? "是" : "否", mode: "Offer", location: item.base, eventUrl: item.link, note: "由岗位 Offer 信息生成，修改与恢复以岗位记录中的 Offer 日期为准",
+      status: suffix === "received" ? "已完成" : "待进行", createdAt: exportDate(item.createdAt ?? ""), updatedAt: exportDate(item.updatedAt),
+    }))),
   ].sort((a, b) => (options.scheduleSort === "time" ? compareTime(a.startsAtText, b.startsAtText) || comparePosition(a, b) : comparePosition(a, b) || compareTime(a.startsAtText, b.startsAtText)) || a.id.localeCompare(b.id));
-  const eventsSheet = addDataSheet("日程安排", "日程安排 · 全部事项", `包含面试、测评、笔试及其他事项；${sortLabel}。面试行仅供查看，修改与恢复以“面试安排”为准。`, [
+  const eventsSheet = addDataSheet("日程安排", "日程安排 · 全部事项", `面试、测评、笔试及其他事项；${sortLabel}。本表负责面试时间、形式、地点与链接；过程和结果以面经库为准。`, [
     { header: "公司", key: "company", width: 18 }, { header: "岗位", key: "position", width: 24 }, { header: "类型", key: "eventType", width: 13 }, { header: "时间类型", key: "timingType", width: 14 },
     { header: "标题", key: "title", width: 28 }, { header: "开始时间", key: "startsAt", width: 19 }, { header: "结束时间", key: "endsAt", width: 19 },
     { header: "全天", key: "allDay", width: 10 }, { header: "形式", key: "mode", width: 14 }, { header: "地点", key: "location", width: 18 },
     { header: "日程链接", key: "eventUrl", width: 34 }, { header: "状态", key: "status", width: 12 }, { header: "面试轮次", key: "round", width: 14 }, { header: "面试结果", key: "result", width: 12 }, { header: "备注", key: "note", width: 36 },
     { header: "记录来源", key: "source", width: 14, hidden: true },
+    { header: "面试恢复数据", key: "interviewBackup", width: 20, hidden: true },
     { header: "岗位ID", key: "applicationId", width: 18, hidden: true }, { header: "日程ID", key: "id", width: 18, hidden: true },
     { header: "创建时间", key: "createdAt", width: 20, hidden: true }, { header: "更新时间", key: "updatedAt", width: 20, hidden: true },
   ], scheduleRows, palette.purple);
@@ -386,31 +382,77 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup, options: Wo
       || compareTime(linkedInterview(a)?.scheduledAt ?? a.createdAt ?? "", linkedInterview(b)?.scheduledAt ?? b.createdAt ?? "")
       || a.id.localeCompare(b.id);
   });
-  const experiencesSheet = addDataSheet("面经库", "面经库 · 按岗位归档", "相同公司 / 岗位放在一起，依轮次与时间排列。面试结果取自关联场次（只读），请在“面试安排”修改。", [
+  const exportedInterviewIds = new Set<string>();
+  const faceRows: Record<string, unknown>[] = sortedExperiences.map((item) => {
+    const interview = linkedInterview(item);
+    const primary = Boolean(interview && !exportedInterviewIds.has(interview.id));
+    if (interview) exportedInterviewIds.add(interview.id);
+    return {
+      title: item.title, company: appById.get(item.applicationId ?? "")?.company ?? item.company, position: appById.get(item.applicationId ?? "")?.position ?? item.position,
+      round: interview?.round ?? item.round, originalExperienceRound: item.round, result: interview?.result ?? "", tags: item.tags.join("、"), content: item.content, takeaway: item.takeaway,
+      interviewAt: exportDate(interview?.scheduledAt ?? ""), endedAt: exportDate(interview?.endedAt ?? ""),
+      timingType: interview?.timingType === "deadline" ? "截止时间" : "指定时间", format: interview?.format ?? "", location: interview?.location ?? "", eventUrl: interview?.eventUrl ?? "",
+      interviewer: interview?.interviewer ?? "", summary: interview?.summary ?? "", nextSteps: interview?.nextSteps ?? "",
+      recordType: !interview ? "独立面经" : primary ? "面试与面经" : "关联面经（面试字段只读）",
+      restoreInterview: primary ? "是" : "否", applicationId: item.applicationId ?? "", interviewId: interview?.id ?? "", originalInterviewId: item.interviewId ?? "", id: item.id,
+      interviewApplicationId: interview?.applicationId ?? "",
+      originalCompany: item.company, originalPosition: item.position,
+      visibility: item.visibility === "full" ? "共享给好友" : "仅自己", groupId: item.groupId ?? "", createdAt: exportDate(item.createdAt ?? ""), updatedAt: exportDate(item.updatedAt),
+      interviewCreatedAt: exportDate(interview?.createdAt ?? ""), interviewUpdatedAt: exportDate(interview?.updatedAt ?? ""),
+    };
+  });
+  for (const interview of data.interviews) {
+    if (exportedInterviewIds.has(interview.id)) continue;
+    const application = appById.get(interview.applicationId);
+    faceRows.push({
+      recordType: "面试记录", restoreInterview: "是", company: application?.company ?? "", position: application?.position ?? "", title: `${interview.round} · 面试记录`, round: interview.round,
+      result: interview.result, interviewAt: exportDate(interview.scheduledAt), endedAt: exportDate(interview.endedAt), timingType: interview.timingType === "deadline" ? "截止时间" : "指定时间",
+      format: interview.format, location: interview.location ?? "", eventUrl: interview.eventUrl ?? "", interviewer: interview.interviewer, summary: interview.summary, nextSteps: interview.nextSteps,
+      applicationId: interview.applicationId, interviewId: interview.id, id: "", content: "", takeaway: "", tags: "", visibility: "", groupId: "",
+      interviewApplicationId: interview.applicationId,
+      interviewCreatedAt: exportDate(interview.createdAt ?? ""), interviewUpdatedAt: exportDate(interview.updatedAt),
+    });
+  }
+  faceRows.sort((a, b) => String(a.company).localeCompare(String(b.company), "zh-CN") || String(a.position).localeCompare(String(b.position), "zh-CN")
+    || String(a.applicationId).localeCompare(String(b.applicationId))
+    || INTERVIEW_STAGE_HEADERS.indexOf(exportInterviewStage(String(a.round))) - INTERVIEW_STAGE_HEADERS.indexOf(exportInterviewStage(String(b.round)))
+    || Number(a.interviewAt ?? Infinity) - Number(b.interviewAt ?? Infinity) || String(a.id).localeCompare(String(b.id)));
+  const experiencesSheet = addDataSheet("面经库", "面经库 · 面试过程与结果", "按岗位、轮次归档，包含没有面经的面试。主记录可修改结果和过程；同场的关联面经保留独立内容，面试字段以主记录为准。", [
     { header: "公司", key: "company", width: 18 }, { header: "岗位", key: "position", width: 24 }, { header: "标题", key: "title", width: 28 },
-    { header: "轮次", key: "round", width: 14 }, { header: "通过与否", key: "result", width: 12 }, { header: "标签", key: "tags", width: 22 }, { header: "面试内容", key: "content", width: 52 },
+    { header: "轮次", key: "round", width: 14 }, { header: "通过与否", key: "result", width: 12 }, { header: "记录类型", key: "recordType", width: 24 }, { header: "标签", key: "tags", width: 22 }, { header: "面试内容", key: "content", width: 52 },
     { header: "复盘要点", key: "takeaway", width: 40 }, { header: "共享范围", key: "visibility", width: 14 }, { header: "面试时间", key: "interviewAt", width: 19 },
+    { header: "结束时间", key: "endedAt", width: 19 }, { header: "时间类型", key: "timingType", width: 14 }, { header: "形式", key: "format", width: 14 }, { header: "地点", key: "location", width: 18 }, { header: "会议链接", key: "eventUrl", width: 34 },
+    { header: "面试官", key: "interviewer", width: 20 }, { header: "过程记录", key: "summary", width: 42 }, { header: "后续安排", key: "nextSteps", width: 30 },
     { header: "岗位ID", key: "applicationId", width: 18, hidden: true }, { header: "面试ID", key: "interviewId", width: 18, hidden: true },
+    { header: "恢复面试主记录", key: "restoreInterview", width: 14, hidden: true }, { header: "面经原关联ID", key: "originalInterviewId", width: 18, hidden: true },
+    { header: "面试岗位ID", key: "interviewApplicationId", width: 18, hidden: true },
+    { header: "面经公司", key: "originalCompany", width: 18, hidden: true }, { header: "面经岗位", key: "originalPosition", width: 24, hidden: true },
+    { header: "面经轮次", key: "originalExperienceRound", width: 14, hidden: true },
+    { header: "面试创建时间", key: "interviewCreatedAt", width: 20, hidden: true }, { header: "面试更新时间", key: "interviewUpdatedAt", width: 20, hidden: true },
     { header: "面经ID", key: "id", width: 18, hidden: true }, { header: "共享小组ID", key: "groupId", width: 18, hidden: true }, { header: "创建时间", key: "createdAt", width: 20, hidden: true }, { header: "更新时间", key: "updatedAt", width: 20, hidden: true },
-  ], sortedExperiences.map((item) => ({
-    title: item.title, company: appById.get(item.applicationId ?? "")?.company ?? item.company, position: appById.get(item.applicationId ?? "")?.position ?? item.position, round: item.round, result: linkedInterview(item)?.result || "未关联结果", tags: item.tags.join("、"), content: item.content, takeaway: item.takeaway,
-    interviewAt: exportDate(linkedInterview(item)?.scheduledAt ?? ""), applicationId: item.applicationId ?? "", interviewId: item.interviewId ?? "", id: item.id,
-    visibility: item.visibility === "full" ? "共享给好友" : "仅自己", groupId: item.groupId ?? "", createdAt: exportDate(item.createdAt ?? ""), updatedAt: exportDate(item.updatedAt),
-  })), palette.amber);
+  ], faceRows, palette.amber);
   experiencesSheet.getColumn("interviewAt").numFmt = "yyyy-mm-dd hh:mm";
+  for (const key of ["endedAt", "interviewCreatedAt", "interviewUpdatedAt"]) experiencesSheet.getColumn(key).numFmt = "yyyy-mm-dd hh:mm";
   experiencesSheet.getColumn("createdAt").numFmt = "yyyy-mm-dd hh:mm";
   experiencesSheet.getColumn("updatedAt").numFmt = "yyyy-mm-dd hh:mm";
   experiencesSheet.eachRow((row: Row, rowNumber: number) => { if (rowNumber >= 5) row.height = Math.max(row.height ?? 28, 44); });
-  for (const sheet of [interviewsSheet, eventsSheet, experiencesSheet]) {
+  for (const sheet of [eventsSheet, experiencesSheet]) {
     sheet.getColumn("result").eachCell((cell: Cell, rowNumber: number) => {
       if (rowNumber <= 4) return;
       const color = cell.text === "通过" ? palette.brand : cell.text === "未通过" ? "FFAB493D" : palette.muted;
       cell.font = { ...bodyFont, bold: ["通过", "未通过"].includes(cell.text), color: { argb: color } };
     });
   }
+  experiencesSheet.getColumn("recordType").eachCell((cell: Cell, rowNumber: number) => {
+    if (rowNumber <= 4) return;
+    const primary = cell.text === "面试与面经";
+    const interviewOnly = cell.text === "面试记录";
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: primary ? palette.brandSoft : interviewOnly ? palette.blueSoft : palette.amberSoft } };
+    cell.font = { ...bodyFont, bold: primary, color: { argb: primary ? palette.brand : interviewOnly ? palette.blue : palette.muted } };
+  });
 
-  const guide = workbook.addWorksheet("使用说明", { views: [{ showGridLines: false }] });
   guide.columns = [{ width: 4 }, { width: 22 }, { width: 22 }, { width: 22 }, { width: 22 }, { width: 4 }];
+  guide.properties.tabColor = { argb: palette.brand };
   guide.mergeCells("B2:E3");
   guide.getCell("B2").value = "秋招同行录 · 完整恢复备份";
   guide.getCell("B2").font = { name: "Microsoft YaHei", size: 24, bold: true, color: { argb: palette.white } };
@@ -419,12 +461,12 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup, options: Wo
   guide.getRow(2).height = 32;
   guide.getRow(3).height = 32;
   guide.mergeCells("B5:E5");
-  guide.getCell("B5").value = `导出时间：${exportedAt.toLocaleString("zh-CN")}　｜　备份版本：6`;
+  guide.getCell("B5").value = `导出时间：${exportedAt.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}　｜　备份版本：7`;
   guide.getCell("B5").font = { name: "Microsoft YaHei", size: 10, color: { argb: palette.muted } };
   guide.mergeCells("B6:E6");
   guide.getCell("B6").value = "时间显示：北京时间（UTC+8）";
   guide.getCell("B6").font = bodyFont;
-  const cards = [["岗位记录", data.applications.length, palette.brandSoft, palette.brand], ["面试安排", data.interviews.length, palette.blueSoft, palette.blue], ["全部日程", scheduleRows.length, palette.purpleSoft, palette.purple], ["面经沉淀", data.experiences.length, palette.amberSoft, palette.amber]] as const;
+  const cards = [["岗位记录", data.applications.length, palette.brandSoft, palette.brand], ["面试记录", data.interviews.length, palette.blueSoft, palette.blue], ["全部日程", scheduleRows.length, palette.purpleSoft, palette.purple], ["面经沉淀", data.experiences.length, palette.amberSoft, palette.amber]] as const;
   cards.forEach(([label, count, fill, color], index) => {
     const column = 2 + index;
     const cell = guide.getCell(7, column);
@@ -445,8 +487,10 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup, options: Wo
     "4. .xlsx 原生保存中文，不需要另选编码，Excel/WPS 均不会出现 CSV 式乱码。",
     "5. 共享小组成员关系不会写入备份；恢复时无效的小组会自动转为“仅自己可见”。",
     `6. 日程排序：${sortLabel}。面经始终按公司、岗位和面试轮次归档。`,
-    "7. 岗位的各轮时间、日程中的面试行和面经通过与否为汇总信息；面试恢复以“面试安排”为准，避免重复导入。",
+    "7. 日程安排负责面试时间、形式、地点和链接；面经库主记录负责面试结果、面试官、过程记录与后续安排。",
     "8. 数据统计包含导出时的数据看板快照；导入时由恢复后的业务记录重新计算，不重复导入统计行。",
+    "9. 无面经的面试保留为“面试记录”；同场多篇面经全部保存，恢复时只生成一场面试。",
+    "10. 恢复关联依靠隐藏 ID；请勿删除或修改隐藏列。旧版本含“面试安排”的备份仍支持导入。",
   ];
   notes.forEach((note, index) => {
     guide.mergeCells(12 + index, 2, 12 + index, 5);
@@ -458,8 +502,21 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup, options: Wo
     cell.border = { bottom: { style: "hair", color: { argb: palette.line } } };
     guide.getRow(12 + index).height = 30;
   });
+  guide.mergeCells("B23:E23");
+  guide.getCell("B23").value = "工作表导航 · 点击打开";
+  guide.getCell("B23").font = { ...bodyFont, size: 13, bold: true };
+  [["数据统计", "绿色看板：进度、通过率、挂率与录用意向"], ["岗位记录", "岗位信息、当前进度及各轮面试汇总"], ["日程安排", "所有安排，包含面试、笔试、测评和 Offer 日期"], ["面经库", "面试过程、结果与完整复盘，包含尚无面经的面试"]].forEach(([name, description], index) => {
+    const row = 25 + index;
+    guide.getCell(row, 2).value = { text: name, hyperlink: `#'${name}'!A1` };
+    guide.getCell(row, 2).font = { ...bodyFont, bold: true, underline: true, color: { argb: palette.brand } };
+    guide.mergeCells(row, 3, row, 5);
+    guide.getCell(row, 3).value = description;
+    guide.getCell(row, 3).font = bodyFont;
+    guide.getCell(row, 3).alignment = { vertical: "middle", wrapText: true };
+    guide.getRow(row).height = 30;
+  });
   guide.state = "visible";
-  workbook.views = [{ x: 0, y: 0, width: 12000, height: 20000, firstSheet: 0, activeTab: workbook.worksheets.indexOf(statisticsSheet), visibility: "visible" }];
+  workbook.views = [{ x: 0, y: 0, width: 12000, height: 20000, firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
   const buffer = await workbook.xlsx.writeBuffer();
   return new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -524,16 +581,62 @@ export async function readWorkspaceWorkbook(file: File): Promise<WorkspaceBackup
   const applicationIds = new Set(applications.map((item) => item.id));
   const applicationByName = new Map(applications.map((item) => [applicationKey(item.company, item.position), item.id]));
 
-  const interviews = records(interviewsSheet).map((row): Interview | null => {
+  const legacyInterviews = records(interviewsSheet).map((row): Interview | null => {
     const applicationId = excelText(row["岗位ID"]).trim() || applicationByName.get(applicationKey(excelText(row["公司"]), excelText(row["岗位"]))) || "";
     const scheduledAt = readWorkbookDate(row["开始时间"]);
     if (!applicationIds.has(applicationId) || !scheduledAt) return null;
     return { id: safeId(row["面试ID"]), applicationId, scheduledAt, endedAt: readWorkbookDate(row["结束时间"]), timingType: excelText(row["时间类型"]).trim() === "截止时间" ? "deadline" : "scheduled", round: excelText(row["轮次"]).trim() || "一面", format: excelText(row["形式"]).trim() || "视频面试", result: excelText(row["结果"]).trim() || "待定", location: excelText(row["地点"]).trim(), eventUrl: excelText(row["会议链接"]).trim(), interviewer: excelText(row["面试官"]).trim(), summary: excelText(row["总结"]).trim(), nextSteps: excelText(row["后续安排"]).trim(), createdAt: readWorkbookDate(row["创建时间"]) || now, updatedAt: readWorkbookDate(row["更新时间"]) || now };
   }).filter((item): item is Interview => Boolean(item));
+  const faceRecords = records(experiencesSheet);
+  const scheduleRecords = records(eventsSheet);
+  const interviewMap = new Map(legacyInterviews.map((item) => [item.id, item]));
+  if (!interviewsSheet) {
+    for (const row of faceRecords) {
+      if (excelText(row["恢复面试主记录"]) !== "是") continue;
+      const applicationId = excelText(row["面试岗位ID"]).trim() || excelText(row["岗位ID"]).trim() || applicationByName.get(applicationKey(excelText(row["公司"]), excelText(row["岗位"]))) || "";
+      const scheduledAt = readWorkbookDate(row["面试时间"]);
+      if (!applicationIds.has(applicationId) || !scheduledAt) continue;
+      const id = safeId(row["面试ID"]);
+      if (interviewMap.has(id)) throw new Error("同一面试存在多行主记录，请保留一行主记录后再导入");
+      interviewMap.set(id, {
+        id, applicationId, scheduledAt, endedAt: readWorkbookDate(row["结束时间"]), timingType: excelText(row["时间类型"]) === "截止时间" ? "deadline" : "scheduled",
+        round: excelText(row["轮次"]).trim() || "技术一面", format: excelText(row["形式"]).trim(), result: excelText(row["通过与否"]).trim(), location: excelText(row["地点"]).trim(), eventUrl: excelText(row["会议链接"]).trim(),
+        interviewer: excelText(row["面试官"]).trim(), summary: excelText(row["过程记录"]), nextSteps: excelText(row["后续安排"]),
+        createdAt: readWorkbookDate(row["面试创建时间"]) || undefined, updatedAt: readWorkbookDate(row["面试更新时间"]) || now,
+      });
+    }
+    const scheduledInterviewIds = new Set<string>();
+    for (const row of scheduleRecords) {
+      if (excelText(row["记录来源"]) !== "interview" && excelText(row["类型"]) !== "面试") continue;
+      const applicationId = excelText(row["岗位ID"]).trim() || applicationByName.get(applicationKey(excelText(row["公司"]), excelText(row["岗位"]))) || "";
+      const scheduledAt = readWorkbookDate(row["开始时间"]);
+      if (!applicationIds.has(applicationId) || !scheduledAt) continue;
+      const id = safeId(row["日程ID"]);
+      if (scheduledInterviewIds.has(id)) throw new Error("日程安排中存在重复的面试 ID，请保留一行安排后再导入");
+      scheduledInterviewIds.add(id);
+      const primary = interviewMap.get(id);
+      let saved: Partial<Interview> = {};
+      try { saved = JSON.parse(excelText(row["面试恢复数据"]) || "{}"); } catch { throw new Error("面试恢复数据损坏，请重新导出备份或保留面经库中的主记录"); }
+      if (!saved || typeof saved !== "object") throw new Error("面试恢复数据格式无效");
+      if (primary && primary.applicationId !== applicationId) throw new Error("日程与面经库中的同一面试关联了不同岗位，请修正后再导入");
+      interviewMap.set(id, {
+        id, applicationId, scheduledAt, endedAt: readWorkbookDate(row["结束时间"]), timingType: excelText(row["时间类型"]) === "截止时间" ? "deadline" : "scheduled",
+        round: excelText(row["面试轮次"]) || excelText(row["标题"]) || "技术一面", format: excelText(row["形式"]), location: excelText(row["地点"]), eventUrl: excelText(row["日程链接"]),
+        result: primary?.result ?? (excelText(row["面试结果"]) || saved.result || "待定"),
+        interviewer: primary?.interviewer ?? saved.interviewer ?? "", summary: primary?.summary ?? excelText(row["备注"]), nextSteps: primary?.nextSteps ?? saved.nextSteps ?? "",
+        createdAt: primary?.createdAt ?? saved.createdAt, updatedAt: primary?.updatedAt ?? saved.updatedAt ?? (readWorkbookDate(row["更新时间"]) || now),
+      });
+    }
+  }
+  const interviews = [...interviewMap.values()];
+  if (interviews.some((item) => !validDate(item.scheduledAt) || (item.endedAt && (!validDate(item.endedAt) || new Date(item.endedAt).getTime() < new Date(item.scheduledAt).getTime())))) {
+    throw new Error("面试时间无效，或结束时间早于开始时间，请修正 Excel 后再导入");
+  }
   if (interviews.length > 1000) throw new Error("单次最多导入 1000 条面试记录");
   const interviewIds = new Set(interviews.map((item) => item.id));
 
-  const events = records(eventsSheet).map((row): RecruitmentEvent | null => {
+  const events = scheduleRecords.map((row): RecruitmentEvent | null => {
+    if (excelText(row["记录来源"]) === "offer") return null;
     if (excelText(row["记录来源"]) === "interview" || excelText(row["类型"]) === "面试") return null;
     const applicationId = excelText(row["岗位ID"]).trim() || applicationByName.get(applicationKey(excelText(row["公司"]), excelText(row["岗位"]))) || "";
     const eventType = EVENT_TYPE_VALUES[excelText(row["类型"]).trim()];
@@ -545,13 +648,14 @@ export async function readWorkspaceWorkbook(file: File): Promise<WorkspaceBackup
   }).filter((item): item is RecruitmentEvent => Boolean(item));
   if (events.length > 2000) throw new Error("单次最多导入 2000 条日程记录");
 
-  const experiences = records(experiencesSheet).map((row): InterviewExperience | null => {
+  const experiences = faceRecords.map((row): InterviewExperience | null => {
+    if (excelText(row["记录类型"]) === "面试记录") return null;
     const applicationId = excelText(row["岗位ID"]).trim() || applicationByName.get(applicationKey(excelText(row["公司"]), excelText(row["岗位"]))) || "";
-    const interviewId = excelText(row["面试ID"]).trim();
+    const interviewId = excelText(row["面经原关联ID"] === undefined ? row["面试ID"] : row["面经原关联ID"]).trim();
     const title = excelText(row["标题"]).trim();
     const content = excelText(row["面试内容"]).trim();
     if (!title || !content) return null;
-    return { id: safeId(row["面经ID"]), applicationId: applicationIds.has(applicationId) ? applicationId : "", interviewId: interviewIds.has(interviewId) ? interviewId : "", title, company: excelText(row["公司"]).trim(), position: excelText(row["岗位"]).trim(), round: excelText(row["轮次"]).trim(), tags: splitTags(row["标签"]), content, takeaway: excelText(row["复盘要点"]).trim(), visibility: excelText(row["共享范围"]).trim() === "共享给好友" ? "full" : "private", groupId: excelText(row["共享小组ID"]).trim() || null, isOwner: true, createdAt: readWorkbookDate(row["创建时间"]) || now, updatedAt: readWorkbookDate(row["更新时间"]) || now };
+    return { id: safeId(row["面经ID"]), applicationId: applicationIds.has(applicationId) ? applicationId : "", interviewId: interviewIds.has(interviewId) ? interviewId : "", title, company: excelText(row["面经公司"] ?? row["公司"]).trim(), position: excelText(row["面经岗位"] ?? row["岗位"]).trim(), round: excelText(row["面经轮次"] ?? row["轮次"]).trim(), tags: splitTags(row["标签"]), content, takeaway: excelText(row["复盘要点"]).trim(), visibility: excelText(row["共享范围"]).trim() === "共享给好友" ? "full" : "private", groupId: excelText(row["共享小组ID"]).trim() || null, isOwner: true, createdAt: readWorkbookDate(row["创建时间"]) || now, updatedAt: readWorkbookDate(row["更新时间"]) || now };
   }).filter((item): item is InterviewExperience => Boolean(item));
   if (experiences.length > 1000) throw new Error("单次最多导入 1000 篇面经");
   return { applications, interviews, experiences, events };

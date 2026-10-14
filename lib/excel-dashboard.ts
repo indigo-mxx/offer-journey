@@ -3,7 +3,7 @@ import type { Workbook, CellValue } from "exceljs";
 type MetricRow = Record<string, unknown>;
 const COLORS = { paper: "FFF7F4EC", white: "FFFFFEFA", green: "FF245D49", muted: "FF768277", line: "FFE0E4DA", pale: "FFEAF2EC", blue: "FF527591", bluePale: "FFEDF3F7", gold: "FF9A762E", goldPale: "FFFAF1DD", red: "FFAC5D49", redPale: "FFFAEEE7", ink: "FF263C32" };
 
-/** Presentation sheet links to the filterable statistics detail, keeping one source. */
+/** Statistics are an export-time snapshot; recovery recalculates from business records. */
 export function addExcelDashboard(workbook: Workbook, rows: MetricRow[], scope: string) {
   const sheet = workbook.addWorksheet("数据统计", {
     views: [{ showGridLines: false, zoomScale: 85, state: "frozen", ySplit: 3 }],
@@ -30,11 +30,9 @@ export function addExcelDashboard(workbook: Workbook, rows: MetricRow[], scope: 
   const source = (section: string, metric: string, key = "count"): CellValue => {
     const index = rows.findIndex((row) => row.section === section && row.metric === metric);
     if (index < 0) return "—";
-    const column = ({ count: "C", passed: "D", failed: "E", ratio: "F", note: "G" } as Record<string, string>)[key];
-    const ref = `'统计明细'!${column}${index + 5}`;
     const result = rows[index][key];
     if (result == null || result === "") return "—";
-    return { formula: ref, result: result as number | string };
+    return result as number | string;
   };
   const panel = (top: number, bottom: number, first: number, last: number, title: string, accent = COLORS.green, tint = COLORS.pale) => {
     for (let row = top; row <= bottom; row++) for (let col = first; col <= last; col++) {
@@ -159,6 +157,6 @@ export function addExcelDashboard(workbook: Workbook, rows: MetricRow[], scope: 
   text(87, 2, 24, "统计口径", 12, COLORS.green, true);
   text(88, 2, 24, "流程推进率排除简历挂及仍在简历投递 / 筛选阶段的岗位。历史记录缺失时，不推算未知阶段与结果。", 9, COLORS.muted);
   text(89, 2, 24, "绿色为累计进展，蓝色为面试与当前分布，金色为录用意向，暖红为未通过。暂无明确结果时显示“—”。", 9, COLORS.muted);
-  text(90, 2, 24, "完整可筛选数据见“统计明细”；岗位、日程、面试与面经可在各自工作表查看。", 9, COLORS.muted);
+  text(90, 2, 24, "岗位与日程用于恢复安排，面经库完整保存面试过程及结果；导入后统计由业务记录重新计算。", 9, COLORS.muted);
   return sheet;
 }

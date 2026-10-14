@@ -264,7 +264,7 @@ test("export groups experiences and combines schedules without duplicating resto
     await workbook.xlsx.load(buffer);
     const schedules = records(workbook.getWorksheet("日程安排"));
     assert.equal(schedules.find((row) => row["日程ID"] === event.id)["开始时间"].getUTCHours(), 18, "Excel displays Beijing wall time");
-    assert.equal(schedules.length, 5, "all interviews, written tests and assessments appear once");
+    assert.equal(schedules.length, 8, "all interviews, written tests, assessments and offer dates appear once");
     assert.equal(schedules.filter((row) => row["类型"] === "面试").length, 3);
     assert.ok(schedules.some((row) => row["类型"] === "测评"));
     assert.ok(schedules.some((row) => row["类型"] === "笔试"));
@@ -278,12 +278,12 @@ test("export groups experiences and combines schedules without duplicating resto
     }
     const apps = records(workbook.getWorksheet("岗位记录"));
     const summary = apps.find((row) => row["岗位ID"] === "app-huawei")["一面时间与结果"];
-    assert.equal(apps.find((row) => row["岗位ID"] === "app-huawei")["二面时间与结果"], "", "missing rounds stay blank");
+    assert.equal(apps.find((row) => row["岗位ID"] === "app-huawei")["二面时间与结果"], null, "missing rounds stay blank");
     assert.match(summary, /2025\/09\/15 22:30 · 通过/);
     assert.match(summary, /2025\/09\/16 14:00 · 未通过/);
     const experiences = records(workbook.getWorksheet("面经库"));
-    assert.deepEqual(experiences.filter((row) => row["岗位ID"] === "app-huawei").map((row) => row["通过与否"]), ["通过", "未通过"]);
-    assert.equal(experiences.find((row) => row["面经ID"] === "exp-general")["通过与否"], "未关联结果");
+    assert.deepEqual(experiences.filter((row) => row["岗位ID"] === "app-huawei" && row["面经ID"]).map((row) => row["通过与否"]), ["通过", "未通过"]);
+    assert.equal(experiences.find((row) => row["面经ID"] === "exp-general")["通过与否"], null);
     assert.equal(workbook.getWorksheet("面经库").views[0].xSplit, 2);
     assert.ok(workbook.getWorksheet("面经库").getRow(5).height >= 44);
     const restored = await readWorkspaceWorkbook(new File([buffer], "backup.xlsx"));
@@ -294,15 +294,9 @@ test("export groups experiences and combines schedules without duplicating resto
     if (scheduleSort === "time") {
       // Legacy files use unshifted UTC Excel serials and have no v6 timezone marker.
       workbook.getWorksheet("使用说明").getCell("B6").value = "";
-      const legacySheet = workbook.getWorksheet("面试安排");
-      let startColumn, idColumn;
-      legacySheet.getRow(4).eachCell((cell, index) => {
-        if (cell.text === "开始时间") startColumn = index;
-        if (cell.text === "面试ID") idColumn = index;
-      });
-      legacySheet.eachRow((row, number) => {
-        if (number >= 5 && row.getCell(idColumn).value === second.id) row.getCell(startColumn).value = new Date(second.scheduledAt);
-      });
+      const legacySheet = workbook.addWorksheet("面试安排");
+      legacySheet.getRow(4).values = ["岗位ID", "面试ID", "开始时间", "轮次", "结果", "总结"];
+      legacySheet.getRow(5).values = [second.applicationId, second.id, new Date(second.scheduledAt), second.round, second.result, second.summary];
       const legacy = await readWorkspaceWorkbook(new File([await workbook.xlsx.writeBuffer()], "old-backup.xlsx"));
       assert.equal(legacy.interviews.find((item) => item.id === second.id).scheduledAt, second.scheduledAt, "legacy timestamps remain compatible");
     }
@@ -318,23 +312,18 @@ test("Excel includes the dashboard snapshot and preserves the selected statistic
     const buffer = await blob.arrayBuffer();
     const workbook = new Workbook();
     await workbook.xlsx.load(buffer);
-    const sheet = workbook.getWorksheet('统计明细');
+    const sheet = workbook.getWorksheet('数据统计');
     assert.ok(sheet);
-    const rows = [];
-    sheet.eachRow((row, number) => { if (number >= 5) rows.push({ section: row.getCell(1).value, metric: row.getCell(2).value, count: row.getCell(3).value, ratio: row.getCell(6).value }); });
-    const metric = (label) => rows.find((row) => row.metric === label);
-    assert.equal(metric('岗位投递').count, statisticsApplicationIds ? 1 : 2);
-    assert.equal(metric('Offer（含意向）').count, statisticsApplicationIds ? 1 : 2);
-    assert.equal(metric('Offer（含意向）').ratio, 1, 'rates are numeric percentages');
-    assert.equal(metric('面试通过率').ratio, statisticsApplicationIds ? '' : 1, 'unknown pass rate stays blank');
-    assert.equal(metric('面试挂率').ratio, statisticsApplicationIds ? '' : 0);
-    assert.equal(metric('总体挂率').count, 0);
-    assert.equal(rows.filter((row) => row.section === '各阶段挂掉岗位').length, 10);
-    assert.equal(rows.filter((row) => row.section === '各轮面试挂率').length, 7);
-    assert.equal(rows.filter((row) => row.section === '各轮面试').length, 7);
-    assert.equal(rows.filter((row) => row.section === '近六个月投递趋势').length, 6);
-    assert.equal(sheet.getColumn(6).numFmt, '0%');
-    assert.equal(sheet.views[0].ySplit, 4);
+    assert.deepEqual(workbook.worksheets.map((item) => item.name), ['使用说明', '数据统计', '岗位记录', '日程安排', '面经库']);
+    assert.equal(workbook.views[0].activeTab, 0);
+    assert.equal(sheet.getCell('B7').value, statisticsApplicationIds ? 1 : 2);
+    assert.equal(sheet.getCell('N7').value, statisticsApplicationIds ? 1 : 2);
+    assert.equal(sheet.getCell('V7').value, statisticsApplicationIds ? '—' : 1);
+    assert.equal(sheet.getCell('H36').value, statisticsApplicationIds ? '—' : 0);
+    assert.equal(sheet.getCell('W41').value, 0);
+    assert.equal(sheet.getCell('V7').numFmt, '0%');
+    assert.equal(sheet.views[0].ySplit, 3);
+    sheet.eachRow((row) => row.eachCell((cell) => assert.ok(!cell.formula, 'no dangling references to removed statistics detail sheet')));
     const restored = await readWorkspaceWorkbook(new File([buffer], 'backup-with-dashboard.xlsx'));
     assert.equal(restored.applications.length, 2, 'statistics cohort does not filter the full backup');
     assert.equal(restored.interviews.length, 2, 'summary statistics are never imported as records');
@@ -351,20 +340,90 @@ test('exported progression excludes resume rejection and screening while preserv
   const Workbook = exceljs.Workbook ?? exceljs.default.Workbook;
   const workbook = new Workbook();
   await workbook.xlsx.load(await blob.arrayBuffer());
-  const rows = [];
-  workbook.getWorksheet('统计明细').eachRow((row, number) => { if (number >= 5) rows.push({ section: row.getCell(1).value, metric: row.getCell(2).value, count: row.getCell(3).value, failed: row.getCell(5).value, ratio: row.getCell(6).value }); });
-  assert.equal(rows.find((row) => row.metric === '流程推进率').ratio, 0);
-  assert.equal(rows.find((row) => row.metric === '总体挂率').ratio, 0.5);
-  const resume = rows.find((row) => row.section === '各阶段挂掉岗位' && row.metric === '简历');
-  assert.equal(resume.failed, 1);
-  assert.equal(resume.ratio, 0.5);
   const dashboard = workbook.getWorksheet('数据统计');
-  assert.match(dashboard.getCell('R7').value.formula, /'统计明细'!F10/, 'progression card links to corrected metric');
-  assert.equal(dashboard.getCell('J41').value.result, 0.5, 'failure rate has a dedicated panel');
+  assert.equal(dashboard.getCell('R7').value, 0);
+  assert.equal(dashboard.getCell('L44').value, 1);
+  assert.equal(dashboard.getCell('Q44').value, 0.5);
+  assert.equal(dashboard.getCell('J41').value, 0.5, 'failure rate has a dedicated panel');
   assert.equal(dashboard.getCell('J41').numFmt, '0%');
   assert.equal(dashboard.getCell('B5').fill.fgColor.argb, 'FFEAF2EC');
   assert.equal(dashboard.getCell('P24').fill.fgColor.argb, 'FFFAF1DD');
   assert.equal(dashboard.getCell('B40').fill.fgColor.argb, 'FFFAEEE7');
   assert.equal(dashboard.views[0].showGridLines, false);
   assert.equal(dashboard.pageSetup.orientation, 'landscape');
+});
+
+test('combined interview and experience backup preserves every record and accepts edits in their owning sheets', async () => {
+  const exceljs = await import('exceljs');
+  const Workbook = exceljs.Workbook ?? exceljs.default.Workbook;
+  const duplicateExperience = { ...SAMPLE.experiences[0], id: 'exp-more', title: '补充复盘', content: '另一份完整内容', round: '综合复盘' };
+  const data = { ...SAMPLE, experiences: [...SAMPLE.experiences, duplicateExperience] };
+  const blob = await createWorkspaceWorkbook(data);
+  const buffer = await blob.arrayBuffer();
+  const original = await readWorkspaceWorkbook(new File([buffer], 'combined.xlsx'));
+  assert.equal(original.interviews.length, 2);
+  assert.equal(original.experiences.length, 3);
+  assert.equal(original.experiences.find((item) => item.id === 'exp-more').round, '综合复盘');
+  assert.equal(original.experiences.find((item) => item.id === 'exp-more').interviewId, 'int-tech1');
+  assert.equal(original.interviews.find((item) => item.id === 'int-hr1').summary, SAMPLE.interviews[1].summary);
+  const workbook = new Workbook();
+  await workbook.xlsx.load(buffer);
+  function column(sheet, header) {
+    let result;
+    sheet.getRow(4).eachCell((cell, index) => { if (cell.text === header) result = index; });
+    assert.ok(result, header);
+    return result;
+  }
+  const face = workbook.getWorksheet('面经库');
+  const faceId = column(face, '面试ID');
+  const facePrimary = column(face, '恢复面试主记录');
+  const summaries = column(face, '过程记录');
+  const outcomes = column(face, '通过与否');
+  face.eachRow((row, index) => {
+    if (index >= 5 && row.getCell(faceId).value === 'int-tech1' && row.getCell(facePrimary).value === '是') {
+      row.getCell(summaries).value = 'Excel 中更新的过程记录';
+      row.getCell(outcomes).value = '未通过';
+    }
+  });
+  const calendar = workbook.getWorksheet('日程安排');
+  const calendarId = column(calendar, '日程ID');
+  const start = column(calendar, '开始时间');
+  const end = column(calendar, '结束时间');
+  calendar.eachRow((row, index) => {
+    if (index >= 5 && row.getCell(calendarId).value === 'int-tech1') {
+      row.getCell(start).value = new Date('2025-09-17T14:30:00Z');
+      row.getCell(end).value = new Date('2025-09-17T16:00:00Z');
+    }
+  });
+  const restored = await readWorkspaceWorkbook(new File([await workbook.xlsx.writeBuffer()], 'edited.xlsx'));
+  const interview = restored.interviews.find((item) => item.id === 'int-tech1');
+  assert.equal(interview.scheduledAt, '2025-09-17T06:30:00.000Z');
+  assert.equal(interview.summary, 'Excel 中更新的过程记录');
+  assert.equal(interview.result, '未通过');
+  assert.equal(restored.experiences.length, 3);
+  assert.equal(restored.events.length, 0, 'offer and interview views do not produce duplicate standalone events');
+  workbook.removeWorksheet('面经库');
+  const fallback = await readWorkspaceWorkbook(new File([await workbook.xlsx.writeBuffer()], 'schedule-fallback.xlsx'));
+  assert.equal(fallback.interviews.length, 2, 'calendar backup also preserves interviews if the face sheet is missing');
+  assert.equal(fallback.interviews.find((item) => item.id === 'int-tech1').interviewer, SAMPLE.interviews[0].interviewer);
+});
+
+test('old separate interview and experience sheets remain recoverable', async () => {
+  const exceljs = await import('exceljs');
+  const Workbook = exceljs.Workbook ?? exceljs.default.Workbook;
+  const workbook = new Workbook();
+  const apps = workbook.addWorksheet('岗位记录');
+  apps.getRow(4).values = ['公司', '岗位', '岗位ID', '当前进度'];
+  apps.getRow(5).values = ['旧公司', '旧岗位', 'old-app', '二面'];
+  const interviews = workbook.addWorksheet('面试安排');
+  interviews.getRow(4).values = ['岗位ID', '面试ID', '开始时间', '结束时间', '轮次', '结果', '总结', '后续安排', '面试官'];
+  interviews.getRow(5).values = ['old-app', 'old-interview', new Date('2025-09-15T06:00:00Z'), '', '技术一面', '通过', '旧过程', '等通知', '旧面试官'];
+  const face = workbook.addWorksheet('面经库');
+  face.getRow(4).values = ['岗位ID', '面试ID', '面经ID', '标题', '面试内容', '公司', '岗位', '轮次'];
+  face.getRow(5).values = ['old-app', 'old-interview', 'old-experience', '旧面经', '旧内容', '旧公司', '旧岗位', '技术一面'];
+  const restored = await readWorkspaceWorkbook(new File([await workbook.xlsx.writeBuffer()], 'legacy.xlsx'));
+  assert.equal(restored.interviews[0].scheduledAt, '2025-09-15T06:00:00.000Z');
+  assert.equal(restored.interviews[0].summary, '旧过程');
+  assert.equal(restored.experiences[0].interviewId, 'old-interview');
+  assert.equal(restored.experiences[0].content, '旧内容');
 });
