@@ -56,3 +56,43 @@ test('pass rates exclude pending and absence, deduplicate interviews and respect
   assert.equal(result.stages.find((row) => row.stage === 'HR面').rate, null);
   assert.equal(calculateRecruitmentAnalytics([]).passRate, null);
 });
+
+test('resume rejection and current resume screening never count as progressing beyond resume', () => {
+  const result = calculateRecruitmentAnalytics([
+    { id: 'rejected-resume', status: '流程结束', finalOutcome: '简历挂' },
+    { id: 'screening', status: '简历筛选' },
+    { id: 'submitted', status: '简历投递' },
+    { id: 'test-rejection', status: '流程结束', finalOutcome: '笔试挂' },
+    { id: 'interview-rejection', status: '流程结束', finalOutcome: '二面挂' },
+    { id: 'unknown', status: '流程结束', finalOutcome: '主动终止' },
+    { id: 'assessment', status: '已拒绝' },
+  ], [], [{ applicationId: 'assessment', eventType: 'assessment', status: '已完成' }]);
+  assert.equal(result.progressed, 3);
+  assert.equal(result.failedApplications, 3);
+  assert.equal(result.failureStages.find((row) => row.stage === '简历').failed, 1);
+  assert.equal(result.failureStages.find((row) => row.stage === '笔试').failed, 1);
+  assert.equal(result.failureStages.find((row) => row.stage === '二面').failed, 1);
+});
+
+test('failure statistics reconcile records and final outcomes without double counting positions', () => {
+  const result = calculateRecruitmentAnalytics([
+    { id: 'a', status: '流程结束', finalOutcome: 'AI 面挂' },
+    { id: 'b', status: '流程结束', finalOutcome: 'HR 面挂' },
+    { id: 'c', status: '已拒绝', rejectionReason: '薪资不满足' },
+    { id: 'd', status: '一面' },
+  ], [
+    { id: 'a1', applicationId: 'a', round: 'AI面', result: '未通过' },
+    { id: 'a2', applicationId: 'a', round: 'AI面', result: '未通过' },
+    { id: 'd1', applicationId: 'd', round: '技术一面', result: '通过' },
+    { id: 'c1', applicationId: 'c', round: 'HR面', result: '未参加' },
+    { id: 'outside', applicationId: 'outside', round: '技术一面', result: '未通过' },
+  ]);
+  assert.equal(result.failedApplications, 2);
+  assert.equal(result.failureRate, 50);
+  assert.equal(result.interviewFailRate, 67);
+  assert.equal(result.failureStages.find((row) => row.stage === 'AI面').failed, 1);
+  assert.equal(result.failureStages.find((row) => row.stage === 'AI面').rate, 100);
+  assert.equal(result.failureStages.find((row) => row.stage === 'HR面').rate, 50);
+  assert.equal(result.stages.find((row) => row.stage === 'AI面').failRate, 100);
+  assert.equal(calculateRecruitmentAnalytics([]).failureRate, null);
+});

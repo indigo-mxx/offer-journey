@@ -243,6 +243,7 @@ button:disabled { cursor: not-allowed; }
 .dashboard-rounds-table th:first-child { text-align: left; }
 .dashboard-rounds-table thead { background: var(--brand-soft); color: var(--brand); }
 .dashboard-rounds-table tbody th { color: var(--ink); font-weight: 600; }
+.dashboard-stage-failures { grid-column: 1 / -1; }
 .calendar-detail-open-link { border-color: #b9cbc0; background: rgba(255, 253, 248, .78); color: var(--brand); }
 .calendar-detail-open-link:hover { border-color: #7da18d; background: #eef5f0; }
 .calendar-mobile-count { display: none; }

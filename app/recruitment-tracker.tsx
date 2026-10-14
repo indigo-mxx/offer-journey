@@ -1193,7 +1193,7 @@ function DashboardPanel({
           <article><span>活跃流程</span><strong>{dashboard.active}</strong><small>仍在持续推进</small></article>
           <article><span>累计进入面试</span><strong>{dashboard.interview}</strong><small>按岗位去重，包含已结束流程</small></article>
           <article><span>Offer（含意向）</span><strong>{dashboard.offers}</strong><small>正式 {dashboard.formalOffers} · 意向 {dashboard.intents}<br />Offer 率 {dashboard.offerRate}%</small></article>
-          <article><span>流程推进率</span><strong>{dashboard.responseRate}%</strong><small>已走出简历阶段</small></article>
+          <article><span>流程推进率</span><strong>{dashboard.responseRate}%</strong><small>已进入测评、笔试、面试或录用阶段</small></article>
           <article><span>面试通过率</span><strong>{dashboard.passRate === null ? "—" : `${dashboard.passRate}%`}</strong><small>通过 {dashboard.passed} / 有明确结果 {dashboard.resolved} 场</small></article>
         </div>
 
@@ -1222,9 +1222,10 @@ function DashboardPanel({
 
         <div className="dashboard-grid dashboard-grid-primary">
           <article className="dashboard-card">
-            <div className="dashboard-card-head"><div><span>历史面试结果</span><h3>各轮面试通过率</h3></div><small>通过 ÷（通过 + 未通过）</small></div>
+            <div className="dashboard-card-head"><div><span>历史面试结果</span><h3>各轮面试通过率 / 挂率</h3></div><small>仅使用明确结果的场次</small></div>
+            <p className="dashboard-metric-note">总体面试挂率：{dashboard.interviewFailRate === null ? "—" : `${dashboard.interviewFailRate}%`}（未通过 {dashboard.failed} / 明确结果 {dashboard.resolved} 场）。</p>
             <p className="dashboard-metric-note">待定 / 未开始 {dashboard.pending} 场，未参加 {dashboard.absent} 场，不计入通过率。仅统计明确填写的场次结果。</p>
-            <div className="dashboard-rounds-scroll"><table className="dashboard-rounds-table"><thead><tr><th>轮次</th><th>场次</th><th>通过</th><th>未通过</th><th>通过率</th></tr></thead><tbody>{dashboard.stages.map((item) => <tr key={item.stage}><th>{item.stage}</th><td>{item.total}</td><td>{item.passed}</td><td>{item.failed}</td><td>{item.rate === null ? "—" : `${item.rate}%`}</td></tr>)}</tbody></table></div>
+            <div className="dashboard-rounds-scroll"><table className="dashboard-rounds-table"><thead><tr><th>轮次</th><th>场次</th><th>通过</th><th>未通过</th><th>通过率</th><th>挂率</th></tr></thead><tbody>{dashboard.stages.map((item) => <tr key={item.stage}><th>{item.stage}</th><td>{item.total}</td><td>{item.passed}</td><td>{item.failed}</td><td>{item.rate === null ? "—" : `${item.rate}%`}</td><td>{item.failRate === null ? "—" : `${item.failRate}%`}</td></tr>)}</tbody></table></div>
           </article>
           <article className="dashboard-card">
             <div className="dashboard-card-head"><div><span>录用反馈</span><h3>OC / 意向与 Offer</h3></div><small>按岗位去重</small></div>
@@ -1239,6 +1240,12 @@ function DashboardPanel({
         </div>
 
         <div className="dashboard-grid dashboard-grid-secondary">
+          <article className="dashboard-card dashboard-stage-failures">
+            <div className="dashboard-card-head"><div><span>累计未通过</span><h3>各阶段挂掉的岗位</h3></div><small>同岗位同阶段只计一次</small></div>
+            <p className="dashboard-metric-note">总体挂率 {dashboard.failureRate === null ? "—" : `${dashboard.failureRate}%`}：有明确未通过记录的 {dashboard.failedApplications} 个岗位 / 总投递 {dashboard.total}。主动拒绝、未参加和未知结果不算挂。</p>
+            <div className="dashboard-rounds-scroll"><table className="dashboard-rounds-table"><thead><tr><th>阶段</th><th>进入岗位数</th><th>挂掉岗位数</th><th>挂率</th></tr></thead><tbody>{dashboard.failureStages.map((item) => <tr key={item.stage}><th>{item.stage}</th><td>{item.entered}</td><td>{item.failed}</td><td>{item.rate === null ? "—" : `${item.rate}%`}</td></tr>)}</tbody></table></div>
+            <p className="dashboard-metric-note">阶段挂率 = 挂掉岗位数 / 有该阶段记录的岗位数。包含最终结果中的简历挂、笔试挂及各轮面试挂，不把待定推算为通过或未通过。</p>
+          </article>
           <article className="dashboard-card dashboard-trend-card">
             <div className="dashboard-card-head"><div><span>投递节奏</span><h3>近六个月趋势</h3></div><small>按投递日期汇总</small></div>
             <div className="dashboard-trend-bars">

@@ -327,6 +327,10 @@ test("Excel includes the dashboard snapshot and preserves the selected statistic
     assert.equal(metric('Offer（含意向）').count, statisticsApplicationIds ? 1 : 2);
     assert.equal(metric('Offer（含意向）').ratio, 1, 'rates are numeric percentages');
     assert.equal(metric('面试通过率').ratio, statisticsApplicationIds ? '' : 1, 'unknown pass rate stays blank');
+    assert.equal(metric('面试挂率').ratio, statisticsApplicationIds ? '' : 0);
+    assert.equal(metric('总体挂率').count, 0);
+    assert.equal(rows.filter((row) => row.section === '各阶段挂掉岗位').length, 10);
+    assert.equal(rows.filter((row) => row.section === '各轮面试挂率').length, 7);
     assert.equal(rows.filter((row) => row.section === '各轮面试').length, 7);
     assert.equal(rows.filter((row) => row.section === '近六个月投递趋势').length, 6);
     assert.equal(sheet.getColumn(6).numFmt, '0%');
@@ -335,4 +339,23 @@ test("Excel includes the dashboard snapshot and preserves the selected statistic
     assert.equal(restored.applications.length, 2, 'statistics cohort does not filter the full backup');
     assert.equal(restored.interviews.length, 2, 'summary statistics are never imported as records');
   }
+});
+
+test('exported progression excludes resume rejection and screening while preserving failure counts', async () => {
+  const data = { applications: [
+    { ...SAMPLE.applications[0], status: '流程结束', finalOutcome: '简历挂', offerReceivedAt: '' },
+    { ...SAMPLE.applications[1], status: '简历筛选' },
+  ], interviews: [], experiences: [], events: [] };
+  const blob = await createWorkspaceWorkbook(data);
+  const exceljs = await import('exceljs');
+  const Workbook = exceljs.Workbook ?? exceljs.default.Workbook;
+  const workbook = new Workbook();
+  await workbook.xlsx.load(await blob.arrayBuffer());
+  const rows = [];
+  workbook.getWorksheet('数据统计').eachRow((row, number) => { if (number >= 5) rows.push({ section: row.getCell(1).value, metric: row.getCell(2).value, count: row.getCell(3).value, failed: row.getCell(5).value, ratio: row.getCell(6).value }); });
+  assert.equal(rows.find((row) => row.metric === '流程推进率').ratio, 0);
+  assert.equal(rows.find((row) => row.metric === '总体挂率').ratio, 0.5);
+  const resume = rows.find((row) => row.section === '各阶段挂掉岗位' && row.metric === '简历');
+  assert.equal(resume.failed, 1);
+  assert.equal(resume.ratio, 0.5);
 });
