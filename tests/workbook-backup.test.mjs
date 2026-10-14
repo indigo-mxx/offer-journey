@@ -309,3 +309,30 @@ test("export groups experiences and combines schedules without duplicating resto
   }
   assert.equal(data.interviews[0].id, second.id, "sorting does not mutate source data");
 });
+
+test("Excel includes the dashboard snapshot and preserves the selected statistics cohort", async () => {
+  const exceljs = await import("exceljs");
+  const Workbook = exceljs.Workbook ?? exceljs.default.Workbook;
+  for (const statisticsApplicationIds of [undefined, ['app-byte']]) {
+    const blob = await createWorkspaceWorkbook(SAMPLE, { statisticsApplicationIds, statisticsRangeLabel: statisticsApplicationIds ? '近 30 天投递的岗位' : '全部投递' });
+    const buffer = await blob.arrayBuffer();
+    const workbook = new Workbook();
+    await workbook.xlsx.load(buffer);
+    const sheet = workbook.getWorksheet('数据统计');
+    assert.ok(sheet);
+    const rows = [];
+    sheet.eachRow((row, number) => { if (number >= 5) rows.push({ section: row.getCell(1).value, metric: row.getCell(2).value, count: row.getCell(3).value, ratio: row.getCell(6).value }); });
+    const metric = (label) => rows.find((row) => row.metric === label);
+    assert.equal(metric('岗位投递').count, statisticsApplicationIds ? 1 : 2);
+    assert.equal(metric('Offer（含意向）').count, statisticsApplicationIds ? 1 : 2);
+    assert.equal(metric('Offer（含意向）').ratio, 1, 'rates are numeric percentages');
+    assert.equal(metric('面试通过率').ratio, statisticsApplicationIds ? '' : 1, 'unknown pass rate stays blank');
+    assert.equal(rows.filter((row) => row.section === '各轮面试').length, 7);
+    assert.equal(rows.filter((row) => row.section === '近六个月投递趋势').length, 6);
+    assert.equal(sheet.getColumn(6).numFmt, '0%');
+    assert.equal(sheet.views[0].ySplit, 4);
+    const restored = await readWorkspaceWorkbook(new File([buffer], 'backup-with-dashboard.xlsx'));
+    assert.equal(restored.applications.length, 2, 'statistics cohort does not filter the full backup');
+    assert.equal(restored.interviews.length, 2, 'summary statistics are never imported as records');
+  }
+});

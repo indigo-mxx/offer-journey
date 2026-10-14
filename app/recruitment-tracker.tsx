@@ -1081,6 +1081,7 @@ function DashboardPanel({
   range,
   onRangeChange,
   onOpenApplications,
+  onExport, busy,
 }: {
   applications: Application[];
   interviews: Interview[];
@@ -1089,6 +1090,8 @@ function DashboardPanel({
   range: DashboardRange;
   onRangeChange: (range: DashboardRange) => void;
   onOpenApplications: () => void;
+  onExport: () => void;
+  busy: boolean;
 }) {
   const dashboard = useMemo(() => {
     const total = applications.length;
@@ -1178,6 +1181,7 @@ function DashboardPanel({
             ))}
           </div>
           <button type="button" className="secondary-button dashboard-list-button" onClick={onOpenApplications}>查看投递清单</button>
+          <button type="button" className="secondary-button dashboard-list-button" onClick={onExport} disabled={busy}>导出 Excel（含统计）</button>
         </div>
       </header>
 
@@ -3781,7 +3785,11 @@ export function RecruitmentTracker({
         experiences: experiences.filter((item) => item.isOwner !== false && (!item.applicationId || ownIds.has(item.applicationId))),
         events: events.filter((item) => item.isOwner !== false && ownIds.has(item.applicationId)),
       };
-      const blob = await createWorkspaceWorkbook(backup, { scheduleSort: exportScheduleSort });
+      const blob = await createWorkspaceWorkbook(backup, {
+        scheduleSort: exportScheduleSort,
+        statisticsApplicationIds: view === "dashboard" ? dashboardApplications.map((item) => item.id) : undefined,
+        statisticsRangeLabel: view === "dashboard" && dashboardRange !== "all" ? `近 ${dashboardRange} 天投递的岗位` : "全部投递",
+      });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -3795,7 +3803,7 @@ export function RecruitmentTracker({
     } finally {
       setPendingAction(null);
     }
-  }, [events, experiences, exportScheduleSort, interviews, ownApplications, recoveryOwnerKey]);
+  }, [events, experiences, exportScheduleSort, interviews, ownApplications, recoveryOwnerKey, dashboardApplications, dashboardRange, view]);
 
   const importData = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -4941,6 +4949,8 @@ export function RecruitmentTracker({
             range={dashboardRange}
             onRangeChange={setDashboardRange}
             onOpenApplications={() => setView("mine")}
+            onExport={() => void exportData()}
+            busy={busy}
           />
         ) : view === "offerCalculator" ? (
           <OfferWorkbench key={user?.email || "local"} ownerKey={user?.email || "local"} applications={applications} details={standaloneOfferDetails} onRestore={(details) => { setStandaloneOfferDetails(details); setStandaloneOfferExpanded(true); }} onOpen={openOfferDetails}>
@@ -5009,7 +5019,7 @@ export function RecruitmentTracker({
                               <option value="time">按时间从早到晚</option>
                             </select>
                           </label>
-                          <small className="backup-export-hint">导出全部岗位、面试、日程与面经。面经始终按岗位和轮次排列。</small>
+                          <small className="backup-export-hint">导出全部岗位、面试、日程、面经与数据统计。面经始终按岗位和轮次排列。</small>
                           <button className="secondary-button" onClick={() => void exportData()} disabled={busy}>导出 Excel</button>
                           <input ref={importRef} type="file" accept=".xlsx,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json" onChange={importData} className="hidden" />
                           <button className="secondary-button" onClick={() => importRef.current?.click()} disabled={busy}>导入备份</button>

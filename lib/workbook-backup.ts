@@ -1,5 +1,6 @@
 import type { Application, ApplicationStatus, Interview, InterviewExperience, OfferCompensationDetails, RecruitmentEvent, RecruitmentEventStatus, RecruitmentEventType, Visibility } from "@/db/schema";
 import type { Cell, Row, Worksheet } from "exceljs";
+import { calculateRecruitmentAnalytics } from "./recruitment-analytics.ts";
 
 export type WorkspaceBackup = {
   applications: Application[];
@@ -8,7 +9,7 @@ export type WorkspaceBackup = {
   events: RecruitmentEvent[];
 };
 
-export type WorkbookExportOptions = { scheduleSort?: "position" | "time" };
+export type WorkbookExportOptions = { scheduleSort?: "position" | "time"; statisticsApplicationIds?: string[]; statisticsRangeLabel?: string };
 const INTERVIEW_STAGE_HEADERS = ["AI面", "一面", "二面", "三面", "终面", "HR面", "其他面试"];
 function exportInterviewStage(round: string) {
   const value = round.toLowerCase();
@@ -209,6 +210,71 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup, options: Wo
     return candidates.length === 1 ? candidates[0] : undefined;
   };
 
+  const statisticsIds = options.statisticsApplicationIds ? new Set(options.statisticsApplicationIds) : null;
+  const statisticsApplications = data.applications.filter((item) => !statisticsIds || statisticsIds.has(item.id));
+  const statistics = calculateRecruitmentAnalytics(statisticsApplications, data.interviews, recruitmentEvents, data.experiences);
+  const proportion = (count: number) => statistics.total ? count / statistics.total : null;
+  const statisticsRows: Record<string, unknown>[] = [
+    { section: "总览", metric: "岗位投递", count: statistics.total, note: `${new Set(statisticsApplications.map((item) => item.company.trim().toLowerCase())).size} 家公司` },
+    { section: "总览", metric: "活跃流程", count: statistics.active, note: "当前仍在推进的岗位" },
+    { section: "总览", metric: "累计进入面试", count: statistics.interview, ratio: proportion(statistics.interview), note: "按岗位去重，包含已结束流程" },
+    { section: "总览", metric: "累计进入测评 / 笔试", count: statistics.written, ratio: proportion(statistics.written), note: "依据安排、记录或最终结果" },
+    { section: "总览", metric: "Offer（含意向）", count: statistics.offers, ratio: statistics.offerRate / 100, note: `正式 ${statistics.formalOffers} · 待谈薪意向 ${statistics.intents}` },
+    { section: "总览", metric: "流程推进率", count: statistics.progressed, ratio: proportion(statistics.progressed), note: "已走出简历阶段" },
+    { section: "总览", metric: "面试通过率", count: statistics.resolved, passed: statistics.passed, failed: statistics.failed, ratio: statistics.passRate === null ? null : statistics.passRate / 100, note: "通过 ÷（通过 + 未通过）；数量为明确填写结果的场次" },
+    { section: "总览", metric: "待定 / 未开始", count: statistics.pending, note: "面试场次，不计入通过率" },
+    { section: "总览", metric: "未参加", count: statistics.absent, note: "面试场次，不计入通过率" },
+    ...statistics.stages.map((item) => ({ section: "各轮面试", metric: item.stage, count: item.total, passed: item.passed, failed: item.failed, ratio: item.rate === null ? null : item.rate / 100, note: "通过率仅使用已填写通过 / 未通过的场次" })),
+    { section: "OC / 意向", metric: "已获 OC / 意向（含正式 Offer）", count: statistics.offers, ratio: proportion(statistics.offers) },
+    { section: "OC / 意向", metric: "待谈薪 / 签约意向", count: statistics.intents },
+    { section: "OC / 意向", metric: "正式 Offer", count: statistics.formalOffers },
+    { section: "OC / 意向", metric: "尚无 OC / 意向记录", count: statistics.total - statistics.offers },
+  ];
+  const distributions = [
+    ["简历阶段", ["准备投递", "简历投递", "已投递", "简历筛选"]],
+    ["笔试", ["笔试"]], ["面试中", ["AI面", "一面", "二面", "三面", "终面", "HR面"]],
+    ["待谈薪/签约", ["已意向，待谈薪/签约"]], ["正式 Offer", ["Offer"]], ["已结束", ["已拒绝", "流程结束"]],
+  ] as const;
+  for (const [metric, statuses] of distributions) {
+    const count = statisticsApplications.filter((item) => (statuses as readonly string[]).includes(item.status)).length;
+    statisticsRows.push({ section: "当前流程分布", metric, count, ratio: proportion(count), note: "按当前状态统计" });
+  }
+  for (let index = 5; index >= 0; index--) {
+    const month = new Date(Date.UTC(exportedAt.getFullYear(), exportedAt.getMonth() - index, 1));
+    const key = month.toISOString().slice(0, 7);
+    const count = statisticsApplications.filter((item) => item.appliedAt?.startsWith(key)).length;
+    statisticsRows.push({ section: "近六个月投递趋势", metric: key, count, note: "按投递日期汇总" });
+  }
+  function addRank(section: string, values: string[]) {
+    const counts = new Map<string, number>();
+    for (const value of values) { const label = value.trim() || "未填写"; counts.set(label, (counts.get(label) ?? 0) + 1); }
+    for (const [metric, count] of [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "zh-CN")).slice(0, 5)) {
+      statisticsRows.push({ section, metric, count, note: "前 5 项；与看板展示范围一致" });
+    }
+  }
+  addRank("投递渠道", statisticsApplications.map((item) => item.channel ?? ""));
+  addRank("目标地点", statisticsApplications.flatMap((item) => (item.base || "未填写").split(/[、,，/]/)));
+  addRank("投递批次", statisticsApplications.map((item) => item.batch));
+  const legacyNatures = new Map([["国企/央企", "国企"], ["事业单位", "事业单位"], ["外企", "外企"], ["创业公司", "私企"]]);
+  addRank("行业方向", statisticsApplications.flatMap((item) => {
+    const tags = (item.industryTags ?? []).filter((tag) => !tag.startsWith("单位性质：") && !tag.startsWith("单位细分：") && !legacyNatures.has(tag));
+    return tags.length ? tags : ["未标注"];
+  }));
+  addRank("单位性质", statisticsApplications.map((item) => {
+    const tags = item.industryTags ?? [];
+    const nature = tags.find((tag) => tag.startsWith("单位性质："))?.slice(5) || tags.map((tag) => legacyNatures.get(tag)).find(Boolean);
+    return nature === "民企" ? "私企" : nature || "未标注";
+  }));
+  addRank("流程结论", statisticsApplications.filter((item) => ["已拒绝", "流程结束"].includes(item.status)).map((item) => item.finalOutcome || item.rejectionReason || "未注明"));
+  const statisticsSheet = addDataSheet("数据统计", "投递数据看板", `统计范围：${options.statisticsRangeLabel ?? "全部投递"}。累计历史记录包含已结束流程；空白比例表示暂无明确结果。此表为导出时的统计快照。`, [
+    { header: "分类", key: "section", width: 23 }, { header: "统计项目", key: "metric", width: 36 },
+    { header: "数量", key: "count", width: 12 }, { header: "通过", key: "passed", width: 12 },
+    { header: "未通过", key: "failed", width: 12 }, { header: "比例 / 通过率", key: "ratio", width: 18 },
+    { header: "统计口径", key: "note", width: 62 },
+  ], statisticsRows, palette.brand);
+  statisticsSheet.getColumn("ratio").numFmt = "0%";
+  for (const key of ["count", "passed", "failed"]) statisticsSheet.getColumn(key).numFmt = "0";
+
   const applicationsSheet = addDataSheet("岗位记录", "岗位记录", "各轮面试时间为北京时间汇总（只读）；同轮多场全部保留。明细请编辑“面试安排”，隐藏列用于恢复关联。", [
     { header: "公司", key: "company", width: 18 }, { header: "岗位", key: "position", width: 24 }, { header: "Base", key: "base", width: 12 },
     { header: "行业标签", key: "industryTags", width: 24 }, { header: "公司规模", key: "companyScale", width: 14 }, { header: "批次", key: "batch", width: 12 },
@@ -374,6 +440,7 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup, options: Wo
     "5. 共享小组成员关系不会写入备份；恢复时无效的小组会自动转为“仅自己可见”。",
     `6. 日程排序：${sortLabel}。面经始终按公司、岗位和面试轮次归档。`,
     "7. 岗位的各轮时间、日程中的面试行和面经通过与否为汇总信息；面试恢复以“面试安排”为准，避免重复导入。",
+    "8. 数据统计包含导出时的数据看板快照；导入时由恢复后的业务记录重新计算，不重复导入统计行。",
   ];
   notes.forEach((note, index) => {
     guide.mergeCells(12 + index, 2, 12 + index, 5);
@@ -386,7 +453,7 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup, options: Wo
     guide.getRow(12 + index).height = 30;
   });
   guide.state = "visible";
-  workbook.views = [{ x: 0, y: 0, width: 12000, height: 20000, firstSheet: 0, activeTab: workbook.worksheets.indexOf(guide), visibility: "visible" }];
+  workbook.views = [{ x: 0, y: 0, width: 12000, height: 20000, firstSheet: 0, activeTab: workbook.worksheets.indexOf(statisticsSheet), visibility: "visible" }];
 
   const buffer = await workbook.xlsx.writeBuffer();
   return new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
