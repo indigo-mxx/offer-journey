@@ -1,6 +1,7 @@
 import type { Application, ApplicationStatus, Interview, InterviewExperience, OfferCompensationDetails, RecruitmentEvent, RecruitmentEventStatus, RecruitmentEventType, Visibility } from "@/db/schema";
 import type { Cell, Row, Worksheet } from "exceljs";
 import { calculateRecruitmentAnalytics } from "./recruitment-analytics.ts";
+import { addExcelDashboard } from "./excel-dashboard.ts";
 
 export type WorkspaceBackup = {
   applications: Application[];
@@ -270,14 +271,15 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup, options: Wo
     return nature === "民企" ? "私企" : nature || "未标注";
   }));
   addRank("流程结论", statisticsApplications.filter((item) => ["已拒绝", "流程结束"].includes(item.status)).map((item) => item.finalOutcome || item.rejectionReason || "未注明"));
-  const statisticsSheet = addDataSheet("数据统计", "投递数据看板", `统计范围：${options.statisticsRangeLabel ?? "全部投递"}。累计历史记录包含已结束流程；空白比例表示暂无明确结果。此表为导出时的统计快照。`, [
+  const statisticsDetailSheet = addDataSheet("统计明细", "投递统计明细", `统计范围：${options.statisticsRangeLabel ?? "全部投递"}。累计历史记录包含已结束流程；空白比例表示暂无明确结果。此表为导出时的统计快照。`, [
     { header: "分类", key: "section", width: 23 }, { header: "统计项目", key: "metric", width: 36 },
     { header: "数量", key: "count", width: 12 }, { header: "通过", key: "passed", width: 12 },
     { header: "未通过", key: "failed", width: 12 }, { header: "比例 / 通过率", key: "ratio", width: 18 },
     { header: "统计口径", key: "note", width: 62 },
   ], statisticsRows, palette.brand);
-  statisticsSheet.getColumn("ratio").numFmt = "0%";
-  for (const key of ["count", "passed", "failed"]) statisticsSheet.getColumn(key).numFmt = "0";
+  statisticsDetailSheet.getColumn("ratio").numFmt = "0%";
+  for (const key of ["count", "passed", "failed"]) statisticsDetailSheet.getColumn(key).numFmt = "0";
+  const statisticsSheet = addExcelDashboard(workbook, statisticsRows, options.statisticsRangeLabel ?? "全部投递");
 
   const applicationsSheet = addDataSheet("岗位记录", "岗位记录", "各轮面试时间为北京时间汇总（只读）；同轮多场全部保留。明细请编辑“面试安排”，隐藏列用于恢复关联。", [
     { header: "公司", key: "company", width: 18 }, { header: "岗位", key: "position", width: 24 }, { header: "Base", key: "base", width: 12 },
