@@ -4,6 +4,7 @@ const INTERVIEW_STATUSES = ["AI面", "一面", "二面", "三面", "终面", "HR
 const RESUME_STATUSES = ["准备投递", "简历投递", "已投递", "简历筛选"];
 const CLOSED_STATUSES = ["已拒绝", "流程结束"];
 export const INTENT_STATUS = "已意向，待谈薪/签约";
+export const POOL_STATUS = "泡池子，待横向筛选";
 
 export function interviewAnalyticsStage(round: string) {
   const value = round.toLowerCase();
@@ -28,12 +29,16 @@ export function calculateRecruitmentAnalytics(applications: Application[], inter
   }
   const formalOfferIds = new Set<string>();
   const intentIds = new Set<string>();
+  const poolIds = new Set<string>();
+  const horizontalIds = new Set<string>();
   const progressedIds = new Set<string>();
   for (const app of applications) {
     if (app.status === "Offer" || app.offerReceivedAt) formalOfferIds.add(app.id);
     if (app.status === INTENT_STATUS) intentIds.add(app.id);
+    if (app.status === POOL_STATUS) poolIds.add(app.id);
     const outcome = app.finalOutcome ?? "";
-    if (INTERVIEW_STATUSES.includes(app.status) || /(?:AI\s*面|HR\s*面|一面|二面|三面|终面)挂/.test(outcome) || formalOfferIds.has(app.id) || intentIds.has(app.id)) interviewIds.add(app.id);
+    if (poolIds.has(app.id) || outcome.replace(/\s/g, "") === "横向挂" || formalOfferIds.has(app.id) || intentIds.has(app.id)) horizontalIds.add(app.id);
+    if (INTERVIEW_STATUSES.includes(app.status) || /(?:AI\s*面|HR\s*面|一面|二面|三面|终面)挂/.test(outcome) || horizontalIds.has(app.id)) interviewIds.add(app.id);
     // Later stages do not prove a written test took place: use its own records.
     if (app.status === "笔试" || outcome === "笔试挂") writtenIds.add(app.id);
     if (!RESUME_STATUSES.includes(app.status) && outcome !== "简历挂"
@@ -51,7 +56,7 @@ export function calculateRecruitmentAnalytics(applications: Application[], inter
     const passed = decisions.filter((item) => item.result === "通过").length;
     return { stage, total: records.length, passed, failed: decisions.length - passed, rate: rate(passed, decisions.length), failRate: rate(decisions.length - passed, decisions.length) };
   });
-  const failureStages = ["简历", "测评", "笔试", "AI面", "一面", "二面", "三面", "终面", "HR面", "其他面试"].map((stage) => ({ stage, enteredIds: new Set<string>(), failedIds: new Set<string>() }));
+  const failureStages = ["简历", "测评", "笔试", "AI面", "一面", "二面", "三面", "终面", "HR面", "其他面试", "横向筛选"].map((stage) => ({ stage, enteredIds: new Set<string>(), failedIds: new Set<string>() }));
   const stageByName = new Map(failureStages.map((item) => [item.stage, item]));
   const markStage = (stage: string, id: string, failed = false) => {
     const entry = stageByName.get(stage);
@@ -62,8 +67,9 @@ export function calculateRecruitmentAnalytics(applications: Application[], inter
     markStage("简历", app.id);
     if (app.status === "笔试") markStage("笔试", app.id);
     if (INTERVIEW_STATUSES.includes(app.status)) markStage(app.status, app.id);
+    if (horizontalIds.has(app.id)) markStage("横向筛选", app.id);
     const outcome = (app.finalOutcome ?? "").replace(/\s/g, "");
-    const failedStage = outcome.endsWith("挂") ? outcome.slice(0, -1) : "";
+    const failedStage = outcome === "横向挂" ? "横向筛选" : outcome.endsWith("挂") ? outcome.slice(0, -1) : "";
     if (stageByName.has(failedStage)) markStage(failedStage, app.id, true);
   }
   for (const event of events) {
@@ -81,7 +87,7 @@ export function calculateRecruitmentAnalytics(applications: Application[], inter
   return {
     total: applications.length, interviewIds, writtenIds, offerIds,
     interview: interviewIds.size, written: writtenIds.size, offers: offerIds.size,
-    formalOffers: formalOfferIds.size, intents: pendingIntentIds.size,
+    formalOffers: formalOfferIds.size, intents: pendingIntentIds.size, pool: poolIds.size,
     active: applications.filter((item) => ![...CLOSED_STATUSES, "Offer"].includes(item.status)).length,
     progressed: progressedIds.size, offerRate: rate(offerIds.size, applications.length) ?? 0,
     passed, failed, resolved: resolved.length, passRate: rate(passed, resolved.length), interviewFailRate: rate(failed, resolved.length),

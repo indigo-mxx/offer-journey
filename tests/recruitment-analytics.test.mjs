@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { calculateRecruitmentAnalytics } from '../lib/recruitment-analytics.ts';
+import { calculateRecruitmentAnalytics, POOL_STATUS } from '../lib/recruitment-analytics.ts';
 
 test('historical stages survive closed applications and count each position once', () => {
   const apps = [
@@ -95,4 +95,45 @@ test('failure statistics reconcile records and final outcomes without double cou
   assert.equal(result.failureStages.find((row) => row.stage === 'HR面').rate, 50);
   assert.equal(result.stages.find((row) => row.stage === 'AI面').failRate, 100);
   assert.equal(calculateRecruitmentAnalytics([]).failureRate, null);
+});
+
+test('pool is after interviews but before OC, with horizontal rejection counted separately', () => {
+  const result = calculateRecruitmentAnalytics([
+    { id: 'pool', status: POOL_STATUS },
+    { id: 'horizontal', status: '流程结束', finalOutcome: '横向挂' },
+    { id: 'intent', status: '已意向，待谈薪/签约' },
+    { id: 'offer', status: 'Offer' },
+    { id: 'resume', status: '简历筛选' },
+  ]);
+  assert.equal(result.pool, 1);
+  assert.equal(result.interview, 4);
+  assert.equal(result.progressed, 4);
+  assert.equal(result.offers, 2, 'waiting in the pool is not an offer or intention');
+  assert.equal(result.intents, 1);
+  assert.equal(result.formalOffers, 1);
+  assert.equal(result.offerRate, 40);
+  assert.deepEqual(result.failureStages.find((item) => item.stage === '横向筛选'), { stage: '横向筛选', entered: 4, failed: 1, rate: 25 });
+  assert.equal(result.failedApplications, 1);
+  assert.equal(result.failureRate, 20);
+  assert.equal(result.failed, 0, 'horizontal rejection is not an interview rejection');
+  assert.equal(result.passRate, null, 'the application stage does not invent individual round results');
+});
+
+test('horizontal failure retains passed interviews and excludes other cohorts', () => {
+  const result = calculateRecruitmentAnalytics([
+    { id: 'a', status: '流程结束', finalOutcome: '横向挂' },
+    { id: 'b', status: POOL_STATUS },
+  ], [
+    { id: 'a1', applicationId: 'a', round: '技术一面', result: '通过' },
+    { id: 'a2', applicationId: 'a', round: 'HR面', result: '通过' },
+    { id: 'b1', applicationId: 'b', round: 'HR面', result: '待定' },
+    { id: 'outside', applicationId: 'outside', round: 'HR面', result: '未通过' },
+  ]);
+  assert.equal(result.passed, 2);
+  assert.equal(result.failed, 0);
+  assert.equal(result.passRate, 100);
+  assert.equal(result.pending, 1);
+  assert.equal(result.failedApplications, 1);
+  assert.equal(result.failureStages.find((item) => item.stage === '横向筛选').rate, 50);
+  assert.equal(result.failureStages.find((item) => item.stage === 'HR面').failed, 0);
 });

@@ -106,12 +106,12 @@ export function addExcelDashboard(workbook: Workbook, rows: MetricRow[], scope: 
   ratio(36, 8, 10, source("总览", "面试挂率", "ratio"), COLORS.red);
   text(38, 2, 14, "待定和未参加不计入通过率、面试挂率。", 9, COLORS.muted);
   panel(24, 38, 16, 24, "OC / 意向与 Offer", COLORS.gold, COLORS.goldPale);
-  ["已获 OC / 意向（含正式 Offer）", "待谈薪 / 签约意向", "正式 Offer", "尚无 OC / 意向记录"].forEach((label, index) => {
+  ["已获 OC / 意向（含正式 Offer）", "待谈薪 / 签约意向", "正式 Offer", "尚无 OC / 意向记录", "泡池子（当前待横向筛选）"].forEach((label, index) => {
     const row = 27 + index * 2;
     text(row, 16, 22, label, 10);
     text(row, 23, 24, source("OC / 意向", label), 16, COLORS.gold, true);
   });
-  text(37, 16, 24, "有 Offer 获得时间的已结束岗位也计入。", 9, COLORS.muted);
+  text(37, 16, 24, "泡池子尚未获意向；历史正式 Offer 仍计入 OC。", 9, COLORS.muted);
 
   panel(40, 55, 2, 24, "各阶段挂掉的岗位", COLORS.red, COLORS.redPale);
   text(41, 2, 9, "总体挂率：明确未通过岗位 / 总投递", 10, COLORS.muted);
@@ -127,7 +127,7 @@ export function addExcelDashboard(workbook: Workbook, rows: MetricRow[], scope: 
     text(row, 12, 16, source("各阶段挂掉岗位", name, "failed"), 11, COLORS.red, true);
     ratio(row, 17, 24, source("各阶段挂掉岗位", name, "ratio"), COLORS.red);
   });
-  text(55, 2, 24, "阶段挂率 = 挂掉岗位 / 有该阶段记录的岗位。主动拒绝、未参加和未知结果不算挂。", 9, COLORS.muted);
+  text(55, 2, 24, "阶段挂率 = 挂掉 / 进入岗位；横向筛选含泡池子、横向挂、意向与 Offer。主动拒绝不算挂。", 9, COLORS.muted);
 
   const rankPanel = (top: number, first: number, last: number, section: string, accent = COLORS.green, tint = COLORS.pale) => {
     panel(top, top + 10, first, last, section, accent, tint);

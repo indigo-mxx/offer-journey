@@ -138,6 +138,33 @@ function sameInstant(a, b, toleranceMs = 1000) {
   return Math.abs(new Date(a).getTime() - new Date(b).getTime()) <= toleranceMs;
 }
 
+test('pool and horizontal rejection survive Excel recovery and appear separately in the dashboard', async () => {
+  const data = { applications: [
+    { ...SAMPLE.applications[0], status: '泡池子，待横向筛选', offerReceivedAt: '', offerDeadline: '', offerOnboardDate: '' },
+    { ...SAMPLE.applications[1], status: '流程结束', finalOutcome: '横向挂' },
+  ], interviews: [], experiences: [], events: [] };
+  const blob = await createWorkspaceWorkbook(data);
+  const buffer = await blob.arrayBuffer();
+  const restored = await readWorkspaceWorkbook(new File([buffer], 'pool.xlsx'));
+  assert.equal(restored.applications.find((item) => item.id === 'app-huawei').status, '泡池子，待横向筛选');
+  assert.equal(restored.applications.find((item) => item.id === 'app-byte').status, '流程结束');
+  assert.equal(restored.applications.find((item) => item.id === 'app-byte').finalOutcome, '横向挂');
+  const exceljs = await import('exceljs');
+  const Workbook = exceljs.Workbook ?? exceljs.default.Workbook;
+  const workbook = new Workbook();
+  await workbook.xlsx.load(buffer);
+  const dashboard = workbook.getWorksheet('数据统计');
+  assert.equal(dashboard.getCell('J7').value, 2, 'both positions historically entered interviews');
+  assert.equal(dashboard.getCell('N7').value, 0, 'pool is excluded from Offer / OC');
+  assert.equal(dashboard.getCell('W35').value, 1, 'current pool count is explicit');
+  assert.equal(dashboard.getCell('Q20').value, '已结束', 'the seventh distribution category fits');
+  assert.equal(dashboard.getCell('B54').value, '横向筛选');
+  assert.equal(dashboard.getCell('G54').value, 2);
+  assert.equal(dashboard.getCell('L54').value, 1);
+  assert.equal(dashboard.getCell('Q54').value, 0.5);
+  assert.equal(dashboard.getCell('H36').value, '—', 'no interview failure is fabricated');
+});
+
 test("Excel round-trip preserves Chinese text, dates, tags and linkage with no 乱码", async () => {
   const blob = await createWorkspaceWorkbook(SAMPLE);
   assert.ok(blob instanceof Blob, "createWorkspaceWorkbook should return a Blob");

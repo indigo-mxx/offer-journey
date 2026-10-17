@@ -1,6 +1,6 @@
 import type { Application, ApplicationStatus, Interview, InterviewExperience, OfferCompensationDetails, RecruitmentEvent, RecruitmentEventStatus, RecruitmentEventType, Visibility } from "@/db/schema";
 import type { Cell, Row, Worksheet } from "exceljs";
-import { calculateRecruitmentAnalytics } from "./recruitment-analytics.ts";
+import { calculateRecruitmentAnalytics, POOL_STATUS } from "./recruitment-analytics.ts";
 import { addExcelDashboard } from "./excel-dashboard.ts";
 
 export type WorkspaceBackup = {
@@ -29,7 +29,7 @@ function displayInterviewTime(interview: Interview) {
   return `${time}${interview.timingType === "deadline" ? " 截止" : ""} · ${interview.result || "待定"}`;
 }
 
-const APPLICATION_STATUSES: ApplicationStatus[] = ["准备投递", "简历投递", "已投递", "简历筛选", "笔试", "AI面", "一面", "二面", "三面", "终面", "HR面", "已意向，待谈薪/签约", "Offer", "已拒绝", "流程结束"];
+const APPLICATION_STATUSES: ApplicationStatus[] = ["准备投递", "简历投递", "已投递", "简历筛选", "笔试", "AI面", "一面", "二面", "三面", "终面", "HR面", POOL_STATUS, "已意向，待谈薪/签约", "Offer", "已拒绝", "流程结束"];
 const VISIBILITY_LABELS: Record<Visibility, string> = { private: "仅自己", progress: "仅共享进度", full: "完整共享" };
 const VISIBILITY_VALUES: Record<string, Visibility> = { "仅自己": "private", "仅共享进度": "progress", "共享进度": "progress", "完整共享": "full", private: "private", progress: "progress", full: "full" };
 const EVENT_TYPE_LABELS: Record<RecruitmentEventType, string> = { written_test: "笔试", assessment: "测评", deadline: "截止事项", hr_contact: "HR 沟通", other: "其他" };
@@ -245,11 +245,12 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup, options: Wo
     { section: "OC / 意向", metric: "待谈薪 / 签约意向", count: statistics.intents },
     { section: "OC / 意向", metric: "正式 Offer", count: statistics.formalOffers },
     { section: "OC / 意向", metric: "尚无 OC / 意向记录", count: statistics.total - statistics.offers },
+    { section: "OC / 意向", metric: "泡池子（当前待横向筛选）", count: statistics.pool },
   ];
   const distributions = [
     ["简历阶段", ["准备投递", "简历投递", "已投递", "简历筛选"]],
     ["笔试", ["笔试"]], ["面试中", ["AI面", "一面", "二面", "三面", "终面", "HR面"]],
-    ["待谈薪/签约", ["已意向，待谈薪/签约"]], ["正式 Offer", ["Offer"]], ["已结束", ["已拒绝", "流程结束"]],
+    ["泡池子", [POOL_STATUS]], ["待谈薪/签约", ["已意向，待谈薪/签约"]], ["正式 Offer", ["Offer"]], ["已结束", ["已拒绝", "流程结束"]],
   ] as const;
   for (const [metric, statuses] of distributions) {
     const count = statisticsApplications.filter((item) => (statuses as readonly string[]).includes(item.status)).length;

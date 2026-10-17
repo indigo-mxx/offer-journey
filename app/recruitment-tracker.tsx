@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { autocompleteScore, matchesFieldsSearch, matchesLiteralSearch, matchesTextSearch, matchingAutocompleteOptions } from "@/lib/search";
 import { createWorkspaceWorkbook, readWorkspaceWorkbook } from "@/lib/workbook-backup";
-import { calculateRecruitmentAnalytics } from "@/lib/recruitment-analytics";
+import { calculateRecruitmentAnalytics, POOL_STATUS } from "@/lib/recruitment-analytics";
 import type { WorkspaceBackup } from "@/lib/workbook-backup";
 import { calendarTimingDefaults, deadlineFromRemainingHours, isAiInterviewRound, supportsCalendarTimingChoice, supportsRemainingHourDeadline } from "@/lib/calendar";
 import { calculateOfferIncome, emptyOfferCompensationDetails, normalizeOfferCompensationDetails, offerCityRates } from "@/lib/offer-calculator";
@@ -258,15 +258,16 @@ function ModalPortal({ children }: { children: ReactNode }) {
 
 // ──────────────────────────────────────────────── constants
 const INTENT_STATUS: ApplicationStatus = "已意向，待谈薪/签约";
-const STATUSES: ApplicationStatus[] = ["准备投递", "简历投递", "已投递", "简历筛选", "笔试", "AI面", "一面", "二面", "三面", "终面", "HR面", INTENT_STATUS, "Offer", "已拒绝", "流程结束"];
+const STATUSES: ApplicationStatus[] = ["准备投递", "简历投递", "已投递", "简历筛选", "笔试", "AI面", "一面", "二面", "三面", "终面", "HR面", POOL_STATUS, INTENT_STATUS, "Offer", "已拒绝", "流程结束"];
 const INTERVIEW_STATUSES: ApplicationStatus[] = ["AI面", "一面", "二面", "三面", "终面", "HR面"];
 const CLOSED_STATUSES: ApplicationStatus[] = ["已拒绝", "流程结束"];
 const RESUME_STATUSES: ApplicationStatus[] = ["准备投递", "简历投递", "已投递", "简历筛选"];
-const QUICK_STATUS_FILTERS = ["全部状态", "简历阶段", "笔试", "面试进行中", "待谈薪/签约", "Offer", "流程已结束"];
+const QUICK_STATUS_FILTERS = ["全部状态", "简历阶段", "笔试", "面试进行中", "泡池子", "待谈薪/签约", "Offer", "流程已结束"];
 const KANBAN_COLUMNS: { key: string; label: string; hint: string; statuses: ApplicationStatus[] }[] = [
   { key: "resume", label: "简历阶段", hint: "准备、投递与筛选", statuses: RESUME_STATUSES },
   { key: "test", label: "笔试", hint: "测评与笔试", statuses: ["笔试"] },
   { key: "interview", label: "面试中", hint: "AI 面至 HR 面", statuses: INTERVIEW_STATUSES },
+  { key: "pool", label: "泡池子", hint: "面试全通过，待横向筛选", statuses: [POOL_STATUS] },
   { key: "intent", label: "待谈薪/签约", hint: "已获录用意向", statuses: [INTENT_STATUS] },
   { key: "offer", label: "正式 Offer", hint: "已获得录用", statuses: ["Offer"] },
   { key: "closed", label: "已结束", hint: "拒绝或主动终止", statuses: CLOSED_STATUSES },
@@ -318,7 +319,7 @@ const COMPANY_NATURE_OPTIONS = [
   { value: "其他", subtypes: ["社会组织", "国际组织", "其他单位"] },
 ];
 
-const FINAL_OUTCOME_OPTIONS = ["简历挂", "笔试挂", "AI 面挂", "一面挂", "二面挂", "三面挂", "终面挂", "HR 面挂", "薪资不满足", "岗位关闭", "主动终止", "其他"];
+const FINAL_OUTCOME_OPTIONS = ["简历挂", "笔试挂", "AI 面挂", "一面挂", "二面挂", "三面挂", "终面挂", "HR 面挂", "横向挂", "薪资不满足", "岗位关闭", "主动终止", "其他"];
 const REJECTION_REASON_OPTIONS = ["薪资不满足", "岗位 / 方向不匹配", "已接受其他 Offer", "地点或到岗时间不合适", "个人原因", "其他"];
 
 const EMPTY_FORM: FormState = {
@@ -582,6 +583,7 @@ function matchesStatusFilter(status: ApplicationStatus, filter: string) {
   if (filter === "简历阶段") return RESUME_STATUSES.includes(status);
   if (filter === "面试进行中") return INTERVIEW_STATUSES.includes(status);
   if (filter === "待谈薪/签约") return status === INTENT_STATUS;
+  if (filter === "泡池子") return status === POOL_STATUS;
   if (filter === "流程已结束") return CLOSED_STATUSES.includes(status);
   return status === filter;
 }
@@ -601,6 +603,7 @@ function tagsWithClassification(companyNature: string, companySubtype: string, i
 function statusTone(status: ApplicationStatus) {
   if (status === "Offer") return "offer";
   if (status === INTENT_STATUS) return "intent";
+  if (status === POOL_STATUS) return "pool";
   if (["AI面", "一面", "二面", "三面", "终面", "HR面"].includes(status)) return "interview";
   if (status === "笔试") return "test";
   if (["已拒绝", "流程结束"].includes(status)) return "closed";
@@ -1234,8 +1237,9 @@ function DashboardPanel({
               <div><span>待谈薪 / 签约意向</span><strong>{dashboard.intents}</strong></div>
               <div><span>正式 Offer</span><strong>{dashboard.formalOffers}</strong></div>
               <div><span>尚无 OC / 意向记录</span><strong>{dashboard.total - dashboard.offers}</strong></div>
+              <div><span>泡池子（当前待横向筛选）</span><strong>{dashboard.pool}</strong></div>
             </div>
-            <p className="dashboard-metric-note">OC 按已意向或已获得 Offer 统计。有 Offer 获得时间的已结束岗位也计入。历史记录缺失时无法还原已走过的阶段，可补充面试或最终结果。</p>
+            <p className="dashboard-metric-note">泡池子表示所有面试已通过，仍待企业横向筛选，不等于已获 OC / 意向。OC 按已意向或已获得 Offer 统计，有 Offer 获得时间的已结束岗位也计入。</p>
           </article>
         </div>
 
@@ -1244,7 +1248,7 @@ function DashboardPanel({
             <div className="dashboard-card-head"><div><span>累计未通过</span><h3>各阶段挂掉的岗位</h3></div><small>同岗位同阶段只计一次</small></div>
             <p className="dashboard-metric-note">总体挂率 {dashboard.failureRate === null ? "—" : `${dashboard.failureRate}%`}：有明确未通过记录的 {dashboard.failedApplications} 个岗位 / 总投递 {dashboard.total}。主动拒绝、未参加和未知结果不算挂。</p>
             <div className="dashboard-rounds-scroll"><table className="dashboard-rounds-table"><thead><tr><th>阶段</th><th>进入岗位数</th><th>挂掉岗位数</th><th>挂率</th></tr></thead><tbody>{dashboard.failureStages.map((item) => <tr key={item.stage}><th>{item.stage}</th><td>{item.entered}</td><td>{item.failed}</td><td>{item.rate === null ? "—" : `${item.rate}%`}</td></tr>)}</tbody></table></div>
-            <p className="dashboard-metric-note">阶段挂率 = 挂掉岗位数 / 有该阶段记录的岗位数。包含最终结果中的简历挂、笔试挂及各轮面试挂，不把待定推算为通过或未通过。</p>
+            <p className="dashboard-metric-note">阶段挂率 = 挂掉岗位数 / 有该阶段记录的岗位数。横向筛选包含泡池子、横向挂及已进入意向 / Offer 的岗位；横向挂单独统计，不计为面试未通过。不把待定推算为通过或未通过。</p>
           </article>
           <article className="dashboard-card dashboard-trend-card">
             <div className="dashboard-card-head"><div><span>投递节奏</span><h3>近六个月趋势</h3></div><small>按投递日期汇总</small></div>
@@ -2943,7 +2947,7 @@ export function RecruitmentTracker({
           );
         })}
         {view === "mine" && !CLOSED_STATUSES.includes(item.status) && (
-          <button type="button" className="schedule-chip add" onClick={() => openCalendarCreate(new Date(), item.id, item.status === INTENT_STATUS ? "hr_contact" : INTERVIEW_STATUSES.includes(item.status) ? "interview" : "written_test")}>
+          <button type="button" className="schedule-chip add" onClick={() => openCalendarCreate(new Date(), item.id, item.status === INTENT_STATUS || item.status === POOL_STATUS ? "hr_contact" : INTERVIEW_STATUSES.includes(item.status) ? "interview" : "written_test")}>
             <strong>＋ 添加日程</strong><span>面试 / 测评 / 沟通</span>
           </button>
         )}
@@ -5410,6 +5414,8 @@ export function RecruitmentTracker({
                           ? "offer"
                           : group.statuses.includes(INTENT_STATUS)
                             ? "intent"
+                          : group.statuses.includes(POOL_STATUS)
+                            ? "pool"
                           : group.statuses.some((status) => INTERVIEW_STATUSES.includes(status))
                             ? "interview"
                             : group.statuses.every((status) => ["已拒绝", "流程结束"].includes(status))
@@ -5428,7 +5434,7 @@ export function RecruitmentTracker({
                               </button>
                               <div className="company-card-tools">
                                 <span className="company-card-stage">
-                                  {cardTone === "offer" ? "已获 Offer" : cardTone === "intent" ? "待谈薪 / 签约" : cardTone === "interview" ? "面试推进中" : cardTone === "closed" ? "流程已结束" : "持续跟进"}
+                                  {cardTone === "offer" ? "已获 Offer" : cardTone === "intent" ? "待谈薪 / 签约" : cardTone === "pool" ? "泡池子 · 待横向筛选" : cardTone === "interview" ? "面试推进中" : cardTone === "closed" ? "流程已结束" : "持续跟进"}
                                 </span>
                                 {view === "mine" && (
                                   <label className="company-card-selector" title="选择该公司的全部岗位">
@@ -5531,7 +5537,7 @@ export function RecruitmentTracker({
                               </div>
                               {renderScheduleStrip(item, true)}
                               {renderOfferAction(item, true)}
-                              {(INTERVIEW_STATUSES.includes(item.status) || item.status === INTENT_STATUS || experiences.some((experience) => experience.applicationId === item.id)) && renderExperienceLink(item, true)}
+                              {(INTERVIEW_STATUSES.includes(item.status) || item.status === POOL_STATUS || item.status === INTENT_STATUS || experiences.some((experience) => experience.applicationId === item.id)) && renderExperienceLink(item, true)}
                               <div className="kanban-card-foot">
                                 {renderStatusControl(item, true)}
                                 <PositionLinkAction application={item} compact />
@@ -5601,7 +5607,7 @@ export function RecruitmentTracker({
                             {item.rejectionReason && <small>原因：{item.rejectionReason}</small>}
                             {renderScheduleStrip(item, true)}
                             {renderOfferAction(item, true)}
-                            {(INTERVIEW_STATUSES.includes(item.status) || item.status === INTENT_STATUS || experiences.some((experience) => experience.applicationId === item.id)) && renderExperienceLink(item, true)}
+                            {(INTERVIEW_STATUSES.includes(item.status) || item.status === POOL_STATUS || item.status === INTENT_STATUS || experiences.some((experience) => experience.applicationId === item.id)) && renderExperienceLink(item, true)}
                           </div></td>
                           {view === "friends" && <td data-label="岗位链接"><PositionLinkAction application={item} /></td>}
                           {view === "mine" && (
@@ -5964,6 +5970,7 @@ export function RecruitmentTracker({
                   <label>
                     <span>状态</span>
                     <DropdownSelect value={form.status} onChange={(status) => updateFormField("status", status)} options={STATUSES.map((status) => ({ value: status, label: status }))} ariaLabel="选择当前状态" />
+                    {form.status === POOL_STATUS && <small>所有面试已通过，等待企业横向筛选，尚未获得意向或 Offer。</small>}
                   </label>
                   {form.status === "流程结束" && (
                     <label>
@@ -6805,7 +6812,7 @@ export function RecruitmentTracker({
                         )}
                         {renderScheduleStrip(item, true)}
                         {renderOfferAction(item, true)}
-                        {(INTERVIEW_STATUSES.includes(item.status) || item.status === INTENT_STATUS || experiences.some((experience) => experience.applicationId === item.id)) && renderExperienceLink(item, true)}
+                        {(INTERVIEW_STATUSES.includes(item.status) || item.status === POOL_STATUS || item.status === INTENT_STATUS || experiences.some((experience) => experience.applicationId === item.id)) && renderExperienceLink(item, true)}
                       </div></td>
                       {view === "friends" && <td data-label="岗位链接"><PositionLinkAction application={item} /></td>}
                       <td className="cell-actions" data-label="操作">
