@@ -2864,17 +2864,26 @@ export function RecruitmentTracker({
   };
 
   const renderExperienceLink = (item: Application, compact = false) => {
-    const count = experiences.filter((experience) => experience.applicationId === item.id).length;
+    const applicationExperiences = experiences.filter((experience) => experience.applicationId === item.id);
+    const count = applicationExperiences.length;
     const canEdit = view === "mine";
     const viewExperiences = () => {
+      closeCompany();
+      setExperienceQuery("");
+      setExperienceSelectionMode(false);
+      setSelectedExperienceIds([]);
       setExperienceApplicationFilter(item.id);
-      setExperienceScope("mine");
+      setExperienceScope(item.isOwner === false ? "friends" : "mine");
+      if (count === 1) {
+        setViewingExperience(applicationExperiences[0]);
+        return;
+      }
       setView("experiences");
     };
     return (
       <div className={`interview-round-strip experience-link-strip ${compact ? "compact" : ""}`} aria-label={`${item.company} ${item.position} 的面经`}>
         {count > 0 ? (
-          <button type="button" className="interview-date-chip experience-link-chip" onClick={viewExperiences} title="查看该岗位全部面经">
+          <button type="button" className="interview-date-chip experience-link-chip" onClick={viewExperiences} title={count === 1 ? "查看完整面经" : "查看该岗位全部面经"}>
             <strong>{count} 篇面经</strong>
             <span>查看 ↗</span>
           </button>
@@ -2882,7 +2891,7 @@ export function RecruitmentTracker({
           <button
             type="button"
             className="interview-date-chip add"
-            onClick={() => openExperienceCreate(item.id, defaultRoundForStage(interviewStage(item.status)))}
+            onClick={() => { closeCompany(); openExperienceCreate(item.id, defaultRoundForStage(interviewStage(item.status))); }}
           >
             <strong>＋ 记录面经</strong>
             <span>顺手记录面试时间</span>
@@ -4801,7 +4810,7 @@ export function RecruitmentTracker({
             </div>
             {experienceApplicationFilter && (
               <div className="experience-application-filter">
-                <span>仅显示：{ownApplications.find((app) => app.id === experienceApplicationFilter)?.company ?? "该岗位"} 的面经</span>
+                <span>仅显示：{applications.find((app) => app.id === experienceApplicationFilter)?.company ?? "该岗位"} 的面经</span>
                 <button type="button" className="text-button" onClick={() => setExperienceApplicationFilter("")}>← 返回全部面经</button>
               </div>
             )}
