@@ -341,7 +341,7 @@ test("Excel includes the dashboard snapshot and preserves the selected statistic
     await workbook.xlsx.load(buffer);
     const sheet = workbook.getWorksheet('数据统计');
     assert.ok(sheet);
-    assert.deepEqual(workbook.worksheets.map((item) => item.name), ['使用说明', '数据统计', '岗位记录', '日程安排', '面经库']);
+    assert.deepEqual(workbook.worksheets.map((item) => item.name), ['使用说明', '数据统计', 'Offer 概览', '岗位记录', '日程安排', '面经库']);
     assert.equal(workbook.views[0].activeTab, 0);
     assert.equal(sheet.getCell('B7').value, statisticsApplicationIds ? 1 : 2);
     assert.equal(sheet.getCell('N7').value, statisticsApplicationIds ? 1 : 2);
@@ -355,6 +355,29 @@ test("Excel includes the dashboard snapshot and preserves the selected statistic
     assert.equal(restored.applications.length, 2, 'statistics cohort does not filter the full backup');
     assert.equal(restored.interviews.length, 2, 'summary statistics are never imported as records');
   }
+});
+
+test('Offer overview includes intentions and saved details without changing restoration', async () => {
+  const exceljs = await import('exceljs');
+  const Workbook = exceljs.Workbook ?? exceljs.default.Workbook;
+  const workbook = new Workbook();
+  const blob = await createWorkspaceWorkbook(SAMPLE);
+  const buffer = await blob.arrayBuffer();
+  await workbook.xlsx.load(buffer);
+  const sheet = workbook.getWorksheet('Offer 概览');
+  assert.equal(sheet.rowCount, 6);
+  const rows = [];
+  sheet.eachRow((row, index) => { if (index > 4) rows.push(row); });
+  const offer = rows.find((row) => row.getCell(1).value === '华为技术');
+  const intent = rows.find((row) => row.getCell(1).value === 'ByteDance 字节跳动');
+  assert.ok(offer.getCell(8).value > 0);
+  assert.ok(offer.getCell(9).value > 0);
+  assert.equal(intent.getCell(3).value, '已意向，待谈薪/签约');
+  assert.equal(intent.getCell(8).value, null, 'missing income parameters do not invent an estimate');
+  offer.getCell(9).value = 1;
+  const restored = await readWorkspaceWorkbook(new File([await workbook.xlsx.writeBuffer()], 'offer.xlsx'));
+  assert.equal(restored.applications.length, 2);
+  assert.equal(restored.applications.find((item) => item.id === 'app-huawei').offerCompensationDetails.monthlyBaseSalary, 35000);
 });
 
 test('exported progression excludes resume rejection and screening while preserving failure counts', async () => {

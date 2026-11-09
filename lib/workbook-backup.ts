@@ -2,6 +2,7 @@ import type { Application, ApplicationStatus, Interview, InterviewExperience, Of
 import type { Cell, Row, Worksheet } from "exceljs";
 import { calculateRecruitmentAnalytics, POOL_STATUS } from "./recruitment-analytics.ts";
 import { addExcelDashboard } from "./excel-dashboard.ts";
+import { calculateOfferIncome, normalizeOfferCompensationDetails } from "./offer-calculator.ts";
 
 export type WorkspaceBackup = {
   applications: Application[];
@@ -285,6 +286,33 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup, options: Wo
   addRank("流程结论", statisticsApplications.filter((item) => ["已拒绝", "流程结束"].includes(item.status)).map((item) => item.finalOutcome || item.rejectionReason || "未注明"));
   addExcelDashboard(workbook, statisticsRows, options.statisticsRangeLabel ?? "全部投递");
 
+  const offerRows = data.applications.filter((item) => item.status === "Offer" || item.status === "已意向，待谈薪/签约" || item.offerReceivedAt || item.offerDeadline || item.offerOnboardDate || item.offerCompensation || item.offerBenefits || item.offerContact || item.offerNote || item.offerCompensationDetails?.monthlyBaseSalary).map((item) => {
+    const details = item.offerCompensationDetails;
+    const income = details?.monthlyBaseSalary ? calculateOfferIncome(normalizeOfferCompensationDetails(details, item.base, item.salary)) : null;
+    return {
+      company: item.company, position: item.position, status: item.status, city: details?.city || item.base,
+      compensation: item.offerCompensation || item.salary, monthlyBase: details?.monthlyBaseSalary || null, salaryMonths: details?.salaryMonths ?? null,
+      annualGross: income?.annualGrossCash ?? null, annualTakeHome: income?.annualTakeHome ?? null, monthlyTakeHome: income?.averageMonthlyTakeHome ?? null,
+      annualFund: income?.annualHousingFundAccount ?? null, totalIncome: income?.annualTakeHomeWithHousingFund ?? null,
+      annualTax: income?.annualTax ?? null, socialBase: details?.socialInsuranceBase ?? null, fundBase: details?.housingFundBase ?? null,
+      personalFundRate: details?.housingFundRate ?? null, employerFundRate: details?.employerHousingFundRate ?? null,
+      receivedAt: exportDate(item.offerReceivedAt ?? ""), deadline: exportDate(item.offerDeadline ?? ""), onboard: validDate(item.offerOnboardDate ?? ""),
+      benefits: item.offerBenefits ?? "", contact: item.offerContact ?? "", note: item.offerNote ?? "", shared: item.offerShared ? "是" : "否",
+    };
+  }).sort((a, b) => a.company.localeCompare(b.company, "zh-CN") || a.position.localeCompare(b.position, "zh-CN"));
+  const offerSheet = addDataSheet("Offer 概览", "Offer 概览 · 薪酬与收入", "包含意向、正式 Offer 和留有 Offer 详情的岗位。收入为导出时估算；恢复或修改以“岗位记录”为准。", [
+    { header: "公司", key: "company", width: 20 }, { header: "岗位", key: "position", width: 26 }, { header: "当前进度", key: "status", width: 24 }, { header: "Base 地", key: "city", width: 14 },
+    { header: "薪酬结构", key: "compensation", width: 26 }, { header: "月基础工资", key: "monthlyBase", width: 16 }, { header: "薪数", key: "salaryMonths", width: 10 },
+    { header: "首年税前现金", key: "annualGross", width: 18 }, { header: "首年税后到账", key: "annualTakeHome", width: 18 }, { header: "月均税后到账", key: "monthlyTakeHome", width: 18 },
+    { header: "年度公积金入账", key: "annualFund", width: 18 }, { header: "税后到账＋公积金", key: "totalIncome", width: 21 }, { header: "年度个税", key: "annualTax", width: 16 },
+    { header: "社保基数", key: "socialBase", width: 15 }, { header: "公积金基数", key: "fundBase", width: 16 }, { header: "个人公积金比例（%）", key: "personalFundRate", width: 20 }, { header: "公司公积金比例（%）", key: "employerFundRate", width: 20 },
+    { header: "Offer 获得时间", key: "receivedAt", width: 20 }, { header: "答复截止时间", key: "deadline", width: 20 }, { header: "预计入职日期", key: "onboard", width: 16 },
+    { header: "福利待遇", key: "benefits", width: 32 }, { header: "联系人", key: "contact", width: 24 }, { header: "备注", key: "note", width: 32 }, { header: "共享详情", key: "shared", width: 12 },
+  ], offerRows, palette.amber);
+  for (const key of ["monthlyBase", "annualGross", "annualTakeHome", "monthlyTakeHome", "annualFund", "totalIncome", "annualTax", "socialBase", "fundBase"]) offerSheet.getColumn(key).numFmt = '#,##0.00';
+  for (const key of ["receivedAt", "deadline"]) offerSheet.getColumn(key).numFmt = "yyyy-mm-dd hh:mm";
+  offerSheet.getColumn("onboard").numFmt = "yyyy-mm-dd";
+
   const applicationsSheet = addDataSheet("岗位记录", "岗位记录", "各轮面试时间为北京时间汇总（只读）；同轮多场全部保留。面试过程与结果请编辑“面经库”，隐藏列用于恢复关联。", [
     { header: "公司", key: "company", width: 18 }, { header: "岗位", key: "position", width: 24 }, { header: "Base", key: "base", width: 12 },
     { header: "行业标签", key: "industryTags", width: 24 }, { header: "公司规模", key: "companyScale", width: 14 }, { header: "批次", key: "batch", width: 12 },
@@ -492,6 +520,7 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup, options: Wo
     "8. 数据统计包含导出时的数据看板快照；导入时由恢复后的业务记录重新计算，不重复导入统计行。",
     "9. 无面经的面试保留为“面试记录”；同场多篇面经全部保存，恢复时只生成一场面试。",
     "10. 恢复关联依靠隐藏 ID；请勿删除或修改隐藏列。旧版本含“面试安排”的备份仍支持导入。",
+    "11. Offer 概览为导出时快照；恢复和编辑 Offer 详情以岗位记录为准，避免重复导入。",
   ];
   notes.forEach((note, index) => {
     guide.mergeCells(12 + index, 2, 12 + index, 5);
@@ -503,11 +532,11 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup, options: Wo
     cell.border = { bottom: { style: "hair", color: { argb: palette.line } } };
     guide.getRow(12 + index).height = 30;
   });
-  guide.mergeCells("B23:E23");
-  guide.getCell("B23").value = "工作表导航 · 点击打开";
-  guide.getCell("B23").font = { ...bodyFont, size: 13, bold: true };
-  [["数据统计", "绿色看板：进度、通过率、挂率与录用意向"], ["岗位记录", "岗位信息、当前进度及各轮面试汇总"], ["日程安排", "所有安排，包含面试、笔试、测评和 Offer 日期"], ["面经库", "面试过程、结果与完整复盘，包含尚无面经的面试"]].forEach(([name, description], index) => {
-    const row = 25 + index;
+  guide.mergeCells("B24:E24");
+  guide.getCell("B24").value = "工作表导航 · 点击打开";
+  guide.getCell("B24").font = { ...bodyFont, size: 13, bold: true };
+  [["数据统计", "绿色看板：进度、通过率、挂率与录用意向"], ["Offer 概览", "Offer 与意向、薪酬、到手收入和公积金测算"], ["岗位记录", "岗位信息、当前进度及各轮面试汇总"], ["日程安排", "所有安排，包含面试、笔试、测评和 Offer 日期"], ["面经库", "面试过程、结果与完整复盘，包含尚无面经的面试"]].forEach(([name, description], index) => {
+    const row = 26 + index;
     guide.getCell(row, 2).value = { text: name, hyperlink: `#'${name}'!A1` };
     guide.getCell(row, 2).font = { ...bodyFont, bold: true, underline: true, color: { argb: palette.brand } };
     guide.mergeCells(row, 3, row, 5);
