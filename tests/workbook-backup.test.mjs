@@ -357,26 +357,29 @@ test("Excel includes the dashboard snapshot and preserves the selected statistic
   }
 });
 
-test('Offer overview includes intentions and saved details without changing restoration', async () => {
+test('Offer overview includes only current Offer positions without changing restoration', async () => {
   const exceljs = await import('exceljs');
   const Workbook = exceljs.Workbook ?? exceljs.default.Workbook;
   const workbook = new Workbook();
-  const blob = await createWorkspaceWorkbook(SAMPLE);
+  const data = { ...SAMPLE, applications: [
+    { ...SAMPLE.applications[0], status: 'Offer' },
+    SAMPLE.applications[1],
+    { ...SAMPLE.applications[0], id: 'closed-offer', company: '已结束的 Offer', status: '流程结束', finalOutcome: '主动终止' },
+  ] };
+  const blob = await createWorkspaceWorkbook(data);
   const buffer = await blob.arrayBuffer();
   await workbook.xlsx.load(buffer);
   const sheet = workbook.getWorksheet('Offer 概览');
-  assert.equal(sheet.rowCount, 6);
+  assert.equal(sheet.rowCount, 5);
   const rows = [];
   sheet.eachRow((row, index) => { if (index > 4) rows.push(row); });
   const offer = rows.find((row) => row.getCell(1).value === '华为技术');
-  const intent = rows.find((row) => row.getCell(1).value === 'ByteDance 字节跳动');
   assert.ok(offer.getCell(8).value > 0);
   assert.ok(offer.getCell(9).value > 0);
-  assert.equal(intent.getCell(3).value, '已意向，待谈薪/签约');
-  assert.equal(intent.getCell(8).value, null, 'missing income parameters do not invent an estimate');
+  assert.equal(rows.length, 1, 'intentions and ended processes with historical offer details are excluded');
   offer.getCell(9).value = 1;
   const restored = await readWorkspaceWorkbook(new File([await workbook.xlsx.writeBuffer()], 'offer.xlsx'));
-  assert.equal(restored.applications.length, 2);
+  assert.equal(restored.applications.length, 3, 'backup still retains every application');
   assert.equal(restored.applications.find((item) => item.id === 'app-huawei').offerCompensationDetails.monthlyBaseSalary, 35000);
 });
 

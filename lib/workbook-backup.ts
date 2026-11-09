@@ -286,7 +286,7 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup, options: Wo
   addRank("流程结论", statisticsApplications.filter((item) => ["已拒绝", "流程结束"].includes(item.status)).map((item) => item.finalOutcome || item.rejectionReason || "未注明"));
   addExcelDashboard(workbook, statisticsRows, options.statisticsRangeLabel ?? "全部投递");
 
-  const offerRows = data.applications.filter((item) => item.status === "Offer" || item.status === "已意向，待谈薪/签约" || item.offerReceivedAt || item.offerDeadline || item.offerOnboardDate || item.offerCompensation || item.offerBenefits || item.offerContact || item.offerNote || item.offerCompensationDetails?.monthlyBaseSalary).map((item) => {
+  const offerRows = data.applications.filter((item) => item.status === "Offer").map((item) => {
     const details = item.offerCompensationDetails;
     const income = details?.monthlyBaseSalary ? calculateOfferIncome(normalizeOfferCompensationDetails(details, item.base, item.salary)) : null;
     return {
@@ -300,7 +300,7 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup, options: Wo
       benefits: item.offerBenefits ?? "", contact: item.offerContact ?? "", note: item.offerNote ?? "", shared: item.offerShared ? "是" : "否",
     };
   }).sort((a, b) => a.company.localeCompare(b.company, "zh-CN") || a.position.localeCompare(b.position, "zh-CN"));
-  const offerSheet = addDataSheet("Offer 概览", "Offer 概览 · 薪酬与收入", "包含意向、正式 Offer 和留有 Offer 详情的岗位。收入为导出时估算；恢复或修改以“岗位记录”为准。", [
+  const offerSheet = addDataSheet("Offer 概览", "Offer 概览 · 薪酬与收入", "仅包含当前处于 Offer 阶段的岗位。收入为导出时估算；恢复或修改以“岗位记录”为准。", [
     { header: "公司", key: "company", width: 20 }, { header: "岗位", key: "position", width: 26 }, { header: "当前进度", key: "status", width: 24 }, { header: "Base 地", key: "city", width: 14 },
     { header: "薪酬结构", key: "compensation", width: 26 }, { header: "月基础工资", key: "monthlyBase", width: 16 }, { header: "薪数", key: "salaryMonths", width: 10 },
     { header: "首年税前现金", key: "annualGross", width: 18 }, { header: "首年税后到账", key: "annualTakeHome", width: 18 }, { header: "月均税后到账", key: "monthlyTakeHome", width: 18 },
@@ -535,7 +535,7 @@ export async function createWorkspaceWorkbook(data: WorkspaceBackup, options: Wo
   guide.mergeCells("B24:E24");
   guide.getCell("B24").value = "工作表导航 · 点击打开";
   guide.getCell("B24").font = { ...bodyFont, size: 13, bold: true };
-  [["数据统计", "绿色看板：进度、通过率、挂率与录用意向"], ["Offer 概览", "Offer 与意向、薪酬、到手收入和公积金测算"], ["岗位记录", "岗位信息、当前进度及各轮面试汇总"], ["日程安排", "所有安排，包含面试、笔试、测评和 Offer 日期"], ["面经库", "面试过程、结果与完整复盘，包含尚无面经的面试"]].forEach(([name, description], index) => {
+  [["数据统计", "绿色看板：进度、通过率、挂率与录用意向"], ["Offer 概览", "Offer 阶段岗位的薪酬、到手收入和公积金测算"], ["岗位记录", "岗位信息、当前进度及各轮面试汇总"], ["日程安排", "所有安排，包含面试、笔试、测评和 Offer 日期"], ["面经库", "面试过程、结果与完整复盘，包含尚无面经的面试"]].forEach(([name, description], index) => {
     const row = 26 + index;
     guide.getCell(row, 2).value = { text: name, hyperlink: `#'${name}'!A1` };
     guide.getCell(row, 2).font = { ...bodyFont, bold: true, underline: true, color: { argb: palette.brand } };
